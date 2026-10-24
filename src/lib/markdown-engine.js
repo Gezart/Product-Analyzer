@@ -18,6 +18,9 @@ const message = (e) => (e instanceof Error ? e.message : String(e)).slice(0, 500
 /** After this many hourly runs in a row where Shopify refused a step, the plan pauses. */
 const MAX_FAILURES = 3;
 
+// Plan data kept in `steps`: the ladder (`variants`), what the app last wrote per variant (`applied`),
+// failure counts, and what was already reported (`floorAlerted`, `guardAlerted`).
+
 function loadPlan(planId) {
   return db().markdownPlan.findUnique({ where: { id: planId }, include: { product: { include: { shop: true } } } });
 }

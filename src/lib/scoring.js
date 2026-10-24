@@ -1,3 +1,6 @@
+// Product metrics, statuses and money at stake — docs/PLAN.md → "Analysis logic".
+// Pure functions with no imports so node:test can load them directly.
+
 export const DEFAULT_THRESHOLDS = {
   pageProblemViewsTop: 0.4,
   pageProblemConversionRatio: 0.5,

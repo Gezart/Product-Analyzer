@@ -1,3 +1,5 @@
+// Per-product analysis — docs/PLAN.md module 3. Pure (no imports) so node:test can load it.
+
 const DAY_MS = 86_400_000;
 const shift = (date, days) => new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
 

@@ -1,3 +1,7 @@
+// Fix center — docs/PLAN.md module 5. Pure (no imports) so node:test can load it.
+// A fix moves one part of a product from a `before` state (read from Shopify just before applying)
+// to an `after` state; undo writes `before` back.
+
 export const FIX_TYPES = ["title", "description", "seo", "images", "collection"];
 
 const LIMITS = { title: 255, descriptionHtml: 100_000, seoTitle: 70, seoDescription: 320 };

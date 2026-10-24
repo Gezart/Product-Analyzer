@@ -10,7 +10,11 @@ function requireShop(job) {
   return job.shopId;
 }
 
-/** Job type → handler. Feature tasks register their handlers here. */
+/**
+ * Job type → handler `(job, signal) => Promise<void>`. Feature tasks register their handlers here.
+ * A handler must be idempotent (a job can run again after a crash or timeout) and should stop when
+ * `signal` aborts (timeout or shutdown). Throw `PermanentJobError` when retrying can't help.
+ */
 export const handlers = {
   /** Recompute statuses and money at stake (after settings change or new data). */
   "score-shop": async (job) => {

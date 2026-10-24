@@ -1,3 +1,7 @@
+// Rule-based diagnosis — docs/PLAN.md → "Diagnosis rules (v1)". Rules find the problem; every reason
+// carries its evidence (the numbers that triggered it) and the page section that shows them.
+// Pure (no imports) so node:test can load it. AI explanations are v2.
+
 const PRICE_ABOVE = 0.25;
 const MIN_PEERS = 3;
 const MIN_IMAGES = 3;
@@ -30,6 +34,7 @@ function peerMedian(prices, own, ownIsListed) {
   return m != null && others.length >= MIN_PEERS && m > 0 ? { median: m, count: others.length } : null;
 }
 
+/** `ctx`: store-wide numbers the rules compare against (built once per shop). */
 export function diagnose(p, ctx) {
   const reasons = [];
 

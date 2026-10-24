@@ -1,3 +1,5 @@
+// Plans from docs/PLAN.md → "Pricing and billing". No imports so node:test can load it directly.
+
 export const TRIAL_DAYS = 14;
 
 export const PLANS = [

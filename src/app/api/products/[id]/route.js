@@ -1,7 +1,7 @@
 import { authenticate, AuthError } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
-import { dailySeries, lastSaleDate, trend30 } from "@/lib/product-metrics";
+import { dailySeries, lastSaleDate, trend30, windowTotals } from "@/lib/product-metrics";
 import { stockFromVariants } from "@/lib/scoring";
 import { knownOrderDays } from "@/lib/sync/constants";
 

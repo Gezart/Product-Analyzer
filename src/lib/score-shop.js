@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { scoreProducts } from "@/lib/scoring";
+import { scoreProducts, stockFromVariants } from "@/lib/scoring";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { knownOrderDays } from "@/lib/sync/constants";
 

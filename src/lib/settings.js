@@ -41,7 +41,10 @@ function check(value, rule) {
   );
 }
 
-/** Strict validation for the settings form: returns the clean settings or a list of field errors. */
+/**
+ * Strict validation for the settings form: returns the clean settings or a list of field errors
+ * (`{ field, min?, max?, integer? }`, which the form turns into a message with its own label and units).
+ */
 export function validateSettings(raw) {
   const errors = [];
   const input = (raw ?? {});

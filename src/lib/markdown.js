@@ -68,6 +68,9 @@ export function safeToWrite(price, floor) {
   return floor != null && Number.isFinite(price) && cents(price) >= cents(floor);
 }
 
+// ---- Choosing what to write (pure, so every money decision is unit-tested) ----
+// `applied`: what the app last wrote per variant (variant id → { price, compareAt }).
+
 /** Floor now: the stricter of the floor at approval and the floor from the live cost. */
 export function currentFloor(v, liveCost, marginFloorPct) {
   const live = floorPrice(liveCost, marginFloorPct);

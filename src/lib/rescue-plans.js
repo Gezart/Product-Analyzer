@@ -19,7 +19,8 @@ async function shopTime(shopId) {
 
 /**
  * After a fix is applied: the product's measurement window starts today. A fix during an open window
- * restarts it and joins the same plan; the baseline stays before the first fix.
+ * restarts it and joins the same plan; the baseline stays before the first fix (`baseline.baselineEnd`
+ * is the first fix's day).
  */
 export async function startRescuePlan(shopId, productId, fixId) {
   const { today } = await shopTime(shopId);

@@ -1,4 +1,3 @@
-import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { retryPlan } from "@/lib/jobs/schedule";

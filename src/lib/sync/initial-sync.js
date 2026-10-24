@@ -109,6 +109,7 @@ async function startStage(job, stage, query) {
 }
 
 // The key stops a retried job from starting a second poll chain for the same operation.
+// `payload.startedAt`: when the bulk query started; data changed by webhooks after it is newer than the snapshot.
 async function schedulePoll(shopId, payload) {
   await enqueue({
     type: "sync-poll",

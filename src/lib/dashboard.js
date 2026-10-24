@@ -1,3 +1,5 @@
+// Catalog health summary — docs/PLAN.md module 2. Pure (no imports) so node:test can load it.
+
 export const STATUS_ORDER = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "stockout_risk", "healthy"];
 
 /** Statuses whose stock counts as "money stuck in stock". */
