@@ -117,9 +117,10 @@ export async function completeJob(job: ClaimedJob, workerId: string) {
 }
 
 /** Retries with backoff until `maxAttempts`; `PermanentJobError` fails at once. */
-export async function failJob(job: ClaimedJob, workerId: string, error: unknown, now = new Date()) {
+export async function failJob(job: ClaimedJob, workerId: string, error: unknown, now = new Date(), minDelayMs = 0) {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   const plan = retryPlan(job.attempts, job.maxAttempts, error instanceof PermanentJobError, now);
+  if (plan.runAt && plan.runAt.getTime() < now.getTime() + minDelayMs) plan.runAt = new Date(now.getTime() + minDelayMs);
   await db().job.updateMany({
     where: ownedBy(job, workerId),
     data: {

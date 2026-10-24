@@ -12,7 +12,7 @@ import {
   type ClaimedJob,
 } from "@/lib/jobs/queue";
 import { handlers, nightlyJobs, type JobHandler } from "@/lib/jobs/registry";
-import { localDateKey, nextLocalRun } from "@/lib/jobs/schedule";
+import { nextLocalSlot } from "@/lib/jobs/schedule";
 
 /** Must stay well below the lock timeout so a slow handler is stopped before its lock can expire. */
 const HANDLER_TIMEOUT_MS = Math.floor((LOCK_TIMEOUT_MINUTES * 60_000) / 2);
@@ -62,6 +62,10 @@ export async function runJobs({ maxMs }: { maxMs: number }) {
     const job = await claimJob(workerId);
     if (!job) break;
     ran++;
+    if (stopping) {
+      await releaseJob(job, workerId, "Worker stopped");
+      break;
+    }
     try {
       if (job.shopId && !(await shopIsActive(job.shopId))) throw new PermanentJobError("Shop uninstalled");
       // Unknown type retries with backoff: during a rolling deploy an old machine may claim a new type.
@@ -72,6 +76,8 @@ export async function runJobs({ maxMs }: { maxMs: number }) {
     } catch (error) {
       failed++;
       if (stopping) await releaseJob(job, workerId, "Worker stopped");
+      // A timed-out handler that ignores its signal may still be running: retry only after its lock would expire.
+      else if (error instanceof JobTimeoutError) await failJob(job, workerId, error, new Date(), LOCK_TIMEOUT_MINUTES * 60_000);
       else await failJob(job, workerId, error);
     }
   }
@@ -88,9 +94,9 @@ export async function scheduleNightly(now = new Date()) {
   let added = 0;
   for (const shop of shops) {
     for (const { type, hour } of nightlyJobs) {
-      const runAt = nextLocalRun(now, shop.timezone, hour);
-      const uniqueKey = `${type}:${shop.id}:${localDateKey(runAt, shop.timezone)}`;
-      if (await enqueue({ type, shopId: shop.id, runAt, uniqueKey })) added++;
+      const slot = nextLocalSlot(now, shop.timezone, hour);
+      const uniqueKey = `${type}:${shop.id}:${slot.date}`;
+      if (await enqueue({ type, shopId: shop.id, runAt: slot.at, uniqueKey })) added++;
     }
   }
   return added;

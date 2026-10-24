@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { backoffMs, localDateKey, nextLocalRun, retryPlan } from "./schedule.ts";
+import { backoffMs, localDateKey, nextLocalRun, nextLocalSlot, retryPlan } from "./schedule.ts";
 
 test("backoff doubles from 30s and caps at 1h", () => {
   assert.deepEqual([1, 2, 3, 4].map(backoffMs), [30_000, 60_000, 120_000, 240_000]);
@@ -65,4 +65,15 @@ test("New York spring forward and fall back", () => {
   // 1 Nov 2026: 01:00 happens twice, take the first (EDT).
   assert.equal(nextLocalRun(new Date("2026-11-01T04:00:00Z"), "America/New_York", 1).toISOString(), "2026-11-01T05:00:00.000Z");
   assert.equal(nextLocalRun(new Date("2026-11-01T04:00:00Z"), "America/New_York", 2).toISOString(), "2026-11-01T07:00:00.000Z");
+});
+
+test("zones beyond UTC+12 get the right hour on DST change (Chatham)", () => {
+  assert.equal(nextLocalRun(new Date("2026-04-04T11:14:00Z"), "Pacific/Chatham", 2).toISOString(), "2026-04-04T12:15:00.000Z");
+});
+
+test("a run pushed past midnight by a DST gap keeps its own date", () => {
+  // Scoresbysund: 23:00 on 28 Mar 2026 doesn't exist; the run moves to 00:00 but stays the 28 Mar run.
+  const slot = nextLocalSlot(new Date("2026-03-28T12:00:00Z"), "America/Scoresbysund", 23);
+  assert.equal(slot.date, "2026-03-28");
+  assert.ok(slot.at > new Date("2026-03-28T12:00:00Z"));
 });

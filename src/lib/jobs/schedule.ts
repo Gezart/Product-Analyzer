@@ -52,10 +52,11 @@ function offsetMs(date: Date, timeZone: string): number {
  */
 function zonedToUtc(year: number, month: number, day: number, hour: number, timeZone: string): Date {
   const guess = Date.UTC(year, month - 1, day, hour);
-  const halfDay = 12 * 60 * 60 * 1000;
+  // Offsets just before and after the target; ±1 day covers every zone (UTC−12 … UTC+14).
+  const oneDay = 24 * 60 * 60 * 1000;
   const candidates = [
-    guess - offsetMs(new Date(guess - halfDay), timeZone),
-    guess - offsetMs(new Date(guess + halfDay), timeZone),
+    guess - offsetMs(new Date(guess - oneDay), timeZone),
+    guess - offsetMs(new Date(guess + oneDay), timeZone),
   ];
   const matches = candidates.filter((c) => {
     const p = localParts(new Date(c), timeZone);
@@ -70,12 +71,22 @@ export function localDateKey(date: Date, timeZone?: string | null): string {
   return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
 }
 
-/** Next time it is `hour`:00 in `timeZone`, strictly after `now`. Unknown zones fall back to UTC. */
-export function nextLocalRun(now: Date, timeZone: string | null | undefined, hour: number): Date {
+/**
+ * Next time it is `hour`:00 in `timeZone`, strictly after `now`, plus the local date it belongs to.
+ * The date is the target date, not the date of `at`: if `hour` falls in a DST gap the run moves past
+ * the gap (possibly into the next day) but still counts as that date's run. Unknown zones use UTC.
+ */
+export function nextLocalSlot(now: Date, timeZone: string | null | undefined, hour: number): { at: Date; date: string } {
   const zone = safeZone(timeZone);
   const p = localParts(now, zone);
+  const key = (y: number, m: number, d: number) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   const today = zonedToUtc(p.year, p.month, p.day, hour, zone);
-  if (today.getTime() > now.getTime()) return today;
-  const tomorrow = new Date(Date.UTC(p.year, p.month - 1, p.day + 1));
-  return zonedToUtc(tomorrow.getUTCFullYear(), tomorrow.getUTCMonth() + 1, tomorrow.getUTCDate(), hour, zone);
+  if (today.getTime() > now.getTime()) return { at: today, date: key(p.year, p.month, p.day) };
+  const t = new Date(Date.UTC(p.year, p.month - 1, p.day + 1));
+  const [y, m, d] = [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()];
+  return { at: zonedToUtc(y, m, d, hour, zone), date: key(y, m, d) };
+}
+
+export function nextLocalRun(now: Date, timeZone: string | null | undefined, hour: number): Date {
+  return nextLocalSlot(now, timeZone, hour).at;
 }

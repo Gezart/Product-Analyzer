@@ -10,11 +10,14 @@ export function startWorker() {
   if (started) return;
   started = true;
   let stopped = false;
-  // On deploy/shutdown, hand the running job back so another machine can pick it up.
-  process.once("SIGTERM", () => {
+  // Best effort on deploy/shutdown: hand the running job back so another machine can pick it up.
+  // Fly sends SIGINT by default; Next may exit before the release finishes, then the 10-min lock expiry applies.
+  const stop = () => {
     stopped = true;
     stopJobs();
-  });
+  };
+  process.once("SIGTERM", stop);
+  process.once("SIGINT", stop);
   const loop = async () => {
     try {
       await tick(TICK_MS);
