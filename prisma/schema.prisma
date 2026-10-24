@@ -42,6 +42,7 @@ model Shop {
   notifications Notification[]
   syncStates    SyncState[]
   aiUsage       AiUsage[]
+  jobs          Job[]
 
   @@map("shops")
 }
@@ -281,4 +282,29 @@ model AiUsage {
 
   @@id([shopId, month])
   @@map("ai_usage")
+}
+
+// Background job queue (see src/lib/jobs). Claimed with FOR UPDATE SKIP LOCKED; one running job per shop.
+model Job {
+  id          String    @id @default(cuid())
+  shopId      String?   @map("shop_id")
+  type        String
+  payload     Json      @default("{}")
+  status      String    @default("queued") // queued | running | done | failed
+  /// Dedupe key: enqueueing the same key twice is a no-op (e.g. one nightly run per shop per day).
+  uniqueKey   String?   @unique @map("unique_key")
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5) @map("max_attempts")
+  runAt       DateTime  @default(now()) @map("run_at")
+  lockedAt    DateTime? @map("locked_at")
+  lockedBy    String?   @map("locked_by")
+  lastError   String?   @map("last_error")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  finishedAt  DateTime? @map("finished_at")
+
+  shop Shop? @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAt])
+  @@index([shopId, status])
+  @@map("jobs")
 }

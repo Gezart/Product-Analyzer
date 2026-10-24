@@ -41,3 +41,10 @@ Plans are defined in `src/lib/plans.ts` and charged through Shopify Billing (14-
 ## Tests
 
 `npm test` runs `node:test` on `src/**/*.test.ts`.
+
+## Background jobs
+
+Postgres-backed queue in `src/lib/jobs/`. Register a handler in `registry.ts` (and add it to `nightlyJobs` for a nightly run), then `enqueue({ type, shopId })`.
+
+- Always-on server: set `JOBS_WORKER=true`; the worker starts with the Next.js server.
+- Or call `POST /api/jobs/run` every minute with `Authorization: Bearer $CRON_SECRET`.
