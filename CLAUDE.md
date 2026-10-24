@@ -6,7 +6,7 @@
 
 ## Task flow (token-saving)
 
-Tasks and their branch names are in `docs/TASKS.md`. Work one task at a time, start to finish:
+Tasks and their branch names are in `docs/TASKS.md`. Work through them in order without asking whether to start the next one; ask only when something is unclear or needs approval. One task at a time, start to finish:
 
 1. Implement the task directly (no translator, task-analyzer or team-lead agents).
 2. Run the `qa` agent. On FAIL, fix and run `qa` again until PASS.
