@@ -1,7 +1,8 @@
 import { authenticate, AuthError } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { changePlan, PlanError, syncPlan } from "@/lib/billing";
 import { env } from "@/lib/env";
-import { getPlan, PLANS, type PlanId } from "@/lib/plans";
+import { getPlan, PLANS, remainingTrialDays, type PlanId } from "@/lib/plans";
 
 function handleError(error: unknown) {
   if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
@@ -14,8 +15,10 @@ export async function GET(request: Request) {
   try {
     const { session } = await authenticate(request);
     const current = await syncPlan(session);
+    const shop = await db().shop.findUnique({ where: { domain: session.shop } });
     return Response.json({
       current,
+      trialDays: remainingTrialDays(shop?.trialStartedAt ?? null),
       plans: PLANS.map((p) => ({ ...p, products: Number.isFinite(p.products) ? p.products : null })),
     });
   } catch (error) {

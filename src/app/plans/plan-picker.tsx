@@ -14,6 +14,7 @@ type Plan = {
 export function PlanPicker() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
+  const [trialDays, setTrialDays] = useState(0);
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,6 +24,7 @@ export function PlanPicker() {
     const data = await res.json();
     setPlans(data.plans);
     setCurrent(data.current);
+    setTrialDays(data.trialDays);
   }
 
   useEffect(() => {
@@ -61,7 +63,7 @@ export function PlanPicker() {
           <s-section key={plan.id} heading={plan.name}>
             <s-stack gap="base">
               <s-heading>{plan.price === 0 ? "Free" : `$${plan.price}/month`}</s-heading>
-              {plan.price > 0 && <s-text tone="neutral">14-day free trial</s-text>}
+              {plan.price > 0 && trialDays > 0 && <s-text tone="neutral">{trialDays}-day free trial</s-text>}
               <s-unordered-list>
                 <s-list-item>{plan.products ? `${plan.products.toLocaleString()} products` : "Unlimited products"}</s-list-item>
                 <s-list-item>{plan.diagnoses} diagnoses / month</s-list-item>
