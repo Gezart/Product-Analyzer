@@ -15,12 +15,12 @@ For every task the owner gives, run these agents in order (`.claude/agents/`):
 5. `team-lead` — final report and `docs/HISTORY.md`.
 6. Commit, push and open a PR into `staging`. Never merge; the owner merges.
 
+Manual only, never run unless the owner asks: `customer-tester`, `security-reviewer`.
+
 ## Branches
 
 - `main` — production. `staging` — integration. Never push to either directly.
 - Every task gets its own branch from `staging`, named after the task in short kebab-case (e.g. `billing`, `product-sync`). No prefixes.
 - PRs always target `staging`.
-
-Manual only, never run unless the owner asks: `customer-tester`, `security-reviewer`.
 
 @AGENTS.md
