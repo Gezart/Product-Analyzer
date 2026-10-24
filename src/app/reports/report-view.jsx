@@ -65,7 +65,8 @@ export function ReportView() {
           </s-stack>
         )}
         {error && <s-banner tone="critical">Could not load the report ({error}).</s-banner>}
-        {!report && !error && <s-spinner accessibilityLabel="Loading report" />}
+        {months && months.months.length === 0 && <s-banner tone="info">Your first report appears tomorrow, after the first complete day.</s-banner>}
+        {!report && !error && months?.months.length !== 0 && <s-spinner accessibilityLabel="Loading report" />}
 
         {report && (
           <>
