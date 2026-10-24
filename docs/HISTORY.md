@@ -1,5 +1,13 @@
 # History
 
+## 2026-10-24 · compare
+- Compare page (`/compare`, in the app menu and from each product page): pick 2–4 products with Shopify's product picker, side by side over the last 30/60/90 days
+- Rows: units, revenue, views, conversion (view → purchase), price (with compare-at), margin, stock, stock value, stock age, page quality; the best value per row is highlighted
+- Margin = (price − unit cost) ÷ price, averaged over variants with a cost (shows how many have one); stock age = days since the last sale (with no sale: the product's age, or "over N days" when older than the known history); page quality = share of the diagnosis's page checks that pass (0–100), with the failed checks listed
+- Picked products and the window are kept in the URL; windows longer than the known order history are flagged
+- 5 unit tests; API checked on a local Postgres 16 (under 150 ms cold, under 10 ms warm)
+- Open: Growth-plan gating comes with `plan-limits`; views and conversion show once `views-sync` is connected
+
 ## 2026-10-24 · javascript
 - Code converted from TypeScript to JavaScript (owner's request): React files are `.jsx`, the rest `.js`; types removed, comments and formatting kept (docs of removed types moved next to the code that uses them)
 - `typescript` and `@types/*` removed; `tsconfig.json` replaced by `jsconfig.json` (only the `@/*` path alias); `package.json` is `"type": "module"`

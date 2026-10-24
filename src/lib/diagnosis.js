@@ -4,15 +4,15 @@
 
 const PRICE_ABOVE = 0.25;
 const MIN_PEERS = 3;
-const MIN_IMAGES = 3;
-const MIN_WORDS = 80;
+export const MIN_IMAGES = 3;
+export const MIN_WORDS = 80;
 const MIN_CARTS = 5;
 /** A collection holding more than this share of the store (e.g. "All", "Sale") isn't a price peer group. */
 const BROAD_COLLECTION = 0.5;
 
-const SIZE_WORDS = /\b(size|sizes|sizing|fit|fits|dimensions?|cm|mm|inch|inches|length|width|height|weight|kg|ml|oz|xs|xl)\b/i;
-const MATERIAL_WORDS = /\b(material|materials|made of|made from|fabric|cotton|wool|linen|silk|leather|polyester|nylon|steel|wood|wooden|glass|ceramic|plastic|metal|gold|silver)\b/i;
-const USE_WORDS = /\b(use|uses|care|wash|washable|how to|ideal for|perfect for|suitable for|great for|designed for)\b/i;
+export const SIZE_WORDS = /\b(size|sizes|sizing|fit|fits|dimensions?|cm|mm|inch|inches|length|width|height|weight|kg|ml|oz|xs|xl)\b/i;
+export const MATERIAL_WORDS = /\b(material|materials|made of|made from|fabric|cotton|wool|linen|silk|leather|polyester|nylon|steel|wood|wooden|glass|ceramic|plastic|metal|gold|silver)\b/i;
+export const USE_WORDS = /\b(use|uses|care|wash|washable|how to|ideal for|perfect for|suitable for|great for|designed for)\b/i;
 
 export function median(values) {
   if (values.length === 0) return null;
