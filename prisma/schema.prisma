@@ -27,13 +27,14 @@ model Session {
 }
 
 model Shop {
-  id            String    @id @default(cuid())
-  domain        String    @unique
-  plan          String    @default("free")
-  currency      String?
-  timezone      String?
-  installedAt   DateTime  @default(now()) @map("installed_at")
-  uninstalledAt DateTime? @map("uninstalled_at")
+  id             String    @id @default(cuid())
+  domain         String    @unique
+  plan           String    @default("free")
+  trialStartedAt DateTime? @map("trial_started_at")
+  currency       String?
+  timezone       String?
+  installedAt    DateTime  @default(now()) @map("installed_at")
+  uninstalledAt  DateTime? @map("uninstalled_at")
 
   settings      Settings?
   products      Product[]
@@ -41,6 +42,7 @@ model Shop {
   notifications Notification[]
   syncStates    SyncState[]
   aiUsage       AiUsage[]
+  jobs          Job[]
 
   @@map("shops")
 }
@@ -59,21 +61,23 @@ model Settings {
 }
 
 model Product {
-  id               String   @id @default(cuid())
-  shopId           String   @map("shop_id")
-  shopifyGid       String   @map("shopify_gid")
+  id               String    @id @default(cuid())
+  shopId           String    @map("shop_id")
+  shopifyGid       String    @map("shopify_gid")
   title            String
   handle           String
-  productType      String?  @map("product_type")
+  productType      String?   @map("product_type")
   vendor           String?
-  collections      String[] @default([])
-  imageCount       Int      @default(0) @map("image_count")
-  descriptionWords Int      @default(0) @map("description_words")
-  price            Decimal  @db.Decimal(12, 2)
-  compareAtPrice   Decimal? @map("compare_at_price") @db.Decimal(12, 2)
-  cost             Decimal? @db.Decimal(12, 2)
+  collections      String[]  @default([])
+  imageCount       Int       @default(0) @map("image_count")
+  descriptionWords Int       @default(0) @map("description_words")
+  price            Decimal   @db.Decimal(12, 2)
+  compareAtPrice   Decimal?  @map("compare_at_price") @db.Decimal(12, 2)
+  cost             Decimal?  @db.Decimal(12, 2)
   status           String
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  /// Product creation date in Shopify; caps "days without a sale" for new products.
+  shopifyCreatedAt DateTime? @map("shopify_created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   shop          Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
   variants      Variant[]
@@ -278,4 +282,29 @@ model AiUsage {
 
   @@id([shopId, month])
   @@map("ai_usage")
+}
+
+// Background job queue (see src/lib/jobs). Claimed with FOR UPDATE SKIP LOCKED; one running job per shop.
+model Job {
+  id          String    @id @default(cuid())
+  shopId      String?   @map("shop_id")
+  type        String
+  payload     Json      @default("{}")
+  status      String    @default("queued") // queued | running | done | failed
+  /// Dedupe key: enqueueing the same key twice is a no-op (e.g. one nightly run per shop per day).
+  uniqueKey   String?   @unique @map("unique_key")
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5) @map("max_attempts")
+  runAt       DateTime  @default(now()) @map("run_at")
+  lockedAt    DateTime? @map("locked_at")
+  lockedBy    String?   @map("locked_by")
+  lastError   String?   @map("last_error")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  finishedAt  DateTime? @map("finished_at")
+
+  shop Shop? @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAt])
+  @@index([shopId, status])
+  @@map("jobs")
 }

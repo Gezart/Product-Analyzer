@@ -22,7 +22,7 @@ No other dependencies are added without the owner's approval.
 ## How it works
 
 - **Auth:** App Bridge adds a session token to every `fetch` from the embedded UI. `src/lib/auth.ts` verifies it and, on first use, exchanges it for an expiring offline token (refreshed automatically). Tokens are encrypted at rest (`src/lib/crypto.ts`).
-- **Webhooks:** one endpoint, `/api/webhooks`. Register `app/uninstalled` and the compliance topics `customers/data_request`, `customers/redact`, `shop/redact` to it in the Partner Dashboard. Invalid HMAC returns 401.
+- **Webhooks:** one endpoint, `/api/webhooks`. Register `app/uninstalled`, `app_subscriptions/update` and the compliance topics `customers/data_request`, `customers/redact`, `shop/redact` to it in the Partner Dashboard. Invalid HMAC returns 401.
 - **Framing:** `src/proxy.ts` sets `frame-ancestors` to the shop and Shopify Admin.
 
 ## Database
@@ -33,3 +33,18 @@ Schema: `prisma/schema.prisma`. Migrations: `prisma/migrations`.
 - Apply in production: `npm run db:deploy`.
 
 All tables have Row Level Security enabled with no policies, which blocks Supabase's public Data API. The app connects as the `postgres` role through Prisma, which is not affected.
+
+## Billing
+
+Plans are defined in `src/lib/plans.ts` and charged through Shopify Billing (14-day trial on paid plans). The plans page is `/plans`. Outside production all charges are test charges; in production only if `SHOPIFY_BILLING_TEST=true`. One trial per shop (`shops.trial_started_at`).
+
+## Tests
+
+`npm test` runs `node:test` on `src/**/*.test.ts`.
+
+## Background jobs
+
+Postgres-backed queue in `src/lib/jobs/`. Register a handler in `registry.ts` (and add it to `nightlyJobs` for a nightly run), then `enqueue({ type, shopId })`.
+
+- Always-on server: set `JOBS_WORKER=true`; the worker starts with the Next.js server.
+- Or call `POST /api/jobs/run` every minute with `Authorization: Bearer $CRON_SECRET`.
