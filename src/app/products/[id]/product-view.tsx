@@ -29,6 +29,7 @@ type Data = {
     descriptionWords: number;
     seoTitle: string | null;
     seoDescription: string | null;
+    descriptionPreview: string | null;
   };
   score: {
     status: string;
@@ -153,6 +154,12 @@ export function ProductView() {
             <Stat label="SEO title" value={data.product.seoTitle ? "Set" : "Missing"} />
             <Stat label="Meta description" value={data.product.seoDescription ? "Set" : "Missing"} />
           </div>
+          {data.product.descriptionPreview && (
+            <p className="mt-3 text-sm text-zinc-600">
+              {data.product.descriptionPreview}
+              {data.product.descriptionPreview.length >= 400 ? "…" : ""}
+            </p>
+          )}
         </s-section>
 
         <s-section heading="Variants" id="variants">

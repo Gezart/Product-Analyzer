@@ -10,6 +10,8 @@ export type VariantRecord = {
   price: number;
   cost: number | null;
   inventoryQty: number;
+  /** Untracked inventory or "continue selling when out of stock". */
+  sellsWhenOut: boolean;
 };
 
 export type ProductRecord = {
@@ -85,7 +87,8 @@ export function assembleProducts(rows: Row[]): ProductRecord[] {
       const options = Object.fromEntries(
         ((row.selectedOptions as { name: string; value: string }[] | undefined) ?? []).map((o) => [o.name, o.value]),
       );
-      const unitCost = (row.inventoryItem as { unitCost?: { amount?: unknown } | null } | undefined)?.unitCost?.amount;
+      const item = row.inventoryItem as { unitCost?: { amount?: unknown } | null; tracked?: boolean } | undefined;
+      const unitCost = item?.unitCost?.amount;
       product.variants.push({
         gid: row.id!,
         sku: str(row.sku),
@@ -93,6 +96,7 @@ export function assembleProducts(rows: Row[]): ProductRecord[] {
         price: num(row.price) ?? 0,
         cost: num(unitCost),
         inventoryQty: num(row.inventoryQuantity) ?? 0,
+        sellsWhenOut: item?.tracked === false || row.inventoryPolicy === "CONTINUE",
       });
       compareAt.set(row.id!, num(row.compareAtPrice));
     }

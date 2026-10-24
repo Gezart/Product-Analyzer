@@ -86,18 +86,19 @@ export async function upsertProducts(
       price: v.price,
       cost: v.cost,
       qty: v.inventoryQty,
+      oversell: v.sellsWhenOut,
     })),
   );
   for (const batch of chunks(variants)) {
     await db().$executeRaw`
-      INSERT INTO "variants" ("id", "product_id", "shopify_gid", "sku", "options", "price", "cost", "inventory_qty")
-      SELECT gen_random_uuid()::text, p."id", t.gid, t.sku, t.options, t.price, t.cost, t.qty
+      INSERT INTO "variants" ("id", "product_id", "shopify_gid", "sku", "options", "price", "cost", "inventory_qty", "sells_when_out")
+      SELECT gen_random_uuid()::text, p."id", t.gid, t.sku, t.options, t.price, t.cost, t.qty, COALESCE(t.oversell, false)
       FROM jsonb_to_recordset(${JSON.stringify(batch)}::jsonb) AS t(
-        product_gid text, gid text, sku text, options jsonb, price numeric, cost numeric, qty int)
+        product_gid text, gid text, sku text, options jsonb, price numeric, cost numeric, qty int, oversell boolean)
       JOIN "products" p ON p."shop_id" = ${shopId} AND p."shopify_gid" = t.product_gid
       ON CONFLICT ("product_id", "shopify_gid") DO UPDATE SET
         "sku" = EXCLUDED."sku", "options" = EXCLUDED."options", "price" = EXCLUDED."price",
-        "cost" = EXCLUDED."cost", "inventory_qty" = EXCLUDED."inventory_qty"
+        "cost" = EXCLUDED."cost", "inventory_qty" = EXCLUDED."inventory_qty", "sells_when_out" = EXCLUDED."sells_when_out"
     `;
   }
 

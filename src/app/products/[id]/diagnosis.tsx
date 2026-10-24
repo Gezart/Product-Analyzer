@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type Reason = { code: string; severity: "high" | "medium" | "low"; evidence: string; link: string };
+type Reason = { code: string; severity: "high" | "medium" | "low"; evidence: string; link: string; data: Record<string, unknown> };
 
 const TITLES: Record<string, string> = {
   price_above_peers: "Price is high for its group",
@@ -49,10 +50,36 @@ export function Diagnosis({ productId }: { productId: string }) {
                   See the data
                 </a>
               </span>
+              <ReasonData reason={r} />
             </li>
           ))}
         </ul>
       )}
     </s-section>
   );
+}
+
+/** The items behind a reason that the linked section doesn't show by itself. */
+function ReasonData({ reason }: { reason: Reason }) {
+  if (reason.code === "duplicate_description") {
+    const ids = (reason.data.sameAs as string[]) ?? [];
+    return (
+      <span className="text-sm text-zinc-500">
+        Same text as:{" "}
+        {ids.map((id, i) => (
+          <span key={id}>
+            {i > 0 && ", "}
+            <Link href={`/products/${id}`} className="underline">
+              product {i + 1}
+            </Link>
+          </span>
+        ))}
+      </span>
+    );
+  }
+  if (reason.code === "low_traffic_collections") {
+    const views = (reason.data.collectionViews as number[]) ?? [];
+    return <span className="text-sm text-zinc-500">Views per collection (30 days): {views.join(", ")}</span>;
+  }
+  return null;
 }

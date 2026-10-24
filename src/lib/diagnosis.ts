@@ -27,6 +27,8 @@ export type Reason = {
 
 export type DiagnosisProduct = {
   id: string;
+  /** Only active products are in the peer price lists; others aren't removed from them. */
+  active: boolean;
   price: number;
   productType: string | null;
   collections: string[];
@@ -35,7 +37,15 @@ export type DiagnosisProduct = {
   descriptionWords: number;
   seoTitle: string | null;
   seoDescription: string | null;
-  variants: { title: string; stock: number }[];
+  /**
+   * False for rows synced before the description text and SEO fields were stored (the next catalog
+   * refresh fills them): those rules then stay silent instead of reporting data that is only unknown.
+   */
+  pageDataKnown: boolean;
+  /** Other active products with the same description; null when unknown. */
+  duplicateOf: string[] | null;
+  /** `sellsWhenOut`: untracked or "continue selling" — still buyable at 0 stock. */
+  variants: { title: string; stock: number; sellsWhenOut: boolean }[];
   views30: number;
   carts30: number;
   purchases30: number;
@@ -46,8 +56,8 @@ export type DiagnosisContext = {
   /** Active product prices by product type and by collection id. */
   pricesByType: Map<string, number[]>;
   pricesByCollection: Map<string, number[]>;
-  /** Normalized description → product ids using it. */
-  descriptions: Map<string, string[]>;
+  /** Active products in the store (to skip catch-all collections as price peers). */
+  activeProducts: number;
   /** 30-day views per collection id (only when view data exists). */
   collectionViews: Map<string, number>;
   /** Store medians over products with views; null without view data. */
@@ -60,7 +70,9 @@ const PRICE_ABOVE = 0.25;
 const MIN_PEERS = 3;
 const MIN_IMAGES = 3;
 const MIN_WORDS = 80;
-const MIN_WORDS_FOR_DUPLICATE = 20;
+const MIN_CARTS = 5;
+/** A collection holding more than this share of the store (e.g. "All", "Sale") isn't a price peer group. */
+const BROAD_COLLECTION = 0.5;
 
 const SIZE_WORDS = /\b(size|sizes|sizing|fit|fits|dimensions?|cm|mm|inch|inches|length|width|height|weight|kg|ml|oz|xs|xl)\b/i;
 const MATERIAL_WORDS = /\b(material|materials|made of|made from|fabric|cotton|wool|linen|silk|leather|polyester|nylon|steel|wood|wooden|glass|ceramic|plastic|metal|gold|silver)\b/i;
@@ -73,18 +85,14 @@ export function median(values: number[]): number | null {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-export function normalizeDescription(text: string | null): string {
-  return (text ?? "").toLowerCase().replace(/\s+/g, " ").trim();
-}
-
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 const SEVERITY_RANK: Record<Severity, number> = { high: 0, medium: 1, low: 2 };
 
 /** Peer median excluding the product itself, so one expensive product can't hide behind its own price. */
-function peerMedian(prices: number[] | undefined, own: number): { median: number; count: number } | null {
+function peerMedian(prices: number[] | undefined, own: number, ownIsListed: boolean): { median: number; count: number } | null {
   if (!prices) return null;
   const others = [...prices];
-  const i = others.indexOf(own);
+  const i = ownIsListed ? others.indexOf(own) : -1;
   if (i >= 0) others.splice(i, 1);
   const m = median(others);
   return m != null && others.length >= MIN_PEERS && m > 0 ? { median: m, count: others.length } : null;
@@ -93,21 +101,27 @@ function peerMedian(prices: number[] | undefined, own: number): { median: number
 export function diagnose(p: DiagnosisProduct, ctx: DiagnosisContext): Reason[] {
   const reasons: Reason[] = [];
 
-  // 1. Price more than 25% above the median of the same product type or collection (largest gap wins).
-  const groups: { label: string; key: string; peers: { median: number; count: number } | null }[] = [
-    ...(p.productType ? [{ label: `product type "${p.productType}"`, key: p.productType, peers: peerMedian(ctx.pricesByType.get(p.productType), p.price) }] : []),
-    ...p.collections.map((c) => ({ label: "the same collection", key: c, peers: peerMedian(ctx.pricesByCollection.get(c), p.price) })),
-  ];
-  const worst = groups
-    .filter((g) => g.peers)
-    .map((g) => ({ ...g, above: p.price / g.peers!.median - 1 }))
-    .sort((a, b) => b.above - a.above)[0];
-  if (worst && worst.above > PRICE_ABOVE) {
+  // 1. Price more than 25% above the median of similar products: the product type when it has
+  //    enough peers, otherwise the narrowest specific collection (catch-all collections are skipped).
+  const typePeers = p.productType ? peerMedian(ctx.pricesByType.get(p.productType), p.price, p.active) : null;
+  const collectionPeers = p.collections
+    .map((c) => ({ key: c, prices: ctx.pricesByCollection.get(c) }))
+    .filter((c) => c.prices && c.prices.length <= Math.max(MIN_PEERS + 1, ctx.activeProducts * BROAD_COLLECTION))
+    .sort((a, b) => a.prices!.length - b.prices!.length)
+    .map((c) => ({ key: c.key, peers: peerMedian(c.prices, p.price, p.active) }))
+    .find((c) => c.peers);
+  const group = typePeers
+    ? { label: `product type "${p.productType}"`, key: p.productType!, peers: typePeers }
+    : collectionPeers
+      ? { label: "its collection", key: collectionPeers.key, peers: collectionPeers.peers! }
+      : null;
+  const above = group ? p.price / group.peers.median - 1 : 0;
+  if (group && above > PRICE_ABOVE) {
     reasons.push({
       code: "price_above_peers",
-      severity: worst.above > 0.5 ? "high" : "medium",
-      evidence: `Price is ${pct(worst.above)} above the median ${worst.peers!.median.toFixed(2)} of ${worst.peers!.count} other products in ${worst.label}.`,
-      data: { price: p.price, peerMedian: worst.peers!.median, peers: worst.peers!.count, group: worst.key, abovePct: worst.above },
+      severity: above > 0.5 ? "high" : "medium",
+      evidence: `Price is ${pct(above)} above the median ${group.peers.median.toFixed(2)} of ${group.peers.count} other products in ${group.label}.`,
+      data: { price: p.price, peerMedian: group.peers.median, peers: group.peers.count, group: group.key, abovePct: above },
       link: "#overview",
     });
   }
@@ -133,23 +147,23 @@ export function diagnose(p: DiagnosisProduct, ctx: DiagnosisContext): Reason[] {
       link: "#page",
     });
   }
-  const text = p.description ?? "";
-  const missing = [
-    ...(SIZE_WORDS.test(text) ? [] : ["size or dimensions"]),
-    ...(MATERIAL_WORDS.test(text) ? [] : ["material"]),
-    ...(USE_WORDS.test(text) ? [] : ["use or care"]),
-  ];
-  if (missing.length) {
-    reasons.push({
-      code: "missing_details",
-      severity: missing.length === 3 ? "medium" : "low",
-      evidence: `Description doesn't mention ${missing.join(", ")}.`,
-      data: { missing },
-      link: "#page",
-    });
-  }
-  if (p.descriptionWords >= MIN_WORDS_FOR_DUPLICATE) {
-    const same = (ctx.descriptions.get(normalizeDescription(p.description)) ?? []).filter((id) => id !== p.id);
+  if (p.pageDataKnown) {
+    const text = p.description ?? "";
+    const missing = [
+      ...(SIZE_WORDS.test(text) ? [] : ["size or dimensions"]),
+      ...(MATERIAL_WORDS.test(text) ? [] : ["material"]),
+      ...(USE_WORDS.test(text) ? [] : ["use or care"]),
+    ];
+    if (missing.length) {
+      reasons.push({
+        code: "missing_details",
+        severity: missing.length === 3 ? "medium" : "low",
+        evidence: `Description doesn't mention ${missing.join(", ")}.`,
+        data: { missing },
+        link: "#page",
+      });
+    }
+    const same = [...(p.duplicateOf ?? [])].filter((id) => id !== p.id).sort();
     if (same.length) {
       reasons.push({
         code: "duplicate_description",
@@ -159,23 +173,23 @@ export function diagnose(p: DiagnosisProduct, ctx: DiagnosisContext): Reason[] {
         link: "#page",
       });
     }
-  }
 
-  // 4. Missing SEO title or meta description.
-  const seoMissing = [...(p.seoTitle ? [] : ["SEO title"]), ...(p.seoDescription ? [] : ["meta description"])];
-  if (seoMissing.length) {
-    reasons.push({
-      code: "missing_seo",
-      severity: "low",
-      evidence: `Missing ${seoMissing.join(" and ")}.`,
-      data: { missing: seoMissing },
-      link: "#page",
-    });
+    // 4. Missing SEO title or meta description.
+    const seoMissing = [...(p.seoTitle ? [] : ["SEO title"]), ...(p.seoDescription ? [] : ["meta description"])];
+    if (seoMissing.length) {
+      reasons.push({
+        code: "missing_seo",
+        severity: "low",
+        evidence: `Missing ${seoMissing.join(" and ")}.`,
+        data: { missing: seoMissing },
+        link: "#page",
+      });
+    }
   }
 
   // 5. Broken size run: some variants out of stock while others still have stock.
   if (p.variants.length > 1) {
-    const out = p.variants.filter((v) => v.stock <= 0);
+    const out = p.variants.filter((v) => v.stock <= 0 && !v.sellsWhenOut);
     if (out.length > 0 && out.length < p.variants.length) {
       reasons.push({
         code: "broken_size_run",
@@ -206,7 +220,7 @@ export function diagnose(p: DiagnosisProduct, ctx: DiagnosisContext): Reason[] {
   }
 
   // 7. Many add to cart but few buy → likely store-level (shipping cost, checkout), not this product.
-  if (p.views30 >= ctx.minViews && p.carts30 > 0 && ctx.medianViewToCart != null && ctx.medianCartToPurchase != null) {
+  if (p.views30 >= ctx.minViews && p.carts30 >= MIN_CARTS && ctx.medianViewToCart != null && ctx.medianCartToPurchase != null) {
     const viewToCart = p.carts30 / p.views30;
     const cartToPurchase = p.purchases30 / p.carts30;
     if (viewToCart >= ctx.medianViewToCart && cartToPurchase < ctx.medianCartToPurchase * 0.5) {
@@ -221,4 +235,21 @@ export function diagnose(p: DiagnosisProduct, ctx: DiagnosisContext): Reason[] {
   }
 
   return reasons.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+}
+
+/**
+ * What makes two diagnoses "the same": the reasons and the items they name, not the rolling numbers
+ * (medians and percentages move every day as the 30-day window rolls).
+ */
+export function reasonSignature(reasons: Reason[]): string {
+  return reasons
+    .map((r) => {
+      const items = ["outOfStock", "missing", "sameAs", "group"]
+        .map((k) => r.data[k])
+        .filter((v) => v != null)
+        .map((v) => (Array.isArray(v) ? [...v].sort().join("|") : String(v)));
+      return [r.code, r.severity, ...items].join(":");
+    })
+    .sort()
+    .join(";");
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { diagnose, median, normalizeDescription, type DiagnosisContext, type DiagnosisProduct } from "./diagnosis.ts";
+import { diagnose, median, reasonSignature, type DiagnosisContext, type DiagnosisProduct } from "./diagnosis.ts";
 
 const GOOD_TEXT =
   "Soft cotton shirt made from organic fabric. Sizes from XS to XL with a relaxed fit. Machine wash cold, ideal for everyday use. " +
@@ -9,6 +9,7 @@ const GOOD_TEXT =
 function product(o: Partial<DiagnosisProduct> = {}): DiagnosisProduct {
   return {
     id: "p1",
+    active: true,
     price: 40,
     productType: "Shirts",
     collections: ["c1"],
@@ -17,7 +18,9 @@ function product(o: Partial<DiagnosisProduct> = {}): DiagnosisProduct {
     descriptionWords: 90,
     seoTitle: "Shirt",
     seoDescription: "A shirt",
-    variants: [{ title: "S", stock: 3 }, { title: "M", stock: 4 }],
+    pageDataKnown: true,
+    duplicateOf: [],
+    variants: [{ title: "S", stock: 3, sellsWhenOut: false }, { title: "M", stock: 4, sellsWhenOut: false }],
     views30: 0,
     carts30: 0,
     purchases30: 0,
@@ -29,7 +32,7 @@ function ctx(o: Partial<DiagnosisContext> = {}): DiagnosisContext {
   return {
     pricesByType: new Map([["Shirts", [40, 30, 30, 30, 30]]]),
     pricesByCollection: new Map([["c1", [40, 30, 30, 30]]]),
-    descriptions: new Map([[normalizeDescription(GOOD_TEXT), ["p1"]]]),
+    activeProducts: 20,
     collectionViews: new Map(),
     medianViewToCart: null,
     medianCartToPurchase: null,
@@ -68,18 +71,26 @@ test("few images, short or thin description, missing SEO", () => {
   assert.deepEqual(details.data.missing, ["size or dimensions", "material", "use or care"]);
 });
 
-test("duplicate description across products", () => {
-  const c = ctx({ descriptions: new Map([[normalizeDescription(GOOD_TEXT), ["p1", "p2", "p3"]]]) });
-  const r = diagnose(product({ price: 30 }), c).find((x) => x.code === "duplicate_description")!;
+test("duplicate description across products, listed in a stable order", () => {
+  const r = diagnose(product({ price: 30, duplicateOf: ["p3", "p2"] }), ctx()).find((x) => x.code === "duplicate_description")!;
   assert.equal(r.data.count, 2);
+  assert.deepEqual(r.data.sameAs, ["p2", "p3"]);
+});
+
+test("rows synced before the text was stored don't get description or SEO reasons", () => {
+  const c = codes(product({ price: 30, description: null, seoTitle: null, seoDescription: null, pageDataKnown: false, duplicateOf: null }), ctx());
+  assert.deepEqual(c, []);
 });
 
 test("broken size run, but not when everything or nothing is out", () => {
-  const r = diagnose(product({ price: 30, variants: [{ title: "S", stock: 0 }, { title: "M", stock: 5 }, { title: "L", stock: 2 }] }), ctx());
+  const v = (title: string, stock: number, sellsWhenOut = false) => ({ title, stock, sellsWhenOut });
+  const r = diagnose(product({ price: 30, variants: [v("S", 0), v("M", 5), v("L", 2)] }), ctx());
   const run = r.find((x) => x.code === "broken_size_run")!;
   assert.deepEqual(run.data.outOfStock, ["S"]);
   assert.equal(run.link, "#variants");
-  assert.ok(!codes(product({ price: 30, variants: [{ title: "S", stock: 0 }, { title: "M", stock: 0 }] }), ctx()).includes("broken_size_run"));
+  assert.ok(!codes(product({ price: 30, variants: [v("S", 0), v("M", 0)] }), ctx()).includes("broken_size_run"));
+  // Still buyable at 0 (untracked or "continue selling"): not out of stock.
+  assert.ok(!codes(product({ price: 30, variants: [v("S", 0, true), v("M", 5)] }), ctx()).includes("broken_size_run"));
 });
 
 test("no collection; low-traffic collections need view data", () => {
@@ -95,9 +106,42 @@ test("high add-to-cart but low purchase flags a store-level issue", () => {
   assert.match(r.evidence, /15% of viewers add it to the cart/);
   assert.ok(!codes(product({ price: 30, views30: 200, carts30: 30, purchases30: 12 }), c).includes("store_checkout_issue"));
   assert.ok(!codes(product({ price: 30, views30: 10, carts30: 5, purchases30: 0 }), c).includes("store_checkout_issue"));
+  // Too few carts to judge.
+  assert.ok(!codes(product({ price: 30, views30: 20, carts30: 2, purchases30: 0 }), c).includes("store_checkout_issue"));
 });
 
 test("reasons are ordered by severity", () => {
   const r = diagnose(product({ price: 30, collections: [], seoTitle: null }), ctx());
   assert.deepEqual(r.map((x) => x.severity), ["high", "low"]);
+});
+
+test("catch-all collections aren't price peers; type peers come first", () => {
+  // $200 jacket among $195–210 jackets, also in an "All" collection full of $30 tees.
+  const all = [200, 195, 205, 210, 30, 30, 30, 30, 30, 30];
+  const c = ctx({
+    pricesByType: new Map([["Jackets", [200, 195, 205, 210]]]),
+    pricesByCollection: new Map([["all", all]]),
+    activeProducts: all.length,
+  });
+  assert.deepEqual(codes(product({ price: 200, productType: "Jackets", collections: ["all"] }), c), []);
+  // No type: a specific collection is used, the catch-all isn't.
+  const c2 = ctx({ pricesByType: new Map(), pricesByCollection: new Map([["all", all], ["tees", [30, 30, 30, 60]]]), activeProducts: all.length });
+  const r = diagnose(product({ price: 60, productType: null, collections: ["all", "tees"] }), c2).find((x) => x.code === "price_above_peers")!;
+  assert.equal(r.data.group, "tees");
+});
+
+test("draft products don't remove a real peer from the price list", () => {
+  const c = ctx({ pricesByType: new Map([["Shirts", [30, 30, 30]]]), pricesByCollection: new Map() });
+  const r = diagnose(product({ active: false, price: 30 * 1.5 }), c).find((x) => x.code === "price_above_peers")!;
+  assert.equal(r.data.peers, 3);
+});
+
+test("signature ignores rolling numbers but not the items named", () => {
+  const base = diagnose(product({ price: 40 }), ctx());
+  const moved = diagnose(product({ price: 41 }), ctx());
+  assert.equal(reasonSignature(base), reasonSignature(moved));
+  const v = (title: string, stock: number) => ({ title, stock, sellsWhenOut: false });
+  const a = diagnose(product({ price: 30, variants: [v("S", 0), v("M", 3), v("L", 3)] }), ctx());
+  const b = diagnose(product({ price: 30, variants: [v("S", 3), v("M", 0), v("L", 3)] }), ctx());
+  assert.notEqual(reasonSignature(a), reasonSignature(b));
 });

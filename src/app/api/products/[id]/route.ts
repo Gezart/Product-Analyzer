@@ -62,6 +62,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/products/[id
         descriptionWords: product.descriptionWords,
         seoTitle: product.seoTitle,
         seoDescription: product.seoDescription,
+        descriptionPreview: product.description?.slice(0, 400) ?? null,
       },
       score: score
         ? {

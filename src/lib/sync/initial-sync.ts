@@ -26,9 +26,9 @@ const PRODUCTS_QUERY = `{
       mediaCount { count }
       collections { edges { node { id } } }
       variants { edges { node {
-        id sku price compareAtPrice inventoryQuantity
+        id sku price compareAtPrice inventoryQuantity inventoryPolicy
         selectedOptions { name value }
-        inventoryItem { unitCost { amount } }
+        inventoryItem { tracked unitCost { amount } }
       } } }
     } }
   }
