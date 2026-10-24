@@ -1,12 +1,13 @@
 # History
 
 ## 2026-10-24 · rescue-plans
-- Applying a fix starts the product's measurement window today (a fix during an open window restarts it and joins the same plan); undoing all of a plan's fixes cancels it
-- Window ends at 150 views or 30 days, never before 14; under 50 views it is extended once (to 60 days), then "not enough data"
-- Baseline = the same number of days just before the fix (cut at the start of known history and scaled to the window), with expected units scaled by the rest of the store's traffic change
-- Verdict: improved (conversion +20% and more units than expected), worse (conversion −20%), no change; without view data, units vs expected units (±20%)
-- Hourly `rescue-runner` job (new hourly scheduling); product page shows the window, then the verdict with dates, numbers and next step
-- 8 unit tests for the window logic; runner verified end to end on a local Postgres 16
+- Applying a fix starts the product's measurement window today (a fix during an open window restarts it and joins the same plan; the baseline stays before the first fix); undoing all of a plan's fixes cancels it
+- Window ends on the first day with 150 views or at 30 days, never before 14 (decided by the data, not by when the runner runs); under 50 views it is extended once (to 60 days), then "not enough data"; windows close only after the 04:00 order catch-up
+- Baseline = the same number of days just before the fix (cut at the start of known history or the product's creation, and scaled to the window), with expected units scaled by the rest of the store's traffic change — only with enough volume (30 units / 300 views per period) and capped at ×0.5–×2
+- Verdict: improved (conversion +20% and more units than expected), worse (conversion −20%), no change; exactly ±20% counts; without view data, units vs expected units (±20%)
+- Hourly `rescue-runner` job (new hourly scheduling, guarded against a restart in between); product page shows the window, then the verdict with dates, numbers and next step, and a one-click "Undo the fixes" when worse
+- 13 unit tests for the window logic; runner verified end to end on a local Postgres 16
+- Owner decision pending: the traffic-scaling limits (volume minimum, ×0.5–×2 cap) are defaults in `src/lib/rescue.ts`
 
 ## 2026-10-24 · fix-center
 - Fix center on the product page: merchant edits title, description (HTML), SEO title/meta, image order and manual collections, with hints from the diagnosis; "Apply to Shopify" is the approval

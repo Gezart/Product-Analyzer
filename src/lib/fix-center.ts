@@ -32,6 +32,11 @@ async function refreshProduct(shopId: string, productGid: string) {
   await enqueue({ type: "sync-product", shopId, payload: { productGid } }).catch(() => {});
 }
 
+/** Rescue-plan bookkeeping must not change a fix's outcome once Shopify has been written. */
+async function track(step: Promise<void>) {
+  await step.catch((error) => console.error("[fix-center] rescue plan update failed", error));
+}
+
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 500);
 
 /**
@@ -96,7 +101,7 @@ export async function applyFix(
     });
     await refreshProduct(shopId, product.shopifyGid);
     if (unchanged) throw new FixError(message(writeError), 502);
-    await startRescuePlan(shopId, productId, fix.id);
+    await track(startRescuePlan(shopId, productId, fix.id));
     return result;
   }
 
@@ -107,7 +112,7 @@ export async function applyFix(
   });
   await refreshProduct(shopId, product.shopifyGid);
   // The fix's effect is measured from today.
-  await startRescuePlan(shopId, productId, fix.id);
+  await track(startRescuePlan(shopId, productId, fix.id));
   return { ...result, pending };
 }
 
@@ -144,7 +149,7 @@ export async function undoFix(shopId: string, fixId: string, { force = false } =
     const { pending } = await writeState(session, fix.product.shopifyGid, type, current, fix.before);
     await refreshProduct(shopId, fix.product.shopifyGid);
     const result = await db().fix.update({ where: { id: fix.id }, data: { status: "undone", undoneAt: new Date() } });
-    await removeFromRescuePlan(fix.productId, fix.id);
+    await track(removeFromRescuePlan(fix.productId, fix.id));
     return { ...result, pending };
   } catch (error) {
     // Back to applied so it can be retried; the product may be partly restored.

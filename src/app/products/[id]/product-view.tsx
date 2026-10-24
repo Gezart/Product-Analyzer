@@ -87,7 +87,7 @@ export function ProductView() {
           </Link>
         </div>
 
-        {data.rescuePlan && <RescuePlan plan={data.rescuePlan} />}
+        {data.rescuePlan && <RescuePlan plan={data.rescuePlan} onChanged={() => setVersion((v) => v + 1)} />}
         <Diagnosis productId={data.product.id} key={`diagnosis-${version}`} />
         <FixCenter
           productId={data.product.id}

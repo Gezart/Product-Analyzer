@@ -90,6 +90,10 @@ export async function GET(request: Request, ctx: RouteContext<"/api/products/[id
       rescuePlan: product.rescuePlans[0]
         ? {
             startedAt: product.rescuePlans[0].startedAt.toISOString().slice(0, 10),
+            // Day of the window in the store's calendar (day 1 = the day of the fix).
+            day: Math.round((Date.parse(`${today}T00:00:00Z`) - product.rescuePlans[0].startedAt.getTime()) / 86_400_000) + 1,
+            fixIds: product.rescuePlans[0].fixIds,
+            hasViews: windows[2].views > 0,
             endsAt: product.rescuePlans[0].endsAt?.toISOString().slice(0, 10) ?? null,
             verdict: product.rescuePlans[0].verdict,
             fixes: product.rescuePlans[0].fixIds.length,
