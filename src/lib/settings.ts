@@ -7,6 +7,8 @@ export type SettingsInput = {
   maxDiscountPct: number;
   excludedCollectionIds: string[];
   excludedProductIds: string[];
+  /** When a markdown ends: restore the original price, or hold the last discount. */
+  markdownEndAction: "restore" | "hold";
 };
 
 /** A field error the form can turn into a message with its own label and units. */
@@ -18,6 +20,7 @@ export const DEFAULT_SETTINGS: SettingsInput = {
   maxDiscountPct: 40,
   excludedCollectionIds: [],
   excludedProductIds: [],
+  markdownEndAction: "restore",
 };
 
 type Rule = { min: number; max: number; integer?: boolean };
@@ -80,6 +83,9 @@ export function validateSettings(raw: unknown): { ok: true; value: SettingsInput
   const excludedProductIds = gidList(input.excludedProductIds ?? [], GID.product);
   if (!excludedProductIds) errors.push({ field: "excludedProductIds", max: MAX_EXCLUDED });
 
+  const endAction = input.markdownEndAction ?? "restore";
+  if (endAction !== "restore" && endAction !== "hold") errors.push({ field: "markdownEndAction" });
+
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
@@ -90,6 +96,7 @@ export function validateSettings(raw: unknown): { ok: true; value: SettingsInput
       maxDiscountPct: round2(maxDiscountPct as number),
       excludedCollectionIds: excludedCollectionIds!,
       excludedProductIds: excludedProductIds!,
+      markdownEndAction: endAction as "restore" | "hold",
     },
   };
 }

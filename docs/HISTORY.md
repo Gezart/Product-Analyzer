@@ -1,5 +1,15 @@
 # History
 
+## 2026-10-24 · markdown-engine
+- Markdown ladder 10% → 20% → 30% with a compare-at price, one step every 14 days, proposed when a rescue plan ends with no change or the product is dead stock; preview from live Shopify prices and costs, merchant approves the exact schedule
+- Money rule: never below cost × (1 + minimum margin) (rounded up to the cent), never more than the max discount (rounded so it can't be exceeded); variants without a unit cost are never discounted
+- Enforced three times: in the ladder code (20,000-case property test), right before each write (also against the live cost), and by the database (CHECK on `price_changes`; prices are logged as pending before Shopify is called, so a refused row means no write)
+- Every price change is logged (`price_changes`: old/new price and compare-at, floor, reason, status)
+- Stops when half the starting stock has sold or the ladder is done, then restores or holds the price (new setting); if the merchant changes a price mid-plan, the plan pauses instead of overwriting it; cancel restores
+- Plan runner (hourly) applies steps; price guard after each run and daily reverts any plan price below its floor and notifies; one running plan per product (unique index)
+- 11 unit tests; DB constraints verified on a local Postgres 16
+- Not yet tested against a real store; "bundle or Outlet" for unsold stock is v2 (a notification is created)
+
 ## 2026-10-24 · rescue-plans
 - Applying a fix starts the product's measurement window today (a fix during an open window restarts it and joins the same plan; the baseline stays before the first fix); undoing all of a plan's fixes cancels it
 - Window ends on the first day with 150 views or at 30 days, never before 14 (decided by the data, not by when the runner runs); under 50 views it is extended once (to 60 days), then "not enough data"; windows close only after the 04:00 order catch-up

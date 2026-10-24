@@ -25,6 +25,7 @@ test("out-of-range, wrong-type and missing values are rejected with field errors
     maxDiscountPct: 95,
     excludedCollectionIds: ["123"],
     excludedProductIds: ["gid://shopify/Collection/1"],
+    markdownEndAction: "sometimes",
   });
   assert.equal(r.ok, false);
   if (r.ok) return;
@@ -36,6 +37,7 @@ test("out-of-range, wrong-type and missing values are rejected with field errors
     "maxDiscountPct",
     "excludedCollectionIds",
     "excludedProductIds",
+    "markdownEndAction",
   ]);
   assert.deepEqual(r.errors[1], { field: "thresholds.deadDays", min: 14, max: 365, integer: true });
   assert.equal(validateSettings(null).ok, false);

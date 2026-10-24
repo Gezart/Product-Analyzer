@@ -55,6 +55,8 @@ model Settings {
   maxDiscountPct        Decimal  @default(40) @map("max_discount_pct") @db.Decimal(5, 2)
   excludedCollectionIds String[] @default([]) @map("excluded_collection_ids")
   excludedProductIds    String[] @default([]) @map("excluded_product_ids")
+  /// When a markdown ends: "restore" the original price or "hold" the last discount.
+  markdownEndAction     String   @default("restore") @map("markdown_end_action")
   digestDay             Int      @default(1) @map("digest_day") // 0 = Sunday … 6 = Saturday
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
@@ -209,10 +211,20 @@ model MarkdownPlan {
   id             String    @id @default(cuid())
   productId      String    @map("product_id")
   rescuePlanId   String?   @map("rescue_plan_id")
+  /// Per-variant ladder: original price/compare-at, floor and the price at each step.
   steps          Json
+  /// Lowest floor across the plan's variants (each variant's own floor is in `steps`).
   floorPrice     Decimal   @map("floor_price") @db.Decimal(12, 2)
   maxDiscountPct Decimal   @map("max_discount_pct") @db.Decimal(5, 2)
-  status         String
+  status         String // active | completed | cancelled | failed
+  /// Ladder step currently live (-1 = none yet).
+  currentStep    Int       @default(-1) @map("current_step")
+  /// Units in stock when the plan started (stop at 50% sold).
+  startStock     Int       @default(0) @map("start_stock")
+  /// At the end: "restore" the original prices or "hold" the last step.
+  endAction      String    @default("restore") @map("end_action")
+  /// Why it ended: stock_cleared | ladder_finished | cancelled.
+  endReason      String?   @map("end_reason")
   startedAt      DateTime? @map("started_at")
   endedAt        DateTime? @map("ended_at")
 
@@ -230,8 +242,14 @@ model PriceChange {
   newPrice     Decimal  @map("new_price") @db.Decimal(12, 2)
   oldCompareAt Decimal? @map("old_compare_at") @db.Decimal(12, 2)
   newCompareAt Decimal? @map("new_compare_at") @db.Decimal(12, 2)
-  reason       String
+  reason       String // markdown | restore | guard_revert
   planId       String?  @map("plan_id")
+  variantGid   String?  @map("variant_gid")
+  /// Lowest allowed price at the time; the database refuses a markdown below it (CHECK constraint).
+  floorPrice   Decimal? @map("floor_price") @db.Decimal(12, 2)
+  /// pending (logged, about to be written) | applied | failed
+  status       String   @default("pending")
+  error        String?
   changedAt    DateTime @default(now()) @map("changed_at")
 
   product Product  @relation(fields: [productId], references: [id], onDelete: Cascade)

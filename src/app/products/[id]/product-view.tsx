@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 import { Diagnosis } from "./diagnosis";
 import { FixCenter } from "./fix-center";
+import { Markdown } from "./markdown";
 import { RescuePlan, type RescuePlanData } from "./rescue-plan";
 import { SalesChart } from "./sales-chart";
 
@@ -88,6 +89,7 @@ export function ProductView() {
         </div>
 
         {data.rescuePlan && <RescuePlan plan={data.rescuePlan} onChanged={() => setVersion((v) => v + 1)} />}
+        <Markdown productId={data.product.id} money={money2} onChanged={() => setVersion((v) => v + 1)} />
         <Diagnosis productId={data.product.id} key={`diagnosis-${version}`} />
         <FixCenter
           productId={data.product.id}
