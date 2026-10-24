@@ -27,13 +27,14 @@ model Session {
 }
 
 model Shop {
-  id            String    @id @default(cuid())
-  domain        String    @unique
-  plan          String    @default("free")
-  currency      String?
-  timezone      String?
-  installedAt   DateTime  @default(now()) @map("installed_at")
-  uninstalledAt DateTime? @map("uninstalled_at")
+  id             String    @id @default(cuid())
+  domain         String    @unique
+  plan           String    @default("free")
+  trialStartedAt DateTime? @map("trial_started_at")
+  currency       String?
+  timezone       String?
+  installedAt    DateTime  @default(now()) @map("installed_at")
+  uninstalledAt  DateTime? @map("uninstalled_at")
 
   settings      Settings?
   products      Product[]
