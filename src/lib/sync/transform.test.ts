@@ -10,23 +10,27 @@ test("word count ignores extra whitespace", () => {
 test("products are assembled from parent and child rows in any order", () => {
   const rows = [
     { id: "gid://shopify/ProductVariant/11", price: "30.00", compareAtPrice: "40.00", sku: "S", inventoryQuantity: 5, selectedOptions: [{ name: "Size", value: "S" }], inventoryItem: { unitCost: { amount: "12.50" } }, __parentId: "gid://shopify/Product/1" },
-    { id: "gid://shopify/Product/1", title: "Shirt", handle: "shirt", productType: "Tops", vendor: "Acme", status: "ACTIVE", createdAt: "2026-01-02T03:04:05Z", description: "Soft cotton shirt", mediaCount: { count: 4 } },
+    { id: "gid://shopify/Product/1", title: "Shirt", handle: "shirt", productType: "Tops", vendor: "Acme", status: "ACTIVE", createdAt: "2026-01-02T03:04:05Z", description: "Soft cotton shirt", seo: { title: "Shirt SEO", description: null }, mediaCount: { count: 4 } },
     { id: "gid://shopify/Collection/7", __parentId: "gid://shopify/Product/1" },
-    { id: "gid://shopify/ProductVariant/12", price: "25.00", compareAtPrice: null, sku: "", inventoryQuantity: -2, selectedOptions: [{ name: "Size", value: "M" }], inventoryItem: { unitCost: null }, __parentId: "gid://shopify/Product/1" },
+    { id: "gid://shopify/ProductVariant/12", price: "25.00", compareAtPrice: null, sku: "", inventoryQuantity: -2, inventoryPolicy: "CONTINUE", selectedOptions: [{ name: "Size", value: "M" }], inventoryItem: { unitCost: null, tracked: true }, __parentId: "gid://shopify/Product/1" },
     { id: "gid://shopify/Product/2", title: "Empty", handle: "empty", status: "DRAFT" },
   ];
   const [shirt, empty] = assembleProducts(rows);
   assert.equal(shirt.title, "Shirt");
   assert.equal(shirt.descriptionWords, 3);
+  assert.equal(shirt.description, "Soft cotton shirt");
+  assert.equal(shirt.seoTitle, "Shirt SEO");
+  assert.equal(shirt.seoDescription, null);
   assert.equal(shirt.imageCount, 4);
   assert.deepEqual(shirt.collections, ["gid://shopify/Collection/7"]);
   assert.equal(shirt.price, 25);
   assert.equal(shirt.compareAtPrice, null);
   assert.deepEqual(shirt.createdAt, new Date("2026-01-02T03:04:05Z"));
-  assert.deepEqual(shirt.variants[0], { gid: "gid://shopify/ProductVariant/11", sku: "S", options: { Size: "S" }, price: 30, cost: 12.5, inventoryQty: 5 });
+  assert.deepEqual(shirt.variants[0], { gid: "gid://shopify/ProductVariant/11", sku: "S", options: { Size: "S" }, price: 30, cost: 12.5, inventoryQty: 5, sellsWhenOut: false });
   assert.equal(shirt.variants[1].cost, null);
   assert.equal(shirt.variants[1].sku, null);
   assert.equal(shirt.variants[1].inventoryQty, -2);
+  assert.equal(shirt.variants[1].sellsWhenOut, true);
   assert.equal(empty.status, "DRAFT");
   assert.equal(empty.price, 0);
   assert.deepEqual(empty.variants, []);

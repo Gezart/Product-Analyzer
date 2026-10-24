@@ -12,23 +12,23 @@ import { assembleProducts, orderLinesFromWebhook, rowsFromProductNode, type Orde
 const PRODUCT_QUERY = `#graphql
   query SyncProduct($id: ID!) {
     product(id: $id) {
-      id title handle productType vendor status createdAt description
+      id title handle productType vendor status createdAt description seo { title description }
       mediaCount { count }
       collections(first: 100) { nodes { id } pageInfo { hasNextPage endCursor } }
       variants(first: 100) { nodes { ...SyncVariant } pageInfo { hasNextPage endCursor } }
     }
   }
   fragment SyncVariant on ProductVariant {
-    id sku price compareAtPrice inventoryQuantity
+    id sku price compareAtPrice inventoryQuantity inventoryPolicy
     selectedOptions { name value }
-    inventoryItem { unitCost { amount } }
+    inventoryItem { tracked unitCost { amount } }
   }`;
 
 const MORE_VARIANTS = `#graphql
   query MoreVariants($id: ID!, $after: String) {
     product(id: $id) {
       variants(first: 100, after: $after) {
-        nodes { id sku price compareAtPrice inventoryQuantity selectedOptions { name value } inventoryItem { unitCost { amount } } }
+        nodes { id sku price compareAtPrice inventoryQuantity inventoryPolicy selectedOptions { name value } inventoryItem { tracked unitCost { amount } } }
         pageInfo { hasNextPage endCursor }
       }
     }

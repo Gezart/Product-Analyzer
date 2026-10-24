@@ -10,6 +10,8 @@ export type VariantRecord = {
   price: number;
   cost: number | null;
   inventoryQty: number;
+  /** Untracked inventory or "continue selling when out of stock". */
+  sellsWhenOut: boolean;
 };
 
 export type ProductRecord = {
@@ -21,6 +23,9 @@ export type ProductRecord = {
   status: string;
   createdAt: Date | null;
   descriptionWords: number;
+  description: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
   imageCount: number;
   /** Lowest variant price; compare-at of that variant. */
   price: number;
@@ -58,6 +63,9 @@ export function assembleProducts(rows: Row[]): ProductRecord[] {
         status: str(row.status) ?? "ACTIVE",
         createdAt: typeof row.createdAt === "string" ? new Date(row.createdAt) : null,
         descriptionWords: wordCount(str(row.description)),
+        description: str(row.description)?.slice(0, 5000) ?? null,
+        seoTitle: str((row.seo as { title?: unknown } | null | undefined)?.title),
+        seoDescription: str((row.seo as { description?: unknown } | null | undefined)?.description),
         imageCount: num((row.mediaCount as { count?: unknown } | undefined)?.count) ?? 0,
         price: 0,
         compareAtPrice: null,
@@ -79,7 +87,8 @@ export function assembleProducts(rows: Row[]): ProductRecord[] {
       const options = Object.fromEntries(
         ((row.selectedOptions as { name: string; value: string }[] | undefined) ?? []).map((o) => [o.name, o.value]),
       );
-      const unitCost = (row.inventoryItem as { unitCost?: { amount?: unknown } | null } | undefined)?.unitCost?.amount;
+      const item = row.inventoryItem as { unitCost?: { amount?: unknown } | null; tracked?: boolean } | undefined;
+      const unitCost = item?.unitCost?.amount;
       product.variants.push({
         gid: row.id!,
         sku: str(row.sku),
@@ -87,6 +96,7 @@ export function assembleProducts(rows: Row[]): ProductRecord[] {
         price: num(row.price) ?? 0,
         cost: num(unitCost),
         inventoryQty: num(row.inventoryQuantity) ?? 0,
+        sellsWhenOut: item?.tracked === false || row.inventoryPolicy === "CONTINUE",
       });
       compareAt.set(row.id!, num(row.compareAtPrice));
     }

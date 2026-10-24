@@ -1,5 +1,13 @@
 # History
 
+## 2026-10-24 · diagnosis-rules
+- Rule-based diagnosis (v1, no AI): price > 25% above peers (the narrowest product type or collection with enough peers; catch-all groups over half the store skipped; product itself excluded; ≥ 3 peers), fewer than 3 images, description < 80 words / missing size, material or use / copied from another product, missing SEO title or meta description, broken size run (variants that sell when out of stock don't count), no collection or only quiet collections, high add-to-cart but low purchase with ≥ 5 carts (store-level)
+- Every reason carries its numbers (evidence + data) and links to the product page section that shows them; ordered by severity
+- `GET /api/products/[id]/diagnosis`; a `diagnoses` row is stored only when the reasons or the items they name change (`rules-v1`); duplicates found in SQL
+- Sync now stores the plain-text description, SEO title/description and whether a variant sells when out of stock (migration); rows synced before that get no description/SEO reasons until the nightly catalog refresh fills them; product page shows a "Product page" quality section
+- 13 unit tests; verified end to end on a local Postgres 16
+- Open: traffic rules need `views-sync`; the "first image is a product shot" check needs AI (v2); keyword checks are English only
+
 ## 2026-10-24 · product-page
 - `/products/[id]`: status and next action, stock, stock value, days of stock, last sale, money at stake, sell-through, 30-vs-previous-30 trend, units/revenue/views/view→cart/view→purchase for 30/60/90 days, 90-day units chart (single series, per-bar tooltip, validated color), variants with stock
 - `GET /api/products/[id]` (shop-scoped); dashboard rows link to it
