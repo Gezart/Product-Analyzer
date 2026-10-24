@@ -1,9 +1,15 @@
 # History
 
+## 2026-10-24 · product-page
+- `/products/[id]`: status and next action, stock, stock value, days of stock, last sale, money at stake, sell-through, 30-vs-previous-30 trend, units/revenue/views/view→cart/view→purchase for 30/60/90 days, 90-day units chart (single series, per-bar tooltip, validated color), variants with stock
+- `GET /api/products/[id]` (shop-scoped); dashboard rows link to it
+- Pure window/series logic with 4 unit tests; chart rendered and checked in a browser
+- Open: views stay 0 until `views-sync`; "within 2% of Shopify reports" needs a dev store
+
 ## 2026-10-24 · dashboard
 - Home page is now the catalog health dashboard (Polaris): "money stuck in stock" headline (stock value of dead stock and slow movers, estimate noted), products by status with stock value, top 10 to act on today with next action, money at stake and days of stock
 - `GET /api/dashboard` reads each product's latest score (LATERAL index lookup, independent of other shops); scores now store `stock_value` and `cost_is_estimate` (migration applied to Supabase)
-- The page checks again every 5 s until the first analysis is done; product names link to the product page once it exists
+- The page checks again every 5 s until the first analysis is done
 - Pure summary logic with 3 unit tests; scoring + dashboard query verified end to end on a local Postgres 16
 
 ## 2026-10-24 · daily-metrics
