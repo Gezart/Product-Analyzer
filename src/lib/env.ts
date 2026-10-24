@@ -24,3 +24,7 @@ export const env = {
     return required("ENCRYPTION_KEY");
   },
 };
+
+/** Test charges outside production; in production only when SHOPIFY_BILLING_TEST=true. */
+export const billingIsTest =
+  process.env.NODE_ENV !== "production" || process.env.SHOPIFY_BILLING_TEST === "true";
