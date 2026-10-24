@@ -1,5 +1,5 @@
 import { authenticate, AuthError } from "@/lib/auth";
-import { featureGate } from "@/lib/feature-gate";
+import { featureGate, productGate } from "@/lib/feature-gate";
 import { approveMarkdown, MarkdownError, markdownOverview } from "@/lib/markdown-engine";
 import { FEATURE_PLAN, hasFeature } from "@/lib/plans";
 
@@ -17,8 +17,9 @@ export async function GET(request, ctx) {
   try {
     const { shop } = await authenticate(request);
     const { id } = await ctx.params;
-    const allowed = hasFeature(shop.plan, "markdown");
-    return Response.json({ ...(await markdownOverview(shop.id, id, { preview: allowed })), upgrade: allowed ? null : FEATURE_PLAN.markdown });
+    const overLimit = await productGate(shop, id);
+    const upgrade = !hasFeature(shop.plan, "markdown") ? FEATURE_PLAN.markdown : overLimit ? (await overLimit.json()).upgrade : null;
+    return Response.json({ ...(await markdownOverview(shop.id, id, { preview: !upgrade })), upgrade });
   } catch (error) {
     return handle(error);
   }
@@ -29,7 +30,7 @@ export async function POST(request, ctx) {
   try {
     const { shop } = await authenticate(request);
     const { id } = await ctx.params;
-    const blocked = featureGate(shop, "markdown");
+    const blocked = featureGate(shop, "markdown") ?? (await productGate(shop, id));
     if (blocked) return blocked;
     const body = (await request.json().catch(() => null));
     return Response.json(await approveMarkdown(shop.id, id, body?.expected));

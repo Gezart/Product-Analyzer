@@ -31,7 +31,8 @@ export function ReportView() {
       .catch((e) => setError(e.message));
   }, []);
   const asked = params.get("period");
-  const period = asked && monthRange(asked) ? asked : months?.months[0];
+  // Fetched once the months are known (not at all when the plan doesn't include reports).
+  const period = months ? (asked && monthRange(asked) ? asked : months.months[0]) : null;
 
   useEffect(() => {
     if (!period) return;

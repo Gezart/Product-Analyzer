@@ -18,14 +18,24 @@ async function activeSubscriptions(session) {
   return result.appSubscriptions.filter((s) => s.status === "ACTIVE");
 }
 
+/**
+ * Stores the plan. A new plan analyzes a different number of products, so the shop is re-scored right
+ * away — once its first order import is done (before that, the first analysis follows the import).
+ */
+async function setPlan(domain, plan) {
+  const changed = await db().shop.findMany({
+    where: { domain, NOT: { plan }, syncStates: { some: { resource: "orders", status: "done" } } },
+    select: { id: true },
+  });
+  await db().shop.updateMany({ where: { domain }, data: { plan } });
+  for (const shop of changed) await enqueue({ type: "score-shop", shopId: shop.id });
+}
+
 /** Reads the active subscription from Shopify and stores the plan (and first trial start) on the shop. */
 export async function syncPlan(session) {
   const subs = await activeSubscriptions(session);
   const plan = planFromSubscriptions(subs.map((s) => s.name));
-  const changed = await db().shop.findMany({ where: { domain: session.shop, NOT: { plan } }, select: { id: true } });
-  await db().shop.updateMany({ where: { domain: session.shop }, data: { plan } });
-  // A new plan analyzes a different number of products: re-score now.
-  for (const shop of changed) await enqueue({ type: "score-shop", shopId: shop.id });
+  await setPlan(session.shop, plan);
   if (subs[0]) {
     await db().shop.updateMany({
       where: { domain: session.shop, trialStartedAt: null },
@@ -52,7 +62,7 @@ export async function changePlan(session, planId, returnUrl) {
     for (const sub of subs) {
       await shopify().billing.cancel({ session, subscriptionId: sub.id, prorate: true, isTest: billingIsTest });
     }
-    await db().shop.updateMany({ where: { domain: session.shop }, data: { plan: "free" } });
+    await setPlan(session.shop, "free");
     return { confirmationUrl: null };
   }
 

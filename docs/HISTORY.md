@@ -1,9 +1,9 @@
 # History
 
 ## 2026-10-24 · plan-limits
-- Products analyzed per plan (Free 25, Starter 250, Growth 2,000, Pro unlimited): over the limit, the products with the most money in stock are analyzed; the rest get "Over plan limit" (no diagnosis, no fixes) and the dashboard says how many and links to Plans; a plan change re-scores right away
+- Products analyzed per plan (Free 25, Starter 250, Growth 2,000, Pro unlimited): over the limit, products analyzed before keep their place and free places go to the products with the most money in stock (so the choice doesn't flip night to night); the rest get "Over plan limit" (no diagnosis, fixes or markdown; new products too once the places are taken) and the dashboard says how many and links to Plans; any plan change, including a downgrade to Free, re-scores right away (after the first import)
 - Features by plan: applying fixes (and so rescue plans) and approving markdowns from Starter; Compare and monthly reports from Growth. Blocked actions return 403 with the plan to upgrade to, and the pages show "included from the X plan · See plans"
-- Kept on every plan, for safety: fix history and undo, cancelling a running markdown, running plans finish as approved
+- Kept on every plan, for safety: fix history and undo, cancelling a running markdown; running markdowns keep their approved steps after a downgrade (owner can change this)
 - Monthly reports are only stored (and announced) for shops whose plan includes them
 - 2 unit tests; scoring with the limit and every gate checked on a local Postgres 16
 - Open: the monthly limit on diagnoses waits on the owner's decision (v1 diagnosis is rule-based, no AI)

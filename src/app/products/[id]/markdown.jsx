@@ -45,7 +45,7 @@ export function Markdown({ productId, money, onChanged }) {
         {msg && <s-banner tone={msg.tone}>{msg.text}</s-banner>}
         {locked && (
           <UpgradeBanner>
-            {data.eligible} A stepped markdown is the next step; markdowns are included from the Starter plan.
+            {data.eligible} A stepped markdown is the next step, but your plan doesn&apos;t include it for this product.
           </UpgradeBanner>
         )}
 

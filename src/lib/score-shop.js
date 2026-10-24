@@ -43,6 +43,20 @@ export async function scoreShop(shopId, now = new Date()) {
   const excludedProducts = new Set(settings?.excludedProductIds ?? []);
   const isScored = (p) =>
     p.status === "ACTIVE" && !excludedProducts.has(p.shopifyGid) && !p.collections.some((c) => excludedCollections.has(c));
+  // Each product's status before this run: keeps the plan's selection stable and tells the merchant
+  // what newly needs attention.
+  const previous = new Map(
+    (
+      await db().$queryRaw`
+        SELECT p."id" AS "productId", s."status"
+        FROM "products" p
+        CROSS JOIN LATERAL (
+          SELECT x."status" FROM "product_scores" x WHERE x."product_id" = p."id" ORDER BY x."computed_at" DESC LIMIT 1
+        ) s
+        WHERE p."shop_id" = ${shopId}`
+    ).map((r) => [r.productId, r.status]),
+  );
+
   const eligible = products.filter(isScored);
   const excluded = products.filter((p) => !isScored(p));
   // Over the plan's product limit: the products with the most money in stock are analyzed.
@@ -53,6 +67,7 @@ export async function scoreShop(shopId, now = new Date()) {
         .stockValue,
     })),
     productLimit(shopRow?.plan),
+    new Set([...previous].filter(([, status]) => status !== "over_limit" && status !== "excluded").map(([id]) => id)),
   );
   const scored = eligible.filter((p) => keep.has(p.id));
   const overLimit = eligible.filter((p) => !keep.has(p.id));
@@ -118,19 +133,6 @@ export async function scoreShop(shopId, now = new Date()) {
   });
 
   const results = scoreProducts(inputs, settings?.thresholds, historyDays);
-  // Each product's status before this run, to tell the merchant what newly needs attention.
-  const previous = new Map(
-    (
-      await db().$queryRaw`
-        SELECT p."id" AS "productId", s."status"
-        FROM "products" p
-        CROSS JOIN LATERAL (
-          SELECT x."status" FROM "product_scores" x WHERE x."product_id" = p."id" ORDER BY x."computed_at" DESC LIMIT 1
-        ) s
-        WHERE p."shop_id" = ${shopId}`
-    ).map((r) => [r.productId, r.status]),
-  );
-
   await db().productScore.createMany({
     data: [
       ...results.map((r) => ({

@@ -49,11 +49,14 @@ export function productLimit(planId) {
 }
 
 /**
- * Which products a plan analyzes when the catalog is over its limit: the ones with the most money in
- * stock (ties by id, so the choice is stable). Returns the set of ids kept.
+ * Which products a plan analyzes when the catalog is over its limit. Products analyzed last time keep
+ * their place (so the choice doesn't flip with small stock changes); free places go to the products
+ * with the most money in stock (ties by id). Returns the set of ids kept.
  */
-export function withinLimit(products, limit) {
+export function withinLimit(products, limit, analyzed = new Set()) {
   if (products.length <= limit) return new Set(products.map((p) => p.id));
-  const sorted = [...products].sort((a, b) => b.stockValue - a.stockValue || a.id.localeCompare(b.id));
+  const sorted = [...products].sort(
+    (a, b) => Number(analyzed.has(b.id)) - Number(analyzed.has(a.id)) || b.stockValue - a.stockValue || a.id.localeCompare(b.id),
+  );
   return new Set(sorted.slice(0, limit).map((p) => p.id));
 }

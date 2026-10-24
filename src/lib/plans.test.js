@@ -60,4 +60,8 @@ test("product limit: most money in stock first, stable on ties", () => {
   ];
   assert.deepEqual([...withinLimit(products, 2)].sort(), ["a", "b"]);
   assert.equal(withinLimit(products, Infinity).size, 4);
+  // Analyzed last time keeps its place even with less stock; free places by stock value.
+  assert.deepEqual([...withinLimit(products, 2, new Set(["d"]))].sort(), ["b", "d"]);
+  // After a downgrade (more analyzed than places): the analyzed ones with the most stock.
+  assert.deepEqual([...withinLimit(products, 1, new Set(["a", "c", "d"]))], ["a"]);
 });
