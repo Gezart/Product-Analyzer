@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { cancelShopJobs } from "@/lib/jobs/queue";
 import { shopify } from "@/lib/shopify";
 import { deleteSessions } from "@/lib/session-storage";
 
@@ -15,6 +16,9 @@ export async function POST(request: Request) {
     case "APP_UNINSTALLED":
       await deleteSessions(domain);
       await db().shop.updateMany({ where: { domain }, data: { uninstalledAt: new Date() } });
+      for (const shop of await db().shop.findMany({ where: { domain }, select: { id: true } })) {
+        await cancelShopJobs(shop.id);
+      }
       break;
     case "CUSTOMERS_DATA_REQUEST":
     case "CUSTOMERS_REDACT":

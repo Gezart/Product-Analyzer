@@ -33,3 +33,10 @@ Schema: `prisma/schema.prisma`. Migrations: `prisma/migrations`.
 - Apply in production: `npm run db:deploy`.
 
 All tables have Row Level Security enabled with no policies, which blocks Supabase's public Data API. The app connects as the `postgres` role through Prisma, which is not affected.
+
+## Background jobs
+
+Postgres-backed queue in `src/lib/jobs/`. Register a handler in `registry.ts` (and add it to `nightlyJobs` for a nightly run), then `enqueue({ type, shopId })`.
+
+- Always-on server: set `JOBS_WORKER=true`; the worker starts with the Next.js server.
+- Or call `POST /api/jobs/run` every minute with `Authorization: Bearer $CRON_SECRET`.
