@@ -10,6 +10,9 @@ export async function POST(request: Request, ctx: RouteContext<"/api/products/[i
     const body = (await request.json().catch(() => null)) as { type?: string; after?: unknown; expected?: unknown; diagnosisId?: string } | null;
     const valid = validateFix(body?.type ?? "", body?.after);
     if (!valid.ok) return Response.json({ error: valid.error }, { status: 400 });
+    if (body?.expected !== undefined && (typeof body.expected !== "object" || body.expected === null)) {
+      return Response.json({ error: "expected must be an object" }, { status: 400 });
+    }
     const fix = await applyFix(shop.id, id, valid.type, valid.after, { diagnosisId: body?.diagnosisId, expected: body?.expected });
     return Response.json(fix);
   } catch (error) {

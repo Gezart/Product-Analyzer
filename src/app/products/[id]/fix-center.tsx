@@ -35,21 +35,27 @@ export function FixCenter({ productId, onChanged }: { productId: string; onChang
   const [mediaIds, setMediaIds] = useState<string[]>([]);
   const [collectionIds, setCollectionIds] = useState<string[]>([]);
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/products/${productId}/fix-center`);
-    if (!res.ok) return setError(res.status === 404 ? "Product not found in Shopify" : `Could not load (${res.status})`);
-    const d: Data = await res.json();
-    setData(d);
-    setTitle(d.live.title);
-    setDescription(d.live.descriptionHtml);
-    setSeoTitle(d.live.seo.title ?? "");
-    setSeoDescription(d.live.seo.description ?? "");
-    setMediaIds(d.live.media.map((m) => m.id));
-    setCollectionIds(d.live.collections.filter((c) => c.manual).map((c) => c.id));
-  }, [productId]);
+  /** Refreshes live data and history; drafts are reset only for the listed types (unsaved edits stay). */
+  const load = useCallback(
+    async (reset: string[]) => {
+      const res = await fetch(`/api/products/${productId}/fix-center`);
+      if (!res.ok) return setError(res.status === 404 ? "Product not found in Shopify" : `Could not load (${res.status})`);
+      const d: Data = await res.json();
+      setData(d);
+      if (reset.includes("title")) setTitle(d.live.title);
+      if (reset.includes("description")) setDescription(d.live.descriptionHtml);
+      if (reset.includes("seo")) {
+        setSeoTitle(d.live.seo.title ?? "");
+        setSeoDescription(d.live.seo.description ?? "");
+      }
+      if (reset.includes("images")) setMediaIds(d.live.media.map((m) => m.id));
+      if (reset.includes("collection")) setCollectionIds(d.live.collections.filter((c) => c.manual).map((c) => c.id));
+    },
+    [productId],
+  );
 
   useEffect(() => {
-    load();
+    load(Object.keys(LABELS));
   }, [load]);
 
   // The state this page shows, so the server can refuse if Shopify changed meanwhile.
@@ -75,7 +81,8 @@ export function FixCenter({ productId, onChanged }: { productId: string; onChang
     });
     const body = await res.json().catch(() => ({}));
     setBusy(null);
-    await load();
+    // Keep the merchant's text on failure; on success only the applied section is reset.
+    await load(res.ok ? [type] : []);
     if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
     const note = body.pending ? " Shopify is still finishing it; it can take a minute to show." : "";
     setMessage({ tone: "success", text: `${LABELS[type]} updated in Shopify. The old version is saved; you can undo it below.${note}` });
@@ -96,9 +103,11 @@ export function FixCenter({ productId, onChanged }: { productId: string; onChang
     if (res.status === 409 && !force && /changed since/.test(body.error ?? "")) {
       return setMessage({ tone: "critical", text: body.error, forceFix: fixId });
     }
-    await load();
+    const undone = data?.fixes.find((f) => f.id === fixId)?.type;
+    await load(res.ok && undone ? [undone] : []);
     if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
-    setMessage({ tone: "success", text: "Undone: the product is back to how it was before the fix." });
+    const note = body.pending ? " Shopify is still finishing it; it can take a minute to show." : "";
+    setMessage({ tone: "success", text: `Undone: the product is back to how it was before the fix.${note}` });
     onChanged();
   }
 
@@ -138,7 +147,7 @@ export function FixCenter({ productId, onChanged }: { productId: string; onChang
         <s-stack gap="small">
           <s-text-field label="Title" value={title} ref={listen("input", (el) => setTitle(el.value))} />
           {hintFor("title")}
-          <div>{button("title", { title }, title.trim() !== data.live.title)}</div>
+          <div>{button("title", { title }, title.trim() !== data.live.title && title.trim().length > 0 && title.trim().length <= 255)}</div>
         </s-stack>
 
         <s-stack gap="small">
@@ -161,7 +170,9 @@ export function FixCenter({ productId, onChanged }: { productId: string; onChang
             {button(
               "seo",
               { seoTitle, seoDescription },
-              seoTitle.trim() !== (data.live.seo.title ?? "") || seoDescription.trim() !== (data.live.seo.description ?? ""),
+              (seoTitle.trim() !== (data.live.seo.title ?? "") || seoDescription.trim() !== (data.live.seo.description ?? "")) &&
+                seoTitle.trim().length <= 70 &&
+                seoDescription.trim().length <= 320,
             )}
           </div>
         </s-stack>
@@ -233,7 +244,7 @@ export function FixCenter({ productId, onChanged }: { productId: string; onChang
                   <s-badge tone={f.status === "applied" ? "success" : f.status === "failed" ? "critical" : undefined}>{f.status}</s-badge>
                   <span className="text-zinc-500">{new Date(f.appliedAt ?? f.createdAt).toLocaleString()}</span>
                   {f.error && <span className="text-red-700">{f.error}</span>}
-                  {f.status === "applied" && (
+                  {(f.status === "applied" || (["approved", "undoing"].includes(f.status) && Date.now() - Date.parse(f.createdAt) > 120_000)) && (
                     <s-button
                       variant="tertiary"
                       disabled={busy !== null || undefined}

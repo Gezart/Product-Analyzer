@@ -19,6 +19,7 @@ test("same state: collections as sets, images in order", () => {
   assert.ok(!sameState("images", { mediaIds: ["a", "b"] }, { mediaIds: ["b", "a"] }));
   assert.ok(sameState("seo", { seoTitle: "A", seoDescription: "B" }, { seoDescription: "B", seoTitle: "A" }));
   assert.ok(!sameState("title", { title: "A" }, { title: "B" }));
+  assert.ok(!sameState("collection", null, { collectionIds: [] }));
 });
 
 test("collection changes", () => {

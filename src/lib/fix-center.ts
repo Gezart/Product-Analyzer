@@ -80,15 +80,21 @@ export async function applyFix(
 
   const saved = await readState(session, product.shopifyGid, type);
   if (writeError) {
-    const changed = saved != null && !sameState(type, saved, before);
+    // Unchanged → failed. Changed, or unknown (read-back failed too) → kept undoable from the snapshot.
+    const unchanged = saved != null && sameState(type, saved, before);
     const result = await db().fix.update({
       where: { id: fix.id },
-      data: changed
-        ? { status: "applied", appliedAt: new Date(), after: saved as object, error: `Partly applied: ${message(writeError)}` }
-        : { status: "failed", error: message(writeError) },
+      data: unchanged
+        ? { status: "failed", error: message(writeError) }
+        : {
+            status: "applied",
+            appliedAt: new Date(),
+            after: (saved ?? after) as object,
+            error: `${saved ? "Partly applied" : "Outcome unknown"}: ${message(writeError)}`,
+          },
     });
     await refreshProduct(shopId, product.shopifyGid);
-    if (!changed) throw new FixError(message(writeError), 502);
+    if (unchanged) throw new FixError(message(writeError), 502);
     return result;
   }
 
@@ -102,13 +108,21 @@ export async function applyFix(
 }
 
 /**
- * Undoes an applied fix by writing its `before` snapshot back. If the product changed since (in
+ * Undoes an applied (or crashed part-way) fix by writing its `before` snapshot back. If the product changed since (in
  * Shopify or by another fix), undo would overwrite that change, so it needs `force`.
  * The fix is claimed first ("undoing"), so two undos can't both run.
  */
 export async function undoFix(shopId: string, fixId: string, { force = false } = {}) {
   const fix = await db().fix.findFirst({ where: { id: fixId, product: { shopId } }, include: { product: true } });
   if (!fix) throw new FixError("Fix not found", 404);
+  // Applied fixes, and attempts that crashed part way (stuck "approved"/"undoing"), can be undone.
+  const stale = new Date(Date.now() - IN_PROGRESS_MS);
+  const undoable = fix.status === "applied" || (["approved", "undoing"].includes(fix.status) && fix.createdAt < stale);
+  if (!undoable) throw new FixError(`This fix is ${fix.status}, not applied.`, 409);
+  const otherInProgress = await db().fix.findFirst({
+    where: { productId: fix.productId, id: { not: fix.id }, status: { in: ["approved", "undoing"] }, createdAt: { gt: stale } },
+  });
+  if (otherInProgress) throw new FixError("Another change to this product is still being applied.", 409);
   const { session } = await productContext(shopId, fix.productId);
   const type = fix.type as FixType;
 
@@ -119,7 +133,7 @@ export async function undoFix(shopId: string, fixId: string, { force = false } =
     throw new FixError("The product changed since this fix was applied. Undo anyway to overwrite that change.", 409);
   }
 
-  const claimed = await db().fix.updateMany({ where: { id: fix.id, status: "applied" }, data: { status: "undoing", error: null } });
+  const claimed = await db().fix.updateMany({ where: { id: fix.id, status: fix.status }, data: { status: "undoing", error: null } });
   if (claimed.count === 0) throw new FixError("This fix isn't applied (or is already being undone).", 409);
 
   try {

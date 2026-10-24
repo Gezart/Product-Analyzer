@@ -70,6 +70,7 @@ export function validateFix(type: string, raw: unknown): { ok: true; type: FixTy
 
 /** Same state? Collections compare as sets; image order matters. */
 export function sameState(type: FixType, a: unknown, b: unknown): boolean {
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
   if (type === "collection") {
     const x = [...((a as FixState["collection"]).collectionIds ?? [])].sort();
     const y = [...((b as FixState["collection"]).collectionIds ?? [])].sort();
