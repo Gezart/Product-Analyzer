@@ -35,5 +35,10 @@ test("describe: text and link per type; unknown types still render", () => {
   assert.equal(v.title, "Fixes made it worse: Tee");
   assert.equal(v.href, "/products/p1");
   assert.equal(describe({ type: "markdown_paused", productId: "p1", productTitle: "Tee" }).title, "Markdown paused: Tee");
+  assert.deepEqual(describe({ type: "monthly_report", data: { period: "2026-10", revenueRecovered: 1234.5, currency: "EUR" } }), {
+    title: "Your October 2026 report is ready",
+    body: "€1,235 revenue recovered.",
+    href: "/reports?period=2026-10",
+  });
   assert.deepEqual(describe({ type: "something_new", productId: null }), { title: "something new", body: "", href: "/" });
 });

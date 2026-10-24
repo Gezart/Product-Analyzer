@@ -35,6 +35,7 @@ export default function RootLayout({ children }) {
           </a>
           <a href="/inbox">Inbox</a>
           <a href="/compare">Compare</a>
+          <a href="/reports">Reports</a>
           <a href="/settings">Settings</a>
           <a href="/plans">Plans</a>
         </ui-nav-menu>

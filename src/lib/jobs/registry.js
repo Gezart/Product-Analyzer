@@ -1,6 +1,7 @@
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { guardPrices, runMarkdownPlans } from "@/lib/markdown-engine";
 import { runRescuePlans } from "@/lib/rescue-plans";
+import { closeMonth } from "@/lib/reports";
 import { scoreShop } from "@/lib/score-shop";
 import { runDailyMetrics, runInitialSync, runOrdersCatchup, runRegisterWebhooks, runSyncPoll } from "@/lib/sync/initial-sync";
 import { runSyncInventory, runSyncProduct } from "@/lib/sync/live";
@@ -41,6 +42,9 @@ export const handlers = {
   "price-guard": async (job) => {
     await guardPrices(requireShop(job), { held: true });
   },
+  "monthly-report": async (job) => {
+    await closeMonth(requireShop(job));
+  },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
   "sync-inventory": runSyncInventory,
@@ -54,6 +58,8 @@ export const nightlyJobs = [
   { type: "register-webhooks", hour: 3 },
   { type: "orders-catchup", hour: 4 },
   { type: "price-guard", hour: 6 },
+  // Stores last month's report once it is over (no-op on other days).
+  { type: "monthly-report", hour: 6 },
 ];
 
 /** Jobs enqueued once per shop every hour. */

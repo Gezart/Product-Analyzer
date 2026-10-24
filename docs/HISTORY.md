@@ -1,5 +1,13 @@
 # History
 
+## 2026-10-24 · monthly-report
+- Monthly report (`/reports`, in the app menu): every month since install plus this month so far; the formula is shown next to each number and on every row (with the baseline dates)
+- Revenue recovered = actual revenue − baseline daily revenue × days, floored at 0, per product and period (PLAN formula). Rescue plans that improved count with their whole measurement window in the month it ends (baseline = their window before the fix); markdowns count day by day in each month (baseline = the 30 days before, within known history; without known history nothing counts as recovered); a day is counted once per product, across months too
+- Stock value cleared = units sold in those periods × unit cost (50% of the sale price where no cost is set, marked as estimated); products rescued = distinct products whose window ended in the month as "improved"; fixes applied in the month with their current effect (their rescue plan's verdict)
+- The page always rebuilds from current data; each finished month is also stored once on the 2nd (with its inbox item, "Your October report is ready: €X recovered"); months before the install are skipped
+- 6 unit tests; report build, storing and the API checked on a local Postgres 16 (under 100 ms)
+- Open: Growth-plan gating comes with `plan-limits`; share button and email/PDF reports are later
+
 ## 2026-10-24 · inbox
 - In-app inbox (`/inbox`, in the app menu; "N new in your inbox" on the home page): newest first, unread marked, opening an item marks it read and goes to the action, "Mark all as read"
 - Items: first analysis ready (with counts by status), products that newly need attention after a scoring run (one summary per run), rescue plan verdicts, and the markdown events (floor reached, paused, unsold at the end, restore failed, price below floor)
