@@ -20,6 +20,7 @@ type Settings = {
   excludedCollectionIds: string[];
   excludedProductIds: string[];
   excludedProducts: { id: string; title: string }[];
+  markdownEndAction: "restore" | "hold";
 };
 
 type FieldError = { field: string; min?: number; max?: number; integer?: boolean };
@@ -204,6 +205,15 @@ export function SettingsForm() {
 
       <s-section heading="Discounts">
         <div className="grid gap-4 sm:grid-cols-2">{DISCOUNT_FIELDS.map(numberField)}</div>
+        <fieldset className="mt-4 flex flex-col gap-1 border-0 p-0 text-sm">
+          <legend className="mb-1 font-medium">When a markdown ends (half the stock sold, or the last step done)</legend>
+          {(["restore", "hold"] as const).map((v) => (
+            <label key={v} className="flex items-center gap-2">
+              <input type="radio" name="endAction" checked={settings.markdownEndAction === v} onChange={() => setSettings({ ...settings, markdownEndAction: v })} />
+              {v === "restore" ? "Restore the original price" : "Keep the last discounted price"}
+            </label>
+          ))}
+        </fieldset>
       </s-section>
 
       <s-section heading="Excluded products">

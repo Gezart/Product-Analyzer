@@ -35,6 +35,7 @@ export async function GET(request: Request) {
           maxDiscountPct: Number(row.maxDiscountPct),
           excludedCollectionIds: row.excludedCollectionIds,
           excludedProductIds: row.excludedProductIds,
+          markdownEndAction: row.markdownEndAction === "hold" ? "hold" : "restore",
         }
       : DEFAULT_SETTINGS;
     return Response.json(await withProductTitles(shop.id, settings));

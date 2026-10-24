@@ -1,5 +1,6 @@
 import type { ClaimedJob } from "@/lib/jobs/queue";
 import { PermanentJobError } from "@/lib/jobs/errors";
+import { guardPrices, runMarkdownPlans } from "@/lib/markdown-engine";
 import { runRescuePlans } from "@/lib/rescue-plans";
 import { scoreShop } from "@/lib/score-shop";
 import { runDailyMetrics, runInitialSync, runOrdersCatchup, runRegisterWebhooks, runSyncPoll } from "@/lib/sync/initial-sync";
@@ -28,9 +29,20 @@ export const handlers: Record<string, JobHandler> = {
   "register-webhooks": runRegisterWebhooks,
   "orders-catchup": runOrdersCatchup,
   "daily-metrics": runDailyMetrics,
-  /** Closes measurement windows and sets verdicts. */
+  /** Plan runner: closes measurement windows, applies markdown steps, restores prices, guards floors. */
   "rescue-runner": async (job) => {
-    await runRescuePlans(requireShop(job));
+    // Each part runs even if another fails; the job fails afterwards so it is retried.
+    const shopId = requireShop(job);
+    const results = await Promise.allSettled([
+      runRescuePlans(shopId),
+      runMarkdownPlans(shopId).then(() => guardPrices(shopId)),
+    ]);
+    const failed = results.find((r) => r.status === "rejected");
+    if (failed) throw (failed as PromiseRejectedResult).reason;
+  },
+  /** Daily price guard (also runs after every plan-runner pass). */
+  "price-guard": async (job) => {
+    await guardPrices(requireShop(job), { held: true });
   },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
@@ -44,6 +56,7 @@ export const nightlyJobs: { type: string; hour: number }[] = [
   // Re-subscribe (repairs subscriptions Shopify removed, or a changed app URL), then fill gaps.
   { type: "register-webhooks", hour: 3 },
   { type: "orders-catchup", hour: 4 },
+  { type: "price-guard", hour: 6 },
 ];
 
 /** Jobs enqueued once per shop every hour. */
