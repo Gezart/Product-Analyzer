@@ -1,4 +1,7 @@
+import { AuthError, getOfflineSession } from "@/lib/auth";
+import { syncPlan } from "@/lib/billing";
 import { db } from "@/lib/db";
+import { planFromSubscriptions } from "@/lib/plans";
 import { shopify } from "@/lib/shopify";
 import { deleteSessions } from "@/lib/session-storage";
 
@@ -14,7 +17,20 @@ export async function POST(request: Request) {
   switch (topic) {
     case "APP_UNINSTALLED":
       await deleteSessions(domain);
-      await db().shop.updateMany({ where: { domain }, data: { uninstalledAt: new Date() } });
+      await db().shop.updateMany({ where: { domain }, data: { uninstalledAt: new Date(), plan: "free" } });
+      break;
+    case "APP_SUBSCRIPTIONS_UPDATE":
+      try {
+        // Prefer the live subscription state from Shopify.
+        await syncPlan(await getOfflineSession(domain));
+      } catch (error) {
+        if (!(error instanceof AuthError)) throw error;
+        // No usable token (e.g. after uninstall): fall back to the payload.
+        const sub = (JSON.parse(rawBody) as { app_subscription?: { name?: string; status?: string } })
+          .app_subscription;
+        const plan = sub?.status === "ACTIVE" && sub.name ? planFromSubscriptions([sub.name]) : "free";
+        await db().shop.updateMany({ where: { domain }, data: { plan } });
+      }
       break;
     case "CUSTOMERS_DATA_REQUEST":
     case "CUSTOMERS_REDACT":
