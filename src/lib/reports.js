@@ -15,7 +15,8 @@ export async function buildReport(shopId, period, now = new Date()) {
   const tz = shop.timezone;
   const today = localDateKey(now, tz);
   const [rescues, markdowns, fixes, orders] = await Promise.all([
-    db().rescuePlan.findMany({ where: { product: { shopId }, verdict: "improved" }, include: { product: { select: { title: true, shopifyCreatedAt: true } } } }),
+    // endsAt = the day after the window: windows that end before this month don't matter.
+    db().rescuePlan.findMany({ where: { product: { shopId }, verdict: "improved", endsAt: { gte: asDate(month.from) } }, include: { product: { select: { title: true, shopifyCreatedAt: true } } } }),
     db().markdownPlan.findMany({
       where: {
         product: { shopId },
@@ -101,7 +102,8 @@ export async function buildReport(shopId, period, now = new Date()) {
 /**
  * Nightly: a finished month's numbers are stored once, on the 2nd (its last rescue verdicts and the
  * order catch-up are in by then), and the merchant is told in the inbox. Months that ended before the
- * install are skipped. The report page always rebuilds from current data; this is the record.
+ * install are skipped. The report page always rebuilds from current data; this is a snapshot (a verdict
+ * that lands later can still move days between months on the page).
  */
 export async function closeMonth(shopId, now = new Date()) {
   const shop = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true, installedAt: true } });

@@ -11,7 +11,8 @@ export async function GET(request) {
     const today = localDateKey(new Date(), shop.timezone);
     const last = today.slice(8) === "01" ? previousMonth(today) : today.slice(0, 7);
     const first = row ? localDateKey(row.installedAt, shop.timezone).slice(0, 7) : last;
-    return Response.json({ currency: shop.currency, current: today.slice(0, 7), months: monthsBetween(first < last ? first : last, last) });
+    // Installed on the 1st: no complete day yet, so no month to show until tomorrow.
+    return Response.json({ currency: shop.currency, current: today.slice(0, 7), months: last < first ? [] : monthsBetween(first, last) });
   } catch (error) {
     if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
     throw error;
