@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { scoreProducts, stockFromVariants, type ProductInput } from "@/lib/scoring";
+import { ORDER_DAYS } from "@/lib/sync/constants";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -18,8 +19,9 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
   const d60 = new Date(today.getTime() - 60 * DAY_MS);
   const daysBefore = (d: Date) => Math.max(0, Math.round((today.getTime() - d.getTime()) / DAY_MS));
 
-  const [settings, products] = await Promise.all([
+  const [settings, ordersSync, products] = await Promise.all([
     db().settings.findUnique({ where: { shopId } }),
+    db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } }),
     db().product.findMany({
       where: { shopId },
       select: {
@@ -67,7 +69,10 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
   const lastSale = byId(lastSales);
   const first = byId(firstSeen);
   const firstDates = firstSeen.map((r) => r._min.date).filter((d): d is Date => d != null);
-  const historyDays = firstDates.length ? daysBefore(new Date(Math.min(...firstDates.map((d) => d.getTime())))) : 0;
+  // Rows exist only for days with activity, so the synced order window counts too.
+  const fromRows = firstDates.length ? daysBefore(new Date(Math.min(...firstDates.map((d) => d.getTime())))) : 0;
+  const fromSync = ordersSync?.status === "done" && ordersSync.lastSyncedAt ? ORDER_DAYS + daysBefore(ordersSync.lastSyncedAt) : 0;
+  const historyDays = Math.max(fromRows, fromSync);
 
   const inputs: ProductInput[] = scored.map((p) => {
     const c = cur.get(p.id)?._sum;

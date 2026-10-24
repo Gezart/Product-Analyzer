@@ -1,5 +1,11 @@
 import { authenticate, AuthError } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { retryInitialSync } from "@/lib/sync/initial-sync";
+
+function handleError(error: unknown) {
+  if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
+  throw error;
+}
 
 // Initial import progress for the home page.
 export async function GET(request: Request) {
@@ -11,7 +17,17 @@ export async function GET(request: Request) {
     ]);
     return Response.json({ states, products });
   } catch (error) {
-    if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
-    throw error;
+    return handleError(error);
+  }
+}
+
+// Retry the import after a failed step.
+export async function POST(request: Request) {
+  try {
+    const { shop } = await authenticate(request);
+    const started = await retryInitialSync(shop.id);
+    return started ? Response.json({ started }) : new Response("Sync still running", { status: 409 });
+  } catch (error) {
+    return handleError(error);
   }
 }

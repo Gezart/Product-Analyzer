@@ -9,7 +9,10 @@ function chunks<T>(items: T[], size = CHUNK): T[][] {
   return out;
 }
 
-/** Bulk upsert of products and their variants (one statement per 1,000 rows). */
+/**
+ * Full catalog sync: bulk upsert of products and variants (1,000 rows per statement), then removal of
+ * products and variants no longer in Shopify (their scores and metrics go with them).
+ */
 export async function upsertProducts(shopId: string, products: ProductRecord[]) {
   for (const batch of chunks(products)) {
     const rows = batch.map((p) => ({
@@ -67,28 +70,42 @@ export async function upsertProducts(shopId: string, products: ProductRecord[]) 
         "cost" = EXCLUDED."cost", "inventory_qty" = EXCLUDED."inventory_qty"
     `;
   }
+
+  const productGids = JSON.stringify(products.map((p) => p.gid));
+  const variantGids = JSON.stringify(variants.map((v) => v.gid));
+  await db().$executeRaw`
+    DELETE FROM "products"
+    WHERE "shop_id" = ${shopId} AND "shopify_gid" NOT IN (SELECT jsonb_array_elements_text(${productGids}::jsonb))
+  `;
+  await db().$executeRaw`
+    DELETE FROM "variants" v USING "products" p
+    WHERE v."product_id" = p."id" AND p."shop_id" = ${shopId}
+      AND v."shopify_gid" NOT IN (SELECT jsonb_array_elements_text(${variantGids}::jsonb))
+  `;
 }
 
 /**
- * Replaces units and revenue for every day from `fromDate` (YYYY-MM-DD) on: days without sales are
- * reset to 0 first, then the synced totals are written. View columns are left untouched.
+ * Replaces units and revenue for every day from `fromDate` (YYYY-MM-DD) on, in one transaction: days
+ * without sales are reset to 0 first, then the synced totals are written. View columns are left untouched.
  */
 export async function replaceDailySales(shopId: string, fromDate: string, sales: DailySales[]) {
-  await db().$executeRaw`
-    UPDATE "product_daily_metrics" m SET "units" = 0, "revenue" = 0
-    FROM "products" p
-    WHERE m."product_id" = p."id" AND p."shop_id" = ${shopId} AND m."date" >= ${fromDate}::date
-  `;
-  for (const batch of chunks(sales, 5000)) {
-    const rows = batch.map((s) => ({ product_gid: s.productGid, date: s.date, units: s.units, revenue: s.revenue }));
-    await db().$executeRaw`
-      INSERT INTO "product_daily_metrics" ("product_id", "date", "units", "revenue")
-      SELECT p."id", t.date::date, t.units, t.revenue
-      FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS t(product_gid text, date text, units int, revenue numeric)
-      JOIN "products" p ON p."shop_id" = ${shopId} AND p."shopify_gid" = t.product_gid
-      ON CONFLICT ("product_id", "date") DO UPDATE SET "units" = EXCLUDED."units", "revenue" = EXCLUDED."revenue"
+  await db().$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "product_daily_metrics" m SET "units" = 0, "revenue" = 0
+      FROM "products" p
+      WHERE m."product_id" = p."id" AND p."shop_id" = ${shopId} AND m."date" >= ${fromDate}::date
     `;
-  }
+    for (const batch of chunks(sales, 5000)) {
+      const rows = batch.map((s) => ({ product_gid: s.productGid, date: s.date, units: s.units, revenue: s.revenue }));
+      await tx.$executeRaw`
+        INSERT INTO "product_daily_metrics" ("product_id", "date", "units", "revenue")
+        SELECT p."id", t.date::date, t.units, t.revenue
+        FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS t(product_gid text, date text, units int, revenue numeric)
+        JOIN "products" p ON p."shop_id" = ${shopId} AND p."shopify_gid" = t.product_gid
+        ON CONFLICT ("product_id", "date") DO UPDATE SET "units" = EXCLUDED."units", "revenue" = EXCLUDED."revenue"
+      `;
+    }
+  }, { timeout: 60_000 });
 }
 
 export async function setSyncState(

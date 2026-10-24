@@ -1,5 +1,6 @@
 import type { Session } from "@shopify/shopify-api";
 import { adminGraphql } from "@/lib/admin";
+import { createJsonlParser } from "@/lib/sync/transform";
 
 export type BulkStatus = {
   id: string;
@@ -53,18 +54,14 @@ export async function readJsonl(url: string | null, signal?: AbortSignal): Promi
   const res = await fetch(url, { signal });
   if (!res.ok || !res.body) throw new Error(`Bulk result download failed: ${res.status}`);
   const rows: Record<string, unknown>[] = [];
+  const parser = createJsonlParser();
   const decoder = new TextDecoder();
-  let buffer = "";
   const reader = res.body.getReader();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) if (line.trim()) rows.push(JSON.parse(line));
+    rows.push(...parser.push(decoder.decode(value, { stream: true })));
   }
-  buffer += decoder.decode();
-  if (buffer.trim()) rows.push(JSON.parse(buffer));
+  rows.push(...parser.push(decoder.decode()), ...parser.end());
   return rows;
 }

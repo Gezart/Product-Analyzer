@@ -28,20 +28,34 @@ export async function authenticate(request: Request) {
   const shop = new URL(payload.dest).hostname;
 
   const session = await getOfflineSession(shop, sessionToken);
-  const existing = await db().shop.findUnique({ where: { domain: shop } });
-  const isNewInstall = !existing || existing.uninstalledAt != null;
-  const shopRow = await db().shop.upsert({
-    where: { domain: shop },
-    create: { domain: shop },
-    update: isNewInstall ? { uninstalledAt: null, installedAt: new Date() } : {},
-  });
+  return { shop: await markInstalled(shop), session };
+}
 
-  // First request after (re)install starts the initial import; the key makes it once per install.
-  if (isNewInstall) {
-    await enqueue({ type: "initial-sync", shopId: shopRow.id, uniqueKey: `initial-sync:${shopRow.id}:${shopRow.installedAt.getTime()}` });
+/**
+ * Creates or reactivates the shop row. Concurrent requests race on the database, not in code:
+ * only the request whose insert or reactivation actually changed a row starts the initial import.
+ */
+async function markInstalled(domain: string) {
+  const existing = await db().shop.findUnique({ where: { domain } });
+  if (existing && !existing.uninstalledAt) return existing;
+
+  const now = new Date();
+  const created = await db().shop.createMany({ data: [{ domain, installedAt: now }], skipDuplicates: true });
+  let isNewInstall = created.count === 1;
+  if (!isNewInstall) {
+    const reactivated = await db().shop.updateMany({
+      where: { domain, uninstalledAt: { not: null } },
+      data: { uninstalledAt: null, installedAt: now },
+    });
+    isNewInstall = reactivated.count === 1;
   }
-
-  return { shop: shopRow, session };
+  const shopRow = (await db().shop.findUnique({ where: { domain } }))!;
+  if (isNewInstall) {
+    // Old steps may still be there after a reinstall within 48 h (before shop/redact).
+    await db().syncState.deleteMany({ where: { shopId: shopRow.id } });
+    await enqueue({ type: "initial-sync", shopId: shopRow.id, uniqueKey: `initial-sync:${shopRow.id}:${now.getTime()}` });
+  }
+  return shopRow;
 }
 
 /** Returns a valid offline session, refreshing or exchanging the token when needed. */

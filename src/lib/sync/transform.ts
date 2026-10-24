@@ -123,8 +123,12 @@ export function aggregateOrders(rows: Row[], timeZone: string | null): DailySale
     const date = orderDates.get(row.__parentId);
     const productGid = (row.product as { id?: string } | null | undefined)?.id;
     if (!date || !productGid) continue; // deleted product or unknown order
-    const quantity = num(row.quantity) ?? 0;
-    const revenue = num((row.discountedTotalSet as { shopMoney?: { amount?: unknown } } | undefined)?.shopMoney?.amount) ?? 0;
+    // Quantity after removals/refunds × unit price after line and order-level discounts.
+    const quantity = num(row.currentQuantity) ?? 0;
+    if (quantity <= 0) continue;
+    const unitPrice =
+      num((row.discountedUnitPriceAfterAllDiscountsSet as { shopMoney?: { amount?: unknown } } | undefined)?.shopMoney?.amount) ?? 0;
+    const revenue = quantity * unitPrice;
     const key = `${productGid}|${date}`;
     const entry = totals.get(key) ?? { productGid, date, units: 0, revenue: 0 };
     entry.units += quantity;
@@ -132,4 +136,23 @@ export function aggregateOrders(rows: Row[], timeZone: string | null): DailySale
     totals.set(key, entry);
   }
   return [...totals.values()];
+}
+
+/** Incremental JSONL parser: feed text chunks, get complete rows; a line split across chunks is kept until it ends. */
+export function createJsonlParser() {
+  let buffer = "";
+  const parse = (lines: string[]) => lines.filter((l) => l.trim()).map((l) => JSON.parse(l) as Record<string, unknown>);
+  return {
+    push(text: string) {
+      buffer += text;
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      return parse(lines);
+    },
+    end() {
+      const rest = parse([buffer]);
+      buffer = "";
+      return rest;
+    },
+  };
 }
