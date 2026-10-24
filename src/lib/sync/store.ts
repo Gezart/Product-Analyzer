@@ -10,8 +10,9 @@ function chunks<T>(items: T[], size = CHUNK): T[][] {
 }
 
 /**
- * Full catalog sync: bulk upsert of products and variants (1,000 rows per statement), then removal of
- * products and variants no longer in Shopify (their scores and metrics go with them).
+ * Full catalog sync: bulk upsert of products and variants (1,000 rows per statement). Products no longer
+ * in Shopify are marked DELETED, not removed, so their price audit log and fix history are kept;
+ * removed variants are deleted (price changes keep the row with variant_id set to null).
  */
 export async function upsertProducts(shopId: string, products: ProductRecord[]) {
   for (const batch of chunks(products)) {
@@ -74,8 +75,9 @@ export async function upsertProducts(shopId: string, products: ProductRecord[]) 
   const productGids = JSON.stringify(products.map((p) => p.gid));
   const variantGids = JSON.stringify(variants.map((v) => v.gid));
   await db().$executeRaw`
-    DELETE FROM "products"
-    WHERE "shop_id" = ${shopId} AND "shopify_gid" NOT IN (SELECT jsonb_array_elements_text(${productGids}::jsonb))
+    UPDATE "products" SET "status" = 'DELETED', "updated_at" = (now() AT TIME ZONE 'UTC')
+    WHERE "shop_id" = ${shopId} AND "status" <> 'DELETED'
+      AND "shopify_gid" NOT IN (SELECT jsonb_array_elements_text(${productGids}::jsonb))
   `;
   await db().$executeRaw`
     DELETE FROM "variants" v USING "products" p
@@ -117,5 +119,14 @@ export async function setSyncState(
     where: { shopId_resource: { shopId, resource } },
     create: { shopId, resource, ...data },
     update: data,
+  });
+}
+
+/** Fresh "pending" steps for a new install (old ones may remain after a reinstall within 48 h). */
+export async function resetSyncSteps(shopId: string) {
+  await db().syncState.deleteMany({ where: { shopId, resource: { in: ["products", "orders"] } } });
+  await db().syncState.createMany({
+    data: ["products", "orders"].map((resource) => ({ shopId, resource, status: "pending" })),
+    skipDuplicates: true,
   });
 }

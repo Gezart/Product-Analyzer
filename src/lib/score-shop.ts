@@ -23,7 +23,8 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
     db().settings.findUnique({ where: { shopId } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } }),
     db().product.findMany({
-      where: { shopId },
+      // Products deleted in Shopify are kept for history but not scored at all.
+      where: { shopId, status: { not: "DELETED" } },
       select: {
         id: true,
         shopifyGid: true,
@@ -69,9 +70,10 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
   const lastSale = byId(lastSales);
   const first = byId(firstSeen);
   const firstDates = firstSeen.map((r) => r._min.date).filter((d): d is Date => d != null);
-  // Rows exist only for days with activity, so the synced order window counts too.
+  // Rows exist only for days with activity, so the synced order window counts too. Orders after the
+  // sync aren't captured until live sync exists, so the window is not extended past ORDER_DAYS yet.
   const fromRows = firstDates.length ? daysBefore(new Date(Math.min(...firstDates.map((d) => d.getTime())))) : 0;
-  const fromSync = ordersSync?.status === "done" && ordersSync.lastSyncedAt ? ORDER_DAYS + daysBefore(ordersSync.lastSyncedAt) : 0;
+  const fromSync = ordersSync?.status === "done" ? ORDER_DAYS : 0;
   const historyDays = Math.max(fromRows, fromSync);
 
   const inputs: ProductInput[] = scored.map((p) => {

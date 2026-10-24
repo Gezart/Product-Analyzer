@@ -1,6 +1,7 @@
 import { RequestedTokenType, type Session } from "@shopify/shopify-api";
 import { db } from "@/lib/db";
 import { enqueue } from "@/lib/jobs/queue";
+import { resetSyncSteps } from "@/lib/sync/store";
 import { shopify } from "@/lib/shopify";
 import { loadOfflineSession, storeSession } from "@/lib/session-storage";
 
@@ -51,8 +52,7 @@ async function markInstalled(domain: string) {
   }
   const shopRow = (await db().shop.findUnique({ where: { domain } }))!;
   if (isNewInstall) {
-    // Old steps may still be there after a reinstall within 48 h (before shop/redact).
-    await db().syncState.deleteMany({ where: { shopId: shopRow.id } });
+    await resetSyncSteps(shopRow.id);
     await enqueue({ type: "initial-sync", shopId: shopRow.id, uniqueKey: `initial-sync:${shopRow.id}:${now.getTime()}` });
   }
   return shopRow;

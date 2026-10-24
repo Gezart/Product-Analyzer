@@ -80,6 +80,9 @@ async function step(job: ClaimedJob, stage: Stage, run: () => Promise<void>) {
 }
 
 async function startStage(shopId: string, stage: Stage, query: string) {
+  // A retried job may have started this stage already (crash after starting): keep that operation.
+  const current = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: stage } } });
+  if (current?.status === "running" && current.lastCursor) return;
   const { session } = await shopContext(shopId);
   const operationId = await startBulkQuery(session, query);
   await setSyncState(shopId, stage, { status: "running", error: null, lastCursor: operationId });
@@ -108,7 +111,6 @@ export async function runInitialSync(job: ClaimedJob) {
       query ShopInfo { shop { currencyCode ianaTimezone } }`,
     );
     await db().shop.update({ where: { id: shopId }, data: { currency: shop.currencyCode, timezone: shop.ianaTimezone } });
-    await setSyncState(shopId, "orders", { status: "pending", error: null });
     await startStage(shopId, "products", PRODUCTS_QUERY);
   });
 }
@@ -143,11 +145,32 @@ export async function runSyncPoll(job: ClaimedJob, signal: AbortSignal) {
   });
 }
 
-/** Restarts the import after a failure. Returns false when a step is still running. */
+const SYNC_JOB_TYPES = ["initial-sync", "sync-poll"];
+
+/**
+ * Restarts the import after a failure. A step left "running"/"pending" with no sync job alive
+ * (worker crash on the last try) counts as failed. The products step row is locked for the
+ * check-and-enqueue, so parallel requests start at most one import. Returns false when a sync is
+ * still in progress.
+ */
 export async function retryInitialSync(shopId: string) {
-  const states = await db().syncState.findMany({ where: { shopId, resource: { in: ["products", "orders"] } } });
-  if (states.some((s) => s.status === "running" || s.status === "pending")) return false;
-  await db().syncState.deleteMany({ where: { shopId, resource: { in: ["products", "orders"] } } });
-  await enqueue({ type: "initial-sync", shopId, uniqueKey: `initial-sync:${shopId}:retry:${Date.now()}` });
-  return true;
+  await db().syncState.createMany({
+    data: ["products", "orders"].map((resource) => ({ shopId, resource, status: "error" })),
+    skipDuplicates: true,
+  });
+  return db().$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT 1 FROM "sync_state" WHERE "shop_id" = ${shopId} AND "resource" = 'products' FOR UPDATE
+    `;
+    const active = await tx.job.count({
+      where: { shopId, type: { in: SYNC_JOB_TYPES }, status: { in: ["queued", "running"] } },
+    });
+    if (active > 0) return false;
+    await tx.syncState.updateMany({
+      where: { shopId, resource: { in: ["products", "orders"] } },
+      data: { status: "pending", error: null, lastCursor: null },
+    });
+    await tx.job.create({ data: { type: "initial-sync", shopId, uniqueKey: `initial-sync:${shopId}:retry:${Date.now()}` } });
+    return true;
+  });
 }
