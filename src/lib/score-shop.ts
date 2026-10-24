@@ -10,7 +10,7 @@ function startOfUtcDay(d: Date) {
 
 /**
  * Recomputes metrics, status and money at stake for every product of a shop and writes one
- * `product_scores` row per product (inactive or excluded products get status "excluded").
+ * `product_scores` row per product (inactive, deleted or excluded products get status "excluded").
  * Returns the number of products scored (excluded not counted).
  */
 export async function scoreShop(shopId: string, now = new Date()): Promise<number> {
@@ -23,8 +23,7 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
     db().settings.findUnique({ where: { shopId } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } }),
     db().product.findMany({
-      // Products deleted in Shopify are kept for history but not scored at all.
-      where: { shopId, status: { not: "DELETED" } },
+      where: { shopId },
       select: {
         id: true,
         shopifyGid: true,

@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const { shop } = await authenticate(request);
     const [states, products] = await Promise.all([
       db().syncState.findMany({ where: { shopId: shop.id }, select: { resource: true, status: true, error: true, lastSyncedAt: true } }),
-      db().product.count({ where: { shopId: shop.id } }),
+      db().product.count({ where: { shopId: shop.id, status: { not: "DELETED" } } }),
     ]);
     return Response.json({ states, products });
   } catch (error) {

@@ -81,8 +81,12 @@ async function step(job: ClaimedJob, stage: Stage, run: () => Promise<void>) {
 
 async function startStage(shopId: string, stage: Stage, query: string) {
   // A retried job may have started this stage already (crash after starting): keep that operation.
+  // Re-scheduling its first poll is a no-op when that poll already exists (same unique key).
   const current = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: stage } } });
-  if (current?.status === "running" && current.lastCursor) return;
+  if (current?.status === "running" && current.lastCursor) {
+    await schedulePoll(shopId, { stage, operationId: current.lastCursor, polls: 0 });
+    return;
+  }
   const { session } = await shopContext(shopId);
   const operationId = await startBulkQuery(session, query);
   await setSyncState(shopId, stage, { status: "running", error: null, lastCursor: operationId });
