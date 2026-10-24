@@ -101,20 +101,19 @@ function peerMedian(prices: number[] | undefined, own: number, ownIsListed: bool
 export function diagnose(p: DiagnosisProduct, ctx: DiagnosisContext): Reason[] {
   const reasons: Reason[] = [];
 
-  // 1. Price more than 25% above the median of similar products: the product type when it has
-  //    enough peers, otherwise the narrowest specific collection (catch-all collections are skipped).
-  const typePeers = p.productType ? peerMedian(ctx.pricesByType.get(p.productType), p.price, p.active) : null;
-  const collectionPeers = p.collections
-    .map((c) => ({ key: c, prices: ctx.pricesByCollection.get(c) }))
-    .filter((c) => c.prices && c.prices.length <= Math.max(MIN_PEERS + 1, ctx.activeProducts * BROAD_COLLECTION))
-    .sort((a, b) => a.prices!.length - b.prices!.length)
-    .map((c) => ({ key: c.key, peers: peerMedian(c.prices, p.price, p.active) }))
-    .find((c) => c.peers);
-  const group = typePeers
-    ? { label: `product type "${p.productType}"`, key: p.productType!, peers: typePeers }
-    : collectionPeers
-      ? { label: "its collection", key: collectionPeers.key, peers: collectionPeers.peers! }
-      : null;
+  // 1. Price more than 25% above the median of similar products: the narrowest group (product type
+  //    or collection) with enough peers. Catch-all groups (over half the store, e.g. one type for
+  //    everything or an "All" collection) aren't similar products and are skipped.
+  const isSpecific = (prices: number[]) => prices.length <= Math.max(MIN_PEERS + 1, ctx.activeProducts * BROAD_COLLECTION);
+  const candidates = [
+    ...(p.productType ? [{ label: `product type "${p.productType}"`, key: p.productType, prices: ctx.pricesByType.get(p.productType) }] : []),
+    ...p.collections.map((c) => ({ label: "its collection", key: c, prices: ctx.pricesByCollection.get(c) })),
+  ]
+    .filter((g): g is { label: string; key: string; prices: number[] } => Boolean(g.prices && isSpecific(g.prices)))
+    .sort((a, b) => a.prices.length - b.prices.length);
+  const group = candidates
+    .map((g) => ({ label: g.label, key: g.key, peers: peerMedian(g.prices, p.price, p.active) }))
+    .find((g): g is { label: string; key: string; peers: { median: number; count: number } } => g.peers != null);
   const above = group ? p.price / group.peers.median - 1 : 0;
   if (group && above > PRICE_ABOVE) {
     reasons.push({

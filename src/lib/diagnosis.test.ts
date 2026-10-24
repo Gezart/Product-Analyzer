@@ -56,7 +56,8 @@ test("median", () => {
 test("price more than 25% above peers, with the numbers as evidence", () => {
   const [r] = diagnose(product({ price: 40 }), ctx());
   assert.equal(r.code, "price_above_peers");
-  assert.match(r.evidence, /33% above the median 30\.00 of 4 other products in product type "Shirts"/);
+  // The collection (4 products) is narrower than the type (5), so it is the peer group.
+  assert.match(r.evidence, /33% above the median 30\.00 of 3 other products in its collection/);
   assert.equal(r.data.peerMedian, 30);
   assert.equal(r.link, "#overview");
   // 25% or less is fine; too few peers says nothing.
@@ -128,6 +129,16 @@ test("catch-all collections aren't price peers; type peers come first", () => {
   const c2 = ctx({ pricesByType: new Map(), pricesByCollection: new Map([["all", all], ["tees", [30, 30, 30, 60]]]), activeProducts: all.length });
   const r = diagnose(product({ price: 60, productType: null, collections: ["all", "tees"] }), c2).find((x) => x.code === "price_above_peers")!;
   assert.equal(r.data.group, "tees");
+});
+
+test("a product type covering the whole store isn't a price peer group", () => {
+  const all = [200, 30, 30, 30, 30, 30, 30, 30, 30, 30];
+  const c = ctx({
+    pricesByType: new Map([["Apparel", all]]),
+    pricesByCollection: new Map([["jackets", [200, 195, 205, 210]]]),
+    activeProducts: all.length,
+  });
+  assert.deepEqual(codes(product({ price: 200, productType: "Apparel", collections: ["jackets"] }), c), []);
 });
 
 test("draft products don't remove a real peer from the price list", () => {

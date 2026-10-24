@@ -1,7 +1,7 @@
 # History
 
 ## 2026-10-24 · diagnosis-rules
-- Rule-based diagnosis (v1, no AI): price > 25% above peers (product type first, else the narrowest specific collection; catch-all collections skipped; product itself excluded; ≥ 3 peers), fewer than 3 images, description < 80 words / missing size, material or use / copied from another product, missing SEO title or meta description, broken size run (variants that sell when out of stock don't count), no collection or only quiet collections, high add-to-cart but low purchase with ≥ 5 carts (store-level)
+- Rule-based diagnosis (v1, no AI): price > 25% above peers (the narrowest product type or collection with enough peers; catch-all groups over half the store skipped; product itself excluded; ≥ 3 peers), fewer than 3 images, description < 80 words / missing size, material or use / copied from another product, missing SEO title or meta description, broken size run (variants that sell when out of stock don't count), no collection or only quiet collections, high add-to-cart but low purchase with ≥ 5 carts (store-level)
 - Every reason carries its numbers (evidence + data) and links to the product page section that shows them; ordered by severity
 - `GET /api/products/[id]/diagnosis`; a `diagnoses` row is stored only when the reasons or the items they name change (`rules-v1`); duplicates found in SQL
 - Sync now stores the plain-text description, SEO title/description and whether a variant sells when out of stock (migration); rows synced before that get no description/SEO reasons until the nightly catalog refresh fills them; product page shows a "Product page" quality section
