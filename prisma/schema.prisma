@@ -43,6 +43,7 @@ model Shop {
   syncStates    SyncState[]
   aiUsage       AiUsage[]
   jobs          Job[]
+  orderLines    OrderLine[]
 
   @@map("shops")
 }
@@ -308,4 +309,26 @@ model Job {
   @@index([status, runAt])
   @@index([shopId, status])
   @@map("jobs")
+}
+
+// Order lines without any customer data (date, product, variant, quantity, revenue). Daily sales in
+// product_daily_metrics are rebuilt from these, so repeated or out-of-order webhooks stay correct.
+model OrderLine {
+  shopId         String   @map("shop_id")
+  lineGid        String   @map("line_gid")
+  orderGid       String   @map("order_gid")
+  productGid     String   @map("product_gid")
+  variantGid     String?  @map("variant_gid")
+  /// Order date in the store's timezone.
+  date           DateTime @db.Date
+  quantity       Int
+  revenue        Decimal  @db.Decimal(14, 2)
+  orderUpdatedAt DateTime @map("order_updated_at")
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@id([shopId, lineGid])
+  @@index([shopId, orderGid])
+  @@index([shopId, productGid, date])
+  @@map("order_lines")
 }

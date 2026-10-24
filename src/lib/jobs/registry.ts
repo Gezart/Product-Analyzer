@@ -2,6 +2,7 @@ import type { ClaimedJob } from "@/lib/jobs/queue";
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { scoreShop } from "@/lib/score-shop";
 import { runInitialSync, runSyncPoll } from "@/lib/sync/initial-sync";
+import { runSyncInventory, runSyncProduct } from "@/lib/sync/live";
 
 /**
  * A job handler. It must be idempotent (a job can run again after a crash or timeout) and should
@@ -23,6 +24,9 @@ export const handlers: Record<string, JobHandler> = {
   /** First full import after install: shop info → products bulk query → orders bulk query → score. */
   "initial-sync": runInitialSync,
   "sync-poll": runSyncPoll,
+  /** Live sync after product/inventory webhooks. */
+  "sync-product": runSyncProduct,
+  "sync-inventory": runSyncInventory,
 };
 
 /** Jobs enqueued once per shop per night, at `hour`:00 in the store's timezone. */

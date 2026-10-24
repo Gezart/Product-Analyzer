@@ -6,8 +6,9 @@ import { enqueue, type ClaimedJob } from "@/lib/jobs/queue";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { bulkStatus, readJsonl, startBulkQuery } from "@/lib/sync/bulk";
 import { ORDER_DAYS } from "@/lib/sync/constants";
-import { replaceDailySales, setSyncState, upsertProducts } from "@/lib/sync/store";
-import { aggregateOrders, assembleProducts } from "@/lib/sync/transform";
+import { replaceOrderLines, setSyncState, upsertProducts } from "@/lib/sync/store";
+import { assembleProducts, orderLinesFromBulk } from "@/lib/sync/transform";
+import { registerWebhooks } from "@/lib/sync/webhooks";
 
 const POLL_EVERY_MS = 10_000;
 const MAX_POLLS = 360; // 1 hour
@@ -30,14 +31,14 @@ const PRODUCTS_QUERY = `{
   }
 }`;
 
-// Only date, cancellation and line items (product, quantity, price) — no customer fields.
+// Only dates, cancellation and line items (product, variant, quantity, price) — no customer fields.
 // `since` is a local date; Shopify reads date-only filters in the shop's timezone.
 const ordersQuery = (since: string) => `{
   orders(query: "created_at:>='${since}'") {
     edges { node {
-      id createdAt cancelledAt
+      id createdAt updatedAt cancelledAt
       lineItems { edges { node {
-        id currentQuantity product { id }
+        id currentQuantity product { id } variant { id }
         discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount } }
       } } }
     } }
@@ -115,6 +116,9 @@ export async function runInitialSync(job: ClaimedJob) {
       query ShopInfo { shop { currencyCode ianaTimezone } }`,
     );
     await db().shop.update({ where: { id: shopId }, data: { currency: shop.currencyCode, timezone: shop.ianaTimezone } });
+    // Subscribe before importing so changes made during the import aren't missed.
+    await registerWebhooks(session);
+    await setSyncState(shopId, "webhooks", { status: "done", error: null, lastSyncedAt: new Date() });
     await startStage(shopId, "products", PRODUCTS_QUERY);
   });
 }
@@ -138,11 +142,11 @@ export async function runSyncPoll(job: ClaimedJob, signal: AbortSignal) {
 
     const rows = await readJsonl(op.url, signal);
     if (payload.stage === "products") {
-      await upsertProducts(shopId, assembleProducts(rows));
+      await upsertProducts(shopId, assembleProducts(rows), { full: true });
       await setSyncState(shopId, "products", { status: "done", error: null, lastSyncedAt: new Date() });
       await startStage(shopId, "orders", ordersQuery(ordersFrom(shop.timezone)));
     } else {
-      await replaceDailySales(shopId, ordersFrom(shop.timezone), aggregateOrders(rows, shop.timezone));
+      await replaceOrderLines(shopId, ordersFrom(shop.timezone), orderLinesFromBulk(rows, shop.timezone));
       await setSyncState(shopId, "orders", { status: "done", error: null, lastSyncedAt: new Date() });
       await enqueue({ type: "score-shop", shopId });
     }

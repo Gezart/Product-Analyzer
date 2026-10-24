@@ -19,9 +19,10 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
   const d60 = new Date(today.getTime() - 60 * DAY_MS);
   const daysBefore = (d: Date) => Math.max(0, Math.round((today.getTime() - d.getTime()) / DAY_MS));
 
-  const [settings, ordersSync, products] = await Promise.all([
+  const [settings, ordersSync, webhooks, products] = await Promise.all([
     db().settings.findUnique({ where: { shopId } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } }),
+    db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "webhooks" } } }),
     db().product.findMany({
       where: { shopId },
       select: {
@@ -69,10 +70,12 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
   const lastSale = byId(lastSales);
   const first = byId(firstSeen);
   const firstDates = firstSeen.map((r) => r._min.date).filter((d): d is Date => d != null);
-  // Rows exist only for days with activity, so the synced order window counts too. Orders after the
-  // sync aren't captured until live sync exists, so the window is not extended past ORDER_DAYS yet.
+  // Rows exist only for days with activity, so the synced order window counts too; with live order
+  // webhooks the known history keeps growing after the import.
   const fromRows = firstDates.length ? daysBefore(new Date(Math.min(...firstDates.map((d) => d.getTime())))) : 0;
-  const fromSync = ordersSync?.status === "done" ? ORDER_DAYS : 0;
+  const ordersDone = ordersSync?.status === "done" && ordersSync.lastSyncedAt;
+  const live = webhooks?.status === "done";
+  const fromSync = ordersDone ? ORDER_DAYS + (live ? daysBefore(ordersSync.lastSyncedAt!) : 0) : 0;
   const historyDays = Math.max(fromRows, fromSync);
 
   const inputs: ProductInput[] = scored.map((p) => {

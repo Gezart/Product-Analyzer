@@ -1,5 +1,13 @@
 # History
 
+## 2026-10-24 · live-sync
+- Webhooks registered per shop during the initial sync: app, orders (create/updated/cancelled), products (create/update/delete), inventory levels
+- New table `order_lines` (no customer data): daily sales are rebuilt from it, so repeated, stale (out-of-order) and concurrent webhooks stay correct; refunds and cancellations reduce sales
+- Product/inventory webhooks queue a single-product re-sync (deduplicated), which also rebuilds that product's sales history; deletes mark the product DELETED
+- Initial import now stores order lines too; with live sync the known order history grows past 60 days for dead-stock detection
+- Verified on a local Postgres 16 (repeat, refund, stale replay, cancel, late product, 3 concurrent duplicates); 4 new unit tests
+- Not yet tested against a real store
+
 ## 2026-10-24 · initial-sync
 - First request after (re)install queues `initial-sync` exactly once (install detected by an atomic insert/reactivation, safe with parallel requests)
 - Job chain: shop currency + IANA timezone → products bulk query (variants, stock, cost, collections, media count, created date) → orders bulk query (last 60 days; date, cancellation, line items only — no customer data; revenue = current quantity × unit price after all discounts) → `score-shop`

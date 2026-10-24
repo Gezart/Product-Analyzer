@@ -3,6 +3,7 @@ import { syncPlan } from "@/lib/billing";
 import { db } from "@/lib/db";
 import { cancelShopJobs } from "@/lib/jobs/queue";
 import { shopify } from "@/lib/shopify";
+import { handleInventoryWebhook, handleOrderWebhook, handleProductWebhook } from "@/lib/sync/live";
 import { deleteSessions } from "@/lib/session-storage";
 
 // Single endpoint for all webhooks, including the mandatory compliance topics.
@@ -31,6 +32,19 @@ export async function POST(request: Request) {
         // No usable token means the app is uninstalled; payloads may arrive out of order, so don't trust them.
         await db().shop.updateMany({ where: { domain }, data: { plan: "free" } });
       }
+      break;
+    case "ORDERS_CREATE":
+    case "ORDERS_UPDATED":
+    case "ORDERS_CANCELLED":
+      await handleOrderWebhook(domain, JSON.parse(rawBody));
+      break;
+    case "PRODUCTS_CREATE":
+    case "PRODUCTS_UPDATE":
+    case "PRODUCTS_DELETE":
+      await handleProductWebhook(domain, topic, JSON.parse(rawBody));
+      break;
+    case "INVENTORY_LEVELS_UPDATE":
+      await handleInventoryWebhook(domain, JSON.parse(rawBody));
       break;
     case "CUSTOMERS_DATA_REQUEST":
     case "CUSTOMERS_REDACT":
