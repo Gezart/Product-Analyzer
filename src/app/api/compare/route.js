@@ -1,6 +1,7 @@
 import { authenticate, AuthError } from "@/lib/auth";
 import { grossMargin, pageQuality, parseCompareIds, stockAge } from "@/lib/compare";
 import { db } from "@/lib/db";
+import { featureGate } from "@/lib/feature-gate";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { windowTotals } from "@/lib/product-metrics";
 import { stockFromVariants } from "@/lib/scoring";
@@ -15,6 +16,8 @@ const WINDOWS = [30, 60, 90];
 export async function GET(request) {
   try {
     const { shop } = await authenticate(request);
+    const blocked = featureGate(shop, "compare");
+    if (blocked) return blocked;
     const url = new URL(request.url);
     const ids = parseCompareIds(url.searchParams.get("ids"));
     if (!ids) return Response.json({ error: "Pick 1 to 4 products" }, { status: 400 });

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { enqueue } from "@/lib/jobs/queue";
 import { billingIsTest } from "@/lib/env";
 import { PAID_PLANS, getPlan, planFromSubscriptions, remainingTrialDays } from "@/lib/plans";
 import { shopify } from "@/lib/shopify";
@@ -21,7 +22,10 @@ async function activeSubscriptions(session) {
 export async function syncPlan(session) {
   const subs = await activeSubscriptions(session);
   const plan = planFromSubscriptions(subs.map((s) => s.name));
+  const changed = await db().shop.findMany({ where: { domain: session.shop, NOT: { plan } }, select: { id: true } });
   await db().shop.updateMany({ where: { domain: session.shop }, data: { plan } });
+  // A new plan analyzes a different number of products: re-score now.
+  for (const shop of changed) await enqueue({ type: "score-shop", shopId: shop.id });
   if (subs[0]) {
     await db().shop.updateMany({
       where: { domain: session.shop, trialStartedAt: null },

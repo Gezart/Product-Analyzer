@@ -243,7 +243,7 @@ async function latestPlan(productId) {
 }
 
 /** Markdown state for the product page: the latest plan, eligibility and a live preview. */
-export async function markdownOverview(shopId, productId) {
+export async function markdownOverview(shopId, productId, { preview: withPreview = true } = {}) {
   const { product, session, settings } = await context(shopId, productId);
   const [plan, eligible, priceChanges] = await Promise.all([
     latestPlan(productId),
@@ -252,7 +252,7 @@ export async function markdownOverview(shopId, productId) {
   ]);
   const running = plan && ["active", "paused"].includes(plan.status);
   let preview = null;
-  if (!running && eligible) {
+  if (!running && eligible && withPreview) {
     const live = await readLiveVariants(session, product.shopifyGid);
     if (live) preview = { proposal: proposeLadder(live, settings), settings, stock: liveStock(live) };
   }

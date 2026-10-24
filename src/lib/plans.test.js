@@ -36,3 +36,28 @@ test("trial is given once per shop", () => {
   assert.equal(remainingTrialDays(daysAgo(100), now), 0);
   assert.equal(remainingTrialDays(daysAgo(-3), now), 14);
 });
+
+import { hasFeature, productLimit, withinLimit } from "./plans.js";
+
+test("features by plan: each plan includes the ones below it", () => {
+  assert.equal(hasFeature("free", "fixCenter"), false);
+  assert.equal(hasFeature("starter", "markdown"), true);
+  assert.equal(hasFeature("starter", "compare"), false);
+  assert.equal(hasFeature("growth", "reports"), true);
+  assert.equal(hasFeature("pro", "compare"), true);
+  assert.equal(hasFeature("unknown", "fixCenter"), false);
+});
+
+test("product limit: most money in stock first, stable on ties", () => {
+  assert.equal(productLimit("free"), 25);
+  assert.equal(productLimit("pro"), Infinity);
+  assert.equal(productLimit("nope"), 25);
+  const products = [
+    { id: "a", stockValue: 10 },
+    { id: "b", stockValue: 50 },
+    { id: "c", stockValue: 10 },
+    { id: "d", stockValue: 0 },
+  ];
+  assert.deepEqual([...withinLimit(products, 2)].sort(), ["a", "b"]);
+  assert.equal(withinLimit(products, Infinity).size, 4);
+});

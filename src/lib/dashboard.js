@@ -25,6 +25,7 @@ export function summarize(rows, topN = 10) {
     moneyStuck: round2(stuck.reduce((sum, r) => sum + r.stockValue, 0)),
     moneyStuckIsEstimate: stuck.some((r) => r.costIsEstimate),
     productCount: scored.length,
+    overLimit: rows.filter((r) => r.status === "over_limit").length,
     byStatus,
     top,
   };

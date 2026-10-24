@@ -10,7 +10,7 @@ export const ACTION_STATUSES = ["dead_stock", "slow_mover", "page_problem", "hid
  * later only those that newly need one — a move from one problem status to another doesn't count.
  */
 export function attentionSummary(previous, current) {
-  const firstRun = ![...previous.values()].some((s) => s !== "excluded");
+  const firstRun = ![...previous.values()].some((s) => s !== "excluded" && s !== "over_limit");
   const counts = {};
   for (const r of current) {
     if (!ACTION_STATUSES.includes(r.status) || (!firstRun && ACTION_STATUSES.includes(previous.get(r.id)))) continue;

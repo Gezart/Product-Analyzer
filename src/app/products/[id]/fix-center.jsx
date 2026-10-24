@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@/app/polaris-events";
+import { UpgradeBanner } from "@/app/upgrade-banner";
 
 const LABELS = { title: "Title", description: "Description", seo: "SEO", images: "Image order", collection: "Collections" };
 
@@ -106,7 +107,7 @@ export function FixCenter({ productId, onChanged }) {
   if (!data) return <s-section heading="Fix center"><s-spinner accessibilityLabel="Loading fix center" /></s-section>;
 
   const button = (type, after, changed) => (
-    <s-button variant="primary" disabled={!changed || busy !== null || undefined} loading={busy === type || undefined} ref={listen("click", () => apply(type, after))}>
+    <s-button variant="primary" disabled={!changed || busy !== null || data.upgrade != null || undefined} loading={busy === type || undefined} ref={listen("click", () => apply(type, after))}>
       Apply to Shopify
     </s-button>
   );
@@ -117,6 +118,7 @@ export function FixCenter({ productId, onChanged }) {
   return (
     <s-section heading="Fix center">
       <s-stack gap="base">
+        {data.upgrade && <UpgradeBanner>{data.upgrade.reason}</UpgradeBanner>}
         {message && (
           <s-banner tone={message.tone}>
             {message.text}{" "}

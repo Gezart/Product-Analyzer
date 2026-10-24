@@ -1,5 +1,7 @@
 import { authenticate, AuthError } from "@/lib/auth";
+import { featureGate } from "@/lib/feature-gate";
 import { approveMarkdown, MarkdownError, markdownOverview } from "@/lib/markdown-engine";
+import { FEATURE_PLAN, hasFeature } from "@/lib/plans";
 
 function handle(error) {
   if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
@@ -15,7 +17,8 @@ export async function GET(request, ctx) {
   try {
     const { shop } = await authenticate(request);
     const { id } = await ctx.params;
-    return Response.json(await markdownOverview(shop.id, id));
+    const allowed = hasFeature(shop.plan, "markdown");
+    return Response.json({ ...(await markdownOverview(shop.id, id, { preview: allowed })), upgrade: allowed ? null : FEATURE_PLAN.markdown });
   } catch (error) {
     return handle(error);
   }
@@ -26,6 +29,8 @@ export async function POST(request, ctx) {
   try {
     const { shop } = await authenticate(request);
     const { id } = await ctx.params;
+    const blocked = featureGate(shop, "markdown");
+    if (blocked) return blocked;
     const body = (await request.json().catch(() => null));
     return Response.json(await approveMarkdown(shop.id, id, body?.expected));
   } catch (error) {

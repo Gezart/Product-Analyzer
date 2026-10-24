@@ -1,5 +1,6 @@
 import { authenticate, AuthError } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { featureGate } from "@/lib/feature-gate";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { monthsBetween, previousMonth } from "@/lib/report";
 
@@ -7,6 +8,8 @@ import { monthsBetween, previousMonth } from "@/lib/report";
 export async function GET(request) {
   try {
     const { shop } = await authenticate(request);
+    const blocked = featureGate(shop, "reports");
+    if (blocked) return blocked;
     const row = await db().shop.findUnique({ where: { id: shop.id }, select: { installedAt: true } });
     const today = localDateKey(new Date(), shop.timezone);
     const last = today.slice(8) === "01" ? previousMonth(today) : today.slice(0, 7);

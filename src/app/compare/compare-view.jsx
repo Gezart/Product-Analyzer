@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { listen } from "@/app/polaris-events";
+import { UpgradeBanner } from "@/app/upgrade-banner";
 import { bestIndex, MAX_COMPARE } from "@/lib/compare";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
@@ -17,6 +18,7 @@ export function CompareView() {
   const days = params.get("days") ?? "30";
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [upgrade, setUpgrade] = useState(null);
 
   useEffect(() => {
     if (!ids) return;
@@ -26,6 +28,7 @@ export function CompareView() {
     fetch(`/api/compare?ids=${encodeURIComponent(ids)}&days=${days}`)
       .then(async (res) => {
         const body = await res.json().catch(() => ({}));
+        if (res.status === 403 && body.upgrade) return live && setUpgrade(body.error);
         if (!res.ok) throw new Error(body.error ?? `Failed (${res.status})`);
         if (live) setData(body);
       })
@@ -103,9 +106,10 @@ export function CompareView() {
           ))}
         </s-stack>
 
+        {upgrade && <UpgradeBanner>{upgrade}</UpgradeBanner>}
         {error && <s-banner tone="critical">{error}</s-banner>}
         {!ids && <s-banner tone="info">Pick 2 to {MAX_COMPARE} products to see them side by side.</s-banner>}
-        {ids && !data && !error && <s-spinner accessibilityLabel="Loading comparison" />}
+        {ids && !data && !error && !upgrade && <s-spinner accessibilityLabel="Loading comparison" />}
         {data?.notFound > 0 && <s-banner tone="warning">{data.notFound} picked product(s) aren&apos;t synced yet and are left out.</s-banner>}
         {data && products.length === 1 && <s-banner tone="info">Pick at least one more product to compare.</s-banner>}
         {data?.partial && <s-banner tone="warning">Order history is shorter than {data.days} days, so sales are undercounted.</s-banner>}
