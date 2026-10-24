@@ -31,8 +31,14 @@ export const handlers: Record<string, JobHandler> = {
   "daily-metrics": runDailyMetrics,
   /** Plan runner: closes measurement windows, applies markdown steps, restores prices, guards floors. */
   "rescue-runner": async (job) => {
-    await runRescuePlans(requireShop(job));
-    await runMarkdownPlans(requireShop(job));
+    // Each part runs even if another fails; the job fails afterwards so it is retried.
+    const shopId = requireShop(job);
+    const results = await Promise.allSettled([
+      runRescuePlans(shopId),
+      runMarkdownPlans(shopId).then(() => guardPrices(shopId)),
+    ]);
+    const failed = results.find((r) => r.status === "rejected");
+    if (failed) throw (failed as PromiseRejectedResult).reason;
   },
   /** Daily price guard (also runs after every plan-runner pass). */
   "price-guard": async (job) => {

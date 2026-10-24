@@ -3,11 +3,11 @@
 ## 2026-10-24 · markdown-engine
 - Markdown ladder 10% → 20% → 30% with a compare-at price, one step every 14 days, proposed when a rescue plan ends with no change or the product is dead stock; preview from live Shopify prices and costs, merchant approves the exact schedule
 - Money rule: never below cost × (1 + minimum margin) (rounded up to the cent), never more than the max discount (rounded so it can't be exceeded); variants without a unit cost are never discounted
-- Enforced three times: in the ladder code (20,000-case property test), right before each write (also against the live cost), and by the database (CHECK on `price_changes`; prices are logged as pending before Shopify is called, so a refused row means no write)
-- Every price change is logged (`price_changes`: old/new price and compare-at, floor, reason, status)
-- Stops when half the starting stock has sold or the ladder is done, then restores or holds the price (new setting); if the merchant changes a price mid-plan, the plan pauses instead of overwriting it; cancel restores
-- Plan runner (hourly) applies steps; price guard after each run and daily reverts any plan price below its floor and notifies; one running plan per product (unique index)
-- 11 unit tests; DB constraints verified on a local Postgres 16
+- Enforced three times: in the ladder code (20,000-case property test), right before each write (against the live cost and today's max discount; a price is never raised above the original), and by the database (CHECK on `price_changes`; prices are logged as pending before Shopify is called, so a refused row means no write)
+- Every price change is logged (`price_changes`: old/new price and compare-at, floor, reason, status); a failed or unanswered write is re-read from Shopify and each row marked applied or failed; after 3 failed runs in a row the plan pauses
+- Stops when half the starting stock has sold or the ladder is done (paused plans too), then restores or holds the price (new setting); if the merchant changes a price mid-plan, the plan pauses instead of overwriting it; cancel restores only prices the app set; no plan without stock
+- Plan runner (hourly) applies steps; price guard after each run and daily raises any plan price below its live floor and notifies; one running plan per product (unique index); runner, guard and cancel never overlap on one plan (advisory lock)
+- 18 unit tests; DB constraints verified on a local Postgres 16
 - Not yet tested against a real store; "bundle or Outlet" for unsold stock is v2 (a notification is created)
 
 ## 2026-10-24 · rescue-plans

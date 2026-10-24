@@ -23,6 +23,7 @@ type Data = {
   preview: { proposal: Proposal; settings: { marginFloorPct: number; maxDiscountPct: number; endAction: string }; stock: number } | null;
   ladder: { steps: number[]; stepDays: number; sellThroughStop: number };
   priceChanges: PriceChange[];
+  today: string;
 };
 
 const DAY = 86_400_000;
@@ -42,14 +43,14 @@ export function Markdown({ productId, money, onChanged }: { productId: string; m
     load();
   }, [load]);
 
-  async function act(url: string, body: unknown, ok: string) {
+  async function act(url: string, body: unknown, ok: (out: { status?: string; endReason?: string | null }) => string) {
     if (busy) return;
     setBusy(true);
     setMsg(null);
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const out = await res.json().catch(() => ({}));
     setBusy(false);
-    setMsg(res.ok ? { tone: "success", text: ok } : { tone: "critical", text: out.error ?? `Failed (${res.status})` });
+    setMsg(res.ok ? { tone: "success", text: ok(out) } : { tone: "critical", text: out.error ?? `Failed (${res.status})` });
     await load();
     if (res.ok) onChanged();
   }
@@ -77,7 +78,7 @@ export function Markdown({ productId, money, onChanged }: { productId: string; m
             </s-text>
             <LadderTable variants={running.steps.variants} current={running.currentStep} startedAt={running.startedAt} ladder={data.ladder} p={p} />
             <div>
-              <s-button loading={busy || undefined} disabled={busy || undefined} ref={listen("click", () => act(`/api/markdown/${running.id}/cancel`, {}, "Markdown cancelled; original prices restored."))}>
+              <s-button loading={busy || undefined} disabled={busy || undefined} ref={listen("click", () => act(`/api/markdown/${running.id}/cancel`, {}, () => "Markdown cancelled; original prices restored."))}>
                 Cancel and restore prices
               </s-button>
             </div>
@@ -93,14 +94,16 @@ export function Markdown({ productId, money, onChanged }: { productId: string; m
             </s-text>
             {data.preview.proposal.variants.length > 0 ? (
               <>
-                <LadderTable variants={data.preview.proposal.variants} current={-1} startedAt={new Date().toISOString()} ladder={data.ladder} p={p} />
+                <LadderTable variants={data.preview.proposal.variants} current={-1} startedAt={data.today} ladder={data.ladder} p={p} />
                 <div>
                   <s-button
                     variant="primary"
                     loading={busy || undefined}
                     disabled={busy || undefined}
                     ref={listen("click", () =>
-                      act(`/api/products/${productId}/markdown`, { expected: data.preview!.proposal }, "Approved. Step 1 is live in your store."),
+                      act(`/api/products/${productId}/markdown`, { expected: data.preview!.proposal }, (plan) =>
+                        plan.status === "active" ? "Approved. Step 1 is live in your store." : `Approved, but paused: ${plan.endReason ?? "see below"}.`,
+                      ),
                     )}
                   >
                     Approve schedule

@@ -93,3 +93,65 @@ test("safe to write: unknown floor or below floor is refused", () => {
   assert.ok(safeToWrite(11, 11));
   assert.ok(!safeToWrite(Number.NaN, 1));
 });
+
+// ---- write selection ----
+import { guardWrites, restoreWrites, stepWrites, type LivePrice, type VariantPlan } from "./markdown.ts";
+
+const plan: VariantPlan = { id: "v", title: "S", originalPrice: 100, originalCompareAt: null, floor: 44, stepPrices: [90, 80, 70], compareAt: 100 };
+const lp = (price: number, cost: number | null = 40, inventory = 10): LivePrice => ({ id: "v", price, compareAtPrice: null, cost, inventory });
+const s = { marginFloorPct: 10, maxDiscountPct: 40, approvedMaxDiscountPct: 40 };
+
+test("step writes: normal step from the price the app last wrote", () => {
+  const r = stepWrites([plan], [lp(90)], { v: { price: 90, compareAt: 100 } }, 1, s);
+  assert.deepEqual(r.writes, [{ id: "v", price: 80, compareAtPrice: 100, floor: 44, reason: "markdown" }]);
+});
+
+test("step writes: a cost rise never pushes the price above the original", () => {
+  // Cost corrected to 95 → floor 104.50 ≥ original 100: can't discount, nothing written.
+  const r = stepWrites([plan], [lp(90, 95)], { v: { price: 90, compareAt: 100 } }, 1, s);
+  assert.deepEqual(r.writes, []);
+  assert.deepEqual(r.cantDiscount, ["v"]);
+  // Cost 75 → floor 82.50: step 2 (80) is lifted to the floor, still below the original.
+  const r2 = stepWrites([plan], [lp(90, 75)], { v: { price: 90, compareAt: 100 } }, 1, s);
+  assert.equal(r2.writes[0].price, 82.5);
+});
+
+test("step writes: price already at the target counts as applied (retries after a lost response)", () => {
+  const r = stepWrites([plan], [lp(80)], { v: { price: 90, compareAt: 100 } }, 1, s);
+  assert.deepEqual(r.writes, []);
+  assert.deepEqual(r.alreadyApplied, { v: { price: 80, compareAt: 100 } });
+});
+
+test("step writes: a price changed by hand pauses instead of being overwritten", () => {
+  const r = stepWrites([plan], [lp(95)], { v: { price: 90, compareAt: 100 } }, 1, s);
+  assert.deepEqual(r.changedByMerchant, ["v"]);
+  assert.deepEqual(r.writes, []);
+});
+
+test("step writes: a lower max discount in settings applies to later steps", () => {
+  const r = stepWrites([plan], [lp(90)], { v: { price: 90, compareAt: 100 } }, 2, { ...s, maxDiscountPct: 15 });
+  assert.equal(r.writes[0].price, 85);
+});
+
+test("restore only puts back prices the app wrote", () => {
+  assert.deepEqual(restoreWrites([plan], [lp(80)], { v: { price: 80, compareAt: 100 } }), [
+    { id: "v", price: 100, compareAtPrice: null, floor: null, reason: "restore" },
+  ]);
+  assert.deepEqual(restoreWrites([plan], [lp(75)], { v: { price: 80, compareAt: 100 } }), []); // changed by hand
+  assert.deepEqual(restoreWrites([plan], [lp(80)], {}), []); // never written
+});
+
+test("guard: raises the app's own price to the live floor, never above the original; never touches manual or paused prices", () => {
+  const ours = { v: { price: 70, compareAt: 100 } };
+  // Cost rose to 70 → floor 77 > 70: raised to 77.
+  assert.deepEqual(guardWrites([plan], [lp(70, 70)], ours, { marginFloorPct: 10, paused: false }).writes, [
+    { id: "v", price: 77, compareAtPrice: 100, floor: 77, reason: "guard_revert" },
+  ]);
+  // Floor above the original: the original comes back.
+  assert.deepEqual(guardWrites([plan], [lp(70, 95)], ours, { marginFloorPct: 10, paused: false }).writes[0].price, 100);
+  // Paused, or a price set by hand: alert only.
+  assert.deepEqual(guardWrites([plan], [lp(70, 70)], ours, { marginFloorPct: 10, paused: true }), { writes: [], alerts: ["v"] });
+  assert.deepEqual(guardWrites([plan], [lp(60, 70)], ours, { marginFloorPct: 10, paused: false }), { writes: [], alerts: ["v"] });
+  // At or above the floor: nothing.
+  assert.deepEqual(guardWrites([plan], [lp(70, 40)], ours, { marginFloorPct: 10, paused: false }), { writes: [], alerts: [] });
+});
