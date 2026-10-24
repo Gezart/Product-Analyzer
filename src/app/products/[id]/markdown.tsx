@@ -75,7 +75,8 @@ export function Markdown({ productId, money, onChanged }: { productId: string; m
               {running.currentStep < 0
                 ? "Step 1 isn't live yet; the app retries within the hour. "
                 : `Step ${running.currentStep + 1} of ${data.ladder.steps.length} since ${running.startedAt.slice(0, 10)}. `}
-              {running.currentStep + 1 < data.ladder.steps.length &&
+              {running.currentStep >= 0 &&
+                running.currentStep + 1 < data.ladder.steps.length &&
                 `Next step on ${addDays(running.startedAt, (running.currentStep + 1) * data.ladder.stepDays)}. `}
               Stops when {Math.ceil(running.startStock * data.ladder.sellThroughStop)} of the {running.startStock} units in stock at the start have
               sold, then {running.endAction === "hold" ? "keeps the last price" : "restores the original price"}.
@@ -115,7 +116,7 @@ export function Markdown({ productId, money, onChanged }: { productId: string; m
                     ref={listen("click", () =>
                       act(`/api/products/${productId}/markdown`, { expected: data.preview!.proposal }, (plan) =>
                         plan.status !== "active"
-                          ? { tone: "warning", text: `Not started: ${plan.endReason ?? plan.status}.` }
+                          ? { tone: "warning", text: plan.status === "paused" ? `Started but paused: ${plan.endReason}.` : `Not started: ${plan.endReason ?? plan.status}.` }
                           : plan.notice
                             ? { tone: "warning", text: `Approved. ${plan.notice}` }
                             : { tone: "success", text: "Approved. Step 1 is live in your store." },

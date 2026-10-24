@@ -38,7 +38,14 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e)).sli
 const MAX_FAILURES = 3;
 
 /** Plan data kept in `steps`: the ladder, what the app last wrote per variant, failure count, what was already reported. */
-type PlanData = { variants: VariantPlan[]; applied: Applied; failures: number; floorAlerted?: string[]; guardAlerted?: string[] };
+type PlanData = {
+  variants: VariantPlan[];
+  applied: Applied;
+  failures: number;
+  restoreFailures?: number;
+  floorAlerted?: string[];
+  guardAlerted?: string[];
+};
 
 type Plan = NonNullable<Awaited<ReturnType<typeof loadPlan>>>;
 
@@ -60,13 +67,14 @@ async function notify(shopId: string, productId: string, type: string) {
 }
 
 /**
- * Runs `fn` while holding a database lock for the plan, so the runner, the guard and a cancel can't
- * interleave their read-live-then-write steps on the same product.
+ * Runs `fn` while holding a database lock for the plan's product, so the runner, the guard, a cancel
+ * and a new plan can't interleave their read-live-then-write steps on the same product.
  */
 async function withPlanLock<T>(planId: string, fn: () => Promise<T>): Promise<T> {
+  const { productId } = await db().markdownPlan.findUniqueOrThrow({ where: { id: planId }, select: { productId: true } });
   return db().$transaction(
     async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`markdown:${planId}`}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`markdown:product:${productId}`}))`;
       return fn();
     },
     { timeout: 180_000, maxWait: 30_000 },
@@ -218,7 +226,15 @@ async function endPlan(planId: string, reason: "stock_cleared" | "ladder_finishe
       const writes = restoreWrites(data.variants, state.live, data.applied);
       const { applied, outcomes, error } = await writePrices(session, plan, state.live, writes, data.applied);
       if (outcomes.some((o) => o !== "applied")) {
-        await saveData(plan.id, { ...data, applied });
+        // Retried every run; after repeated failures the plan pauses (no more steps) and the merchant is told.
+        const restoreFailures = (data.restoreFailures ?? 0) + 1;
+        const giveUp = restoreFailures === MAX_FAILURES;
+        await saveData(
+          plan.id,
+          { ...data, applied, restoreFailures },
+          giveUp && plan.status === "active" ? { status: "paused", endReason: `Shopify kept refusing to restore the original prices: ${message(error)}` } : {},
+        );
+        if (giveUp) await notify(plan.product.shopId, plan.productId, "markdown_restore_failed");
         throw new MarkdownError(`Some prices couldn't be restored: ${message(error)}`, 502);
       }
       data.applied = {};
@@ -248,11 +264,22 @@ async function context(shopId: string, productId: string) {
   return { product, session: await getOfflineSession(product.shop.domain), settings: await shopSettings(shopId) };
 }
 
+/**
+ * The running plan (at most one per product), else the most recently ended one. Plans start at local
+ * midnight, so `startedAt` alone can tie between plans of the same day.
+ */
+async function latestPlan(productId: string) {
+  return (
+    (await db().markdownPlan.findFirst({ where: { productId, status: { in: ["active", "paused"] } } })) ??
+    db().markdownPlan.findFirst({ where: { productId }, orderBy: [{ startedAt: "desc" }, { endedAt: { sort: "desc", nulls: "last" } }] })
+  );
+}
+
 /** Markdown state for the product page: the latest plan, eligibility and a live preview. */
 export async function markdownOverview(shopId: string, productId: string) {
   const { product, session, settings } = await context(shopId, productId);
   const [plan, eligible, priceChanges] = await Promise.all([
-    db().markdownPlan.findFirst({ where: { productId }, orderBy: { startedAt: "desc" } }),
+    latestPlan(productId),
     eligibility(productId),
     db().priceChange.findMany({ where: { productId }, orderBy: { changedAt: "desc" }, take: 30 }),
   ]);
@@ -387,11 +414,13 @@ export async function guardPrices(shopId: string, opts: { held?: boolean } = {})
       product: { shopId },
       OR: [{ status: { in: ["active", "paused"] } }, ...(opts.held ? [{ status: "completed", endAction: "hold" }] : [])],
     },
-    orderBy: { startedAt: "desc" },
-    select: { id: true, productId: true },
+    orderBy: [{ startedAt: "desc" }, { endedAt: { sort: "desc", nulls: "first" } }],
+    select: { id: true, productId: true, status: true },
   });
-  // Only the newest plan per product: an older plan's held price is the newer plan's original.
-  const latest = plans.filter((p, i) => plans.findIndex((q) => q.productId === p.productId) === i);
+  // One plan per product: the running one, else the newest held one (its price is a newer plan's original).
+  const running = new Set(plans.filter((p) => p.status !== "completed").map((p) => p.productId));
+  const candidates = plans.filter((p) => p.status !== "completed" || !running.has(p.productId));
+  const latest = candidates.filter((p, i) => candidates.findIndex((q) => q.productId === p.productId) === i);
   const settings = await shopSettings(shopId);
   for (const { id } of latest) {
     try {
