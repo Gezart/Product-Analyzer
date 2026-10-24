@@ -1,5 +1,6 @@
-function required(name) {
-  const value = process.env[name];
+// `shopify app dev` passes the scopes as SCOPES and the tunnel URL as SHOPIFY_APP_URL (or HOST).
+function required(name, ...fallbacks) {
+  const value = [name, ...fallbacks].map((n) => process.env[n]).find(Boolean);
   if (!value) throw new Error(`Missing environment variable ${name}`);
   return value;
 }
@@ -12,10 +13,10 @@ export const env = {
     return required("SHOPIFY_API_SECRET");
   },
   get shopifyScopes() {
-    return required("SHOPIFY_SCOPES").split(",").map((s) => s.trim());
+    return required("SHOPIFY_SCOPES", "SCOPES").split(",").map((s) => s.trim());
   },
   get appUrl() {
-    return required("SHOPIFY_APP_URL");
+    return required("SHOPIFY_APP_URL", "HOST", "APP_URL");
   },
   get databaseUrl() {
     return required("DATABASE_URL");

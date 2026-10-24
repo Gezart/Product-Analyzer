@@ -1,0 +1,31 @@
+# Shopify app configuration — https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration
+# `shopify app config link` fills client_id for your app; `shopify app dev` updates the URLs to its tunnel.
+client_id = ""
+name = "Unstuck: Product Analyzer"
+application_url = "https://example.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[access_scopes]
+# Keep in sync with SHOPIFY_SCOPES in .env.example.
+scopes = "read_products,write_products,read_inventory,read_orders"
+# Shopify-managed install: the app gets its token by token exchange, no OAuth redirect.
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = ["https://example.com/api/auth"]
+
+[webhooks]
+api_version = "2026-10"
+
+  # Mandatory privacy webhooks (App Store requirement). App, order, product and inventory topics are
+  # registered per shop by the app itself after install (src/lib/sync/webhooks.js).
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/api/webhooks"
+
+[pos]
+embedded = false
