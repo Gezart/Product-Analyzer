@@ -1,5 +1,6 @@
 import type { ClaimedJob } from "@/lib/jobs/queue";
 import { PermanentJobError } from "@/lib/jobs/errors";
+import { runRescuePlans } from "@/lib/rescue-plans";
 import { scoreShop } from "@/lib/score-shop";
 import { runDailyMetrics, runInitialSync, runOrdersCatchup, runRegisterWebhooks, runSyncPoll } from "@/lib/sync/initial-sync";
 import { runSyncInventory, runSyncProduct } from "@/lib/sync/live";
@@ -27,6 +28,10 @@ export const handlers: Record<string, JobHandler> = {
   "register-webhooks": runRegisterWebhooks,
   "orders-catchup": runOrdersCatchup,
   "daily-metrics": runDailyMetrics,
+  /** Closes measurement windows and sets verdicts. */
+  "rescue-runner": async (job) => {
+    await runRescuePlans(requireShop(job));
+  },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
   "sync-inventory": runSyncInventory,
@@ -40,3 +45,6 @@ export const nightlyJobs: { type: string; hour: number }[] = [
   { type: "register-webhooks", hour: 3 },
   { type: "orders-catchup", hour: 4 },
 ];
+
+/** Jobs enqueued once per shop every hour. */
+export const hourlyJobs: string[] = ["rescue-runner"];

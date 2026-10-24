@@ -1,5 +1,13 @@
 # History
 
+## 2026-10-24 · rescue-plans
+- Applying a fix starts the product's measurement window today (a fix during an open window restarts it and joins the same plan); undoing all of a plan's fixes cancels it
+- Window ends at 150 views or 30 days, never before 14; under 50 views it is extended once (to 60 days), then "not enough data"
+- Baseline = the same number of days just before the fix (cut at the start of known history and scaled to the window), with expected units scaled by the rest of the store's traffic change
+- Verdict: improved (conversion +20% and more units than expected), worse (conversion −20%), no change; without view data, units vs expected units (±20%)
+- Hourly `rescue-runner` job (new hourly scheduling); product page shows the window, then the verdict with dates, numbers and next step
+- 8 unit tests for the window logic; runner verified end to end on a local Postgres 16
+
 ## 2026-10-24 · fix-center
 - Fix center on the product page: merchant edits title, description (HTML), SEO title/meta, image order and manual collections, with hints from the diagnosis; "Apply to Shopify" is the approval
 - Each apply reads the current state live from Shopify as the undo snapshot, writes via the Admin API (productUpdate, productReorderMedia, collectionAdd/RemoveProducts, waiting for async jobs), then stores what Shopify actually saved

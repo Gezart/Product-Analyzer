@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { readLiveProduct, stateOf, writeState } from "@/lib/fix-shopify";
 import { sameState, type FixType } from "@/lib/fixes";
 import { enqueue } from "@/lib/jobs/queue";
+import { removeFromRescuePlan, startRescuePlan } from "@/lib/rescue-plans";
 
 export class FixError extends Error {
   constructor(message: string, readonly status: number) {
@@ -95,6 +96,7 @@ export async function applyFix(
     });
     await refreshProduct(shopId, product.shopifyGid);
     if (unchanged) throw new FixError(message(writeError), 502);
+    await startRescuePlan(shopId, productId, fix.id);
     return result;
   }
 
@@ -104,6 +106,8 @@ export async function applyFix(
     data: { status: "applied", appliedAt: new Date(), after: (pending || !saved ? after : saved) as object },
   });
   await refreshProduct(shopId, product.shopifyGid);
+  // The fix's effect is measured from today.
+  await startRescuePlan(shopId, productId, fix.id);
   return { ...result, pending };
 }
 
@@ -140,6 +144,7 @@ export async function undoFix(shopId: string, fixId: string, { force = false } =
     const { pending } = await writeState(session, fix.product.shopifyGid, type, current, fix.before);
     await refreshProduct(shopId, fix.product.shopifyGid);
     const result = await db().fix.update({ where: { id: fix.id }, data: { status: "undone", undoneAt: new Date() } });
+    await removeFromRescuePlan(fix.productId, fix.id);
     return { ...result, pending };
   } catch (error) {
     // Back to applied so it can be retried; the product may be partly restored.

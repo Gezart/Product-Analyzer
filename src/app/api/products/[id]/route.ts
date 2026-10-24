@@ -15,6 +15,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/products/[id
       include: {
         variants: { select: { id: true, sku: true, options: true, price: true, cost: true, inventoryQty: true }, orderBy: { shopifyGid: "asc" } },
         scores: { orderBy: { computedAt: "desc" }, take: 1 },
+        rescuePlans: { orderBy: { startedAt: "desc" }, take: 1 },
       },
     });
     if (!product) return new Response("Not found", { status: 404 });
@@ -86,6 +87,16 @@ export async function GET(request: Request, ctx: RouteContext<"/api/products/[id
       trend: windows[0].partial || windows[1].partial ? null : trend30(rows, today),
       lastSale: lastSale ? lastSale.date.toISOString().slice(0, 10) : lastSaleDate(rows),
       daily: dailySeries(rows, today, 90, knownDays),
+      rescuePlan: product.rescuePlans[0]
+        ? {
+            startedAt: product.rescuePlans[0].startedAt.toISOString().slice(0, 10),
+            endsAt: product.rescuePlans[0].endsAt?.toISOString().slice(0, 10) ?? null,
+            verdict: product.rescuePlans[0].verdict,
+            fixes: product.rescuePlans[0].fixIds.length,
+            extended: Boolean((product.rescuePlans[0].baseline as { extended?: boolean } | null)?.extended),
+            result: product.rescuePlans[0].result,
+          }
+        : null,
       variants: product.variants.map((v) => ({ id: v.id, sku: v.sku, options: v.options, price: Number(v.price), stock: v.inventoryQty })),
     });
   } catch (error) {
