@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { evaluateWindow, WINDOW } from "@/lib/rescue";
+import { notify } from "@/lib/notify";
 import { isLocalDate, ORDER_DAYS } from "@/lib/sync/constants";
 
 const DAY_MS = 86_400_000;
@@ -101,10 +102,11 @@ export async function runRescuePlans(shopId) {
         data: { baseline: { ...state, extended: true }, endsAt: new Date(plan.startedAt.getTime() + 2 * WINDOW.maxDays * DAY_MS) },
       });
     } else if (result.status === "done") {
-      await db().rescuePlan.updateMany({
+      const { count } = await db().rescuePlan.updateMany({
         where,
         data: { verdict: result.verdict, result, endsAt: new Date(asDate(result.window.to).getTime() + DAY_MS) },
       });
+      if (count) await notify({ shopId, productId: plan.productId, type: "rescue_verdict", data: { verdict: result.verdict } });
     }
   }
 }

@@ -1,5 +1,13 @@
 # History
 
+## 2026-10-24 · inbox
+- In-app inbox (`/inbox`, in the app menu; "N new in your inbox" on the home page): newest first, unread marked, opening an item marks it read and goes to the action, "Mark all as read"
+- Items: first analysis ready (with counts by status), products that newly need attention after a scoring run (one summary per run), rescue plan verdicts, and the markdown events (floor reached, paused, unsold at the end, restore failed, price below floor)
+- Text is built when the inbox is read (`src/lib/notifications.js`), from the type and a small `data` field (new column, migration); a failed notification never breaks the job that sent it
+- Read items are deleted 90 days after reading, unread ones after a year (nightly, never failing the refresh)
+- 2 unit tests; scoring → inbox and the inbox API checked on a local Postgres 16
+- Open: the weekly email digest is v2 (D4)
+
 ## 2026-10-24 · compare
 - Compare page (`/compare`, in the app menu and from each product page): pick 2–4 products with Shopify's product picker, side by side over the last 30/60/90 days
 - Rows: units, revenue, views, conversion (view → purchase), price (with compare-at), margin, stock, stock value, stock age, page quality; the best value per row is highlighted

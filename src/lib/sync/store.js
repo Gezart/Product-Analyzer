@@ -294,3 +294,11 @@ export async function pruneScores(shopId, days = 90) {
       AND s."computed_at" < (SELECT MAX(x."computed_at") FROM "product_scores" x WHERE x."product_id" = s."product_id")
   `;
 }
+
+/** Inbox items are deleted 90 days after they were read, or after a year if never read. */
+export async function pruneNotifications(shopId, days = 90, unreadDays = 365) {
+  const ago = (n) => new Date(Date.now() - n * 86_400_000);
+  await db().notification.deleteMany({
+    where: { shopId, OR: [{ readAt: { not: null }, createdAt: { lt: ago(days) } }, { createdAt: { lt: ago(unreadDays) } }] },
+  });
+}
