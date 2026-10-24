@@ -19,6 +19,12 @@ export function attentionSummary(previous, current) {
   return { firstRun, counts, total: Object.values(counts).reduce((s, n) => s + n, 0) };
 }
 
+const formatMoney = (n, currency) => {
+  try {
+    if (currency) return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(n);
+  } catch {}
+  return Math.round(n).toLocaleString("en-US");
+};
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const needs = (n) => (n === 1 ? "needs" : "need");
 const PLURAL = { slow_mover: "slow movers", page_problem: "page problems", hidden_gem: "hidden gems", stockout_risk: "stock-out risks" };
@@ -70,6 +76,10 @@ export function describe(n) {
         body: "The app raised its own price back to the floor, or the price was set by hand and needs a look.",
         href: product,
       };
+    case "monthly_report": {
+      const month = new Date(`${d.period}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+      return { title: `Your ${month} report is ready`, body: `${formatMoney(d.revenueRecovered ?? 0, d.currency)} revenue recovered.`, href: `/reports?period=${d.period}` };
+    }
     default:
       return { title: n.type.replaceAll("_", " "), body: "", href: product };
   }
