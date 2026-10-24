@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { listen } from "@/app/polaris-events";
+import { monthRange } from "@/lib/report";
 import { moneyFormatter } from "@/lib/status-info";
 
 const monthName = (period) => new Date(`${period}-01T00:00:00Z`).toLocaleString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
@@ -22,7 +23,8 @@ export function ReportView() {
       .then(async (res) => (res.ok ? setMonths(await res.json()) : Promise.reject(new Error(String(res.status)))))
       .catch((e) => setError(e.message));
   }, []);
-  const period = params.get("period") ?? months?.current;
+  const asked = params.get("period");
+  const period = asked && monthRange(asked) ? asked : months?.months[0];
 
   useEffect(() => {
     if (!period) return;
@@ -55,9 +57,9 @@ export function ReportView() {
         {months && (
           <s-stack direction="inline" gap="small">
             {months.months.map((m) => (
-              <s-button key={m.period} variant={m.period === period ? "secondary" : "tertiary"} ref={listen("click", () => router.replace(`/reports?period=${m.period}`))}>
-                {monthName(m.period)}
-                {m.live ? " (so far)" : ""}
+              <s-button key={m} variant={m === period ? "secondary" : "tertiary"} ref={listen("click", () => router.replace(`/reports?period=${m}`))}>
+                {monthName(m)}
+                {m === months.current ? " (so far)" : ""}
               </s-button>
             ))}
           </s-stack>
@@ -69,7 +71,7 @@ export function ReportView() {
           <>
             {!report.complete && (
               <s-banner tone="info">
-                {monthName(report.period)} so far: complete days up to {report.to}. The final report is stored after the month ends.
+                {monthName(report.period)} so far: complete days up to {report.to}. Rescue plans count once their window ends.
               </s-banner>
             )}
             <s-section>
@@ -77,14 +79,14 @@ export function ReportView() {
                 <Headline
                   label="Revenue recovered"
                   value={money.format(report.revenueRecovered)}
-                  formula="For each product in a rescue plan that improved (its measurement window) or in a markdown: actual revenue − baseline daily revenue × days, never below 0. Added up for the days in this month."
+                  formula="Per product: actual revenue − baseline daily revenue × days, never below 0. Periods: the measurement window of each rescue plan that improved (counted in the month it ends; baseline = its window before the fix) and each markdown's days this month (baseline = the 30 days before it started)."
                 />
                 <Headline
                   label="Stock value cleared"
                   value={`${money.format(report.stockValueCleared)}${report.stockValueIsEstimate ? " (partly estimated)" : ""}`}
                   formula="Units sold in those same periods × unit cost (50% of the sale price where no cost is set in Shopify)."
                 />
-                <Headline label="Products rescued" value={String(report.productsRescued)} formula="Rescue plans whose measurement window ended this month with the verdict “improved”." />
+                <Headline label="Products rescued" value={String(report.productsRescued)} formula="Products whose rescue plan's measurement window ended this month with the verdict “improved”." />
                 <Headline
                   label="Fixes applied"
                   value={String(report.fixes.length)}
@@ -120,11 +122,22 @@ export function ReportView() {
                           </td>
                           <td className="py-2 pr-4 whitespace-nowrap">
                             {r.from} → {r.to}
+                            {r.skippedDays > 0 && <div className="text-xs text-zinc-500">{r.skippedDays} days already counted elsewhere</div>}
+                            <div className="text-xs text-zinc-500">
+                              {r.baselineFrom ? `Baseline ${r.baselineFrom} → ${r.baselineTo}` : "No baseline history"}
+                            </div>
                           </td>
                           <td className="py-2 pr-4 text-right font-semibold">{money2.format(r.recovered)}</td>
                           <td className="py-2 pr-4 text-zinc-600">
-                            {money2.format(r.actual)} − {money2.format(r.baselineDaily)} × {r.days} days = {money2.format(r.actual - r.expected)}
-                            {r.actual < r.expected ? " → 0" : ""}
+                            {r.expected == null ? (
+                              "No baseline known, so nothing counts as recovered"
+                            ) : (
+                              <>
+                                {money2.format(r.actual)} − {money2.format(r.baselineDaily)} × {r.days} days ({money2.format(r.expected)}) ={" "}
+                                {money2.format(r.actual - r.expected)}
+                                {r.actual < r.expected ? " → 0" : ""}
+                              </>
+                            )}
                           </td>
                           <td className="py-2 pr-4 text-right">{money2.format(r.stockValueCleared)}</td>
                           <td className="py-2 text-zinc-600">
