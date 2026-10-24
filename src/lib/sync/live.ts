@@ -12,7 +12,7 @@ import { assembleProducts, orderLinesFromWebhook, rowsFromProductNode, type Orde
 const PRODUCT_QUERY = `#graphql
   query SyncProduct($id: ID!) {
     product(id: $id) {
-      id title handle productType vendor status createdAt description
+      id title handle productType vendor status createdAt description seo { title description }
       mediaCount { count }
       collections(first: 100) { nodes { id } pageInfo { hasNextPage endCursor } }
       variants(first: 100) { nodes { ...SyncVariant } pageInfo { hasNextPage endCursor } }

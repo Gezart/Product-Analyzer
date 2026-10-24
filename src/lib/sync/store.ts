@@ -47,6 +47,9 @@ export async function upsertProducts(
       collections: p.collections,
       image_count: p.imageCount,
       description_words: p.descriptionWords,
+      description: p.description,
+      seo_title: p.seoTitle,
+      seo_description: p.seoDescription,
       price: p.price,
       compare_at: p.compareAtPrice,
       status: p.status,
@@ -54,17 +57,21 @@ export async function upsertProducts(
     }));
     await db().$executeRaw`
       INSERT INTO "products" ("id", "shop_id", "shopify_gid", "title", "handle", "product_type", "vendor", "collections",
-        "image_count", "description_words", "price", "compare_at_price", "status", "shopify_created_at", "updated_at")
+        "image_count", "description_words", "description", "seo_title", "seo_description",
+        "price", "compare_at_price", "status", "shopify_created_at", "updated_at")
       SELECT gen_random_uuid()::text, ${shopId}, t.gid, t.title, t.handle, t.product_type, t.vendor,
-        ARRAY(SELECT jsonb_array_elements_text(t.collections)), t.image_count, t.description_words, t.price, t.compare_at,
+        ARRAY(SELECT jsonb_array_elements_text(t.collections)), t.image_count, t.description_words,
+        t.description, t.seo_title, t.seo_description, t.price, t.compare_at,
         t.status, t.created_at, (now() AT TIME ZONE 'UTC')
       FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS t(
         gid text, title text, handle text, product_type text, vendor text, collections jsonb, image_count int,
-        description_words int, price numeric, compare_at numeric, status text, created_at timestamp)
+        description_words int, description text, seo_title text, seo_description text,
+        price numeric, compare_at numeric, status text, created_at timestamp)
       ON CONFLICT ("shop_id", "shopify_gid") DO UPDATE SET
         "title" = EXCLUDED."title", "handle" = EXCLUDED."handle", "product_type" = EXCLUDED."product_type",
         "vendor" = EXCLUDED."vendor", "collections" = EXCLUDED."collections", "image_count" = EXCLUDED."image_count",
-        "description_words" = EXCLUDED."description_words", "price" = EXCLUDED."price",
+        "description_words" = EXCLUDED."description_words", "description" = EXCLUDED."description",
+        "seo_title" = EXCLUDED."seo_title", "seo_description" = EXCLUDED."seo_description", "price" = EXCLUDED."price",
         "compare_at_price" = EXCLUDED."compare_at_price", "status" = EXCLUDED."status",
         "shopify_created_at" = EXCLUDED."shopify_created_at", "updated_at" = EXCLUDED."updated_at"
     `;

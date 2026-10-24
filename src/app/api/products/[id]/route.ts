@@ -50,7 +50,19 @@ export async function GET(request: Request, ctx: RouteContext<"/api/products/[id
 
     return Response.json({
       currency: shop.currency,
-      product: { id: product.id, title: product.title, handle: product.handle, status: product.status, price: Number(product.price) },
+      product: {
+        id: product.id,
+        title: product.title,
+        handle: product.handle,
+        status: product.status,
+        price: Number(product.price),
+        productType: product.productType,
+        collections: product.collections.length,
+        imageCount: product.imageCount,
+        descriptionWords: product.descriptionWords,
+        seoTitle: product.seoTitle,
+        seoDescription: product.seoDescription,
+      },
       score: score
         ? {
             status: score.status,

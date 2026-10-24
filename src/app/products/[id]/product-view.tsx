@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
+import { Diagnosis } from "./diagnosis";
 import { SalesChart } from "./sales-chart";
 
 type Window = {
@@ -17,7 +18,18 @@ type Window = {
 };
 type Data = {
   currency: string | null;
-  product: { id: string; title: string; status: string; price: number };
+  product: {
+    id: string;
+    title: string;
+    status: string;
+    price: number;
+    productType: string | null;
+    collections: number;
+    imageCount: number;
+    descriptionWords: number;
+    seoTitle: string | null;
+    seoDescription: string | null;
+  };
   score: {
     status: string;
     moneyAtStake: number;
@@ -68,7 +80,9 @@ export function ProductView() {
           </Link>
         </div>
 
-        <s-section>
+        <Diagnosis productId={data.product.id} />
+
+        <s-section id="overview">
           <s-stack gap="small">
             <s-stack direction="inline" gap="small" alignItems="center">
               {info && <s-badge tone={info.tone}>{info.label}</s-badge>}
@@ -88,11 +102,13 @@ export function ProductView() {
               <Stat label="Sell-through (60 days)" value={pct(data.score?.sellThrough ?? null)} />
               <Stat label="Trend (30 vs previous 30)" value={data.trend == null ? "—" : `${data.trend.toFixed(2)}×`} />
               <Stat label="Price" value={money2.format(data.product.price)} />
+              <Stat label="Product type" value={data.product.productType ?? "—"} />
+              <Stat label="Collections" value={String(data.product.collections)} />
             </div>
           </s-stack>
         </s-section>
 
-        <s-section heading="Sales and views">
+        <s-section heading="Sales and views" id="metrics">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-zinc-500">
@@ -130,7 +146,16 @@ export function ProductView() {
           <SalesChart days={data.daily} formatMoney={(n) => money2.format(n)} />
         </s-section>
 
-        <s-section heading="Variants">
+        <s-section heading="Product page" id="page">
+          <div className="grid gap-4 sm:grid-cols-4">
+            <Stat label="Images" value={String(data.product.imageCount)} />
+            <Stat label="Description" value={`${data.product.descriptionWords} words`} />
+            <Stat label="SEO title" value={data.product.seoTitle ? "Set" : "Missing"} />
+            <Stat label="Meta description" value={data.product.seoDescription ? "Set" : "Missing"} />
+          </div>
+        </s-section>
+
+        <s-section heading="Variants" id="variants">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-zinc-500">

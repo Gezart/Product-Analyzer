@@ -22,7 +22,7 @@ type PollPayload = { stage: Stage; operationId: string; polls: number; startedAt
 const PRODUCTS_QUERY = `{
   products {
     edges { node {
-      id title handle productType vendor status createdAt description
+      id title handle productType vendor status createdAt description seo { title description }
       mediaCount { count }
       collections { edges { node { id } } }
       variants { edges { node {
