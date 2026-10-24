@@ -43,6 +43,7 @@ type PlanData = {
   applied: Applied;
   failures: number;
   restoreFailures?: number;
+  restoreFailedAt?: string;
   floorAlerted?: string[];
   guardAlerted?: string[];
 };
@@ -231,7 +232,7 @@ async function endPlan(planId: string, reason: "stock_cleared" | "ladder_finishe
         const giveUp = restoreFailures === MAX_FAILURES;
         await saveData(
           plan.id,
-          { ...data, applied, restoreFailures },
+          { ...data, applied, restoreFailures, restoreFailedAt: new Date().toISOString() },
           giveUp && plan.status === "active" ? { status: "paused", endReason: `Shopify kept refusing to restore the original prices: ${message(error)}` } : {},
         );
         if (giveUp) await notify(plan.product.shopId, plan.productId, "markdown_restore_failed");
@@ -383,13 +384,18 @@ export async function runMarkdownPlans(shopId: string) {
         await db().markdownPlan.update({ where: { id: plan.id }, data: { status: "cancelled", endReason: "Product deleted in Shopify", endedAt: new Date() } });
         continue;
       }
+      // After repeated refused restores, the runner retries once a day (cancel still tries right away).
+      const data = plan.steps as PlanData;
+      const retryLater = (data.restoreFailures ?? 0) >= MAX_FAILURES && Date.now() - Date.parse(data.restoreFailedAt ?? "") < DAY_MS;
       if (stockCleared(plan.startStock, liveStock(live))) {
+        if (retryLater) continue;
         await endPlan(plan.id, "stock_cleared", plan.endAction !== "hold");
         continue;
       }
       const today = Date.parse(`${localDateKey(new Date(), plan.product.shop.timezone)}T00:00:00Z`);
       const step = dueStep(Math.floor((today - plan.startedAt!.getTime()) / DAY_MS));
       if (step == null) {
+        if (retryLater) continue;
         // Ladder done and still unsold: bundle / Outlet (v2) or consider delisting.
         await endPlan(plan.id, "ladder_finished", plan.endAction !== "hold");
         await notify(shopId, plan.productId, "markdown_unsold");
