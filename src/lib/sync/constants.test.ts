@@ -4,6 +4,7 @@ import { knownOrderDays } from "./constants.ts";
 
 test("known order history starts at the imported window", () => {
   assert.equal(knownOrderDays({ windowStart: null, today: "2026-10-24", live: true }), 0);
+  assert.equal(knownOrderDays({ windowStart: "gid://shopify/BulkOperation/1", today: "2026-10-24", live: true }), 0);
   assert.equal(knownOrderDays({ windowStart: "2026-08-25", today: "2026-10-24", live: true }), 60);
 });
 

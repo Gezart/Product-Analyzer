@@ -134,7 +134,10 @@ function scopeSql(scope: SalesScope, gidCol: string, dateCol: string) {
  * Serialises every writer of a shop's order lines and daily sales (different orders can touch the
  * same product-day row, and a rebuild must see all committed lines). Held until the transaction ends.
  */
-async function lockShopSales(tx: Tx, shopId: string) {
+async function lockShopSales(tx: Tx, shopId: string, waitSeconds?: number) {
+  // Bounded wait (webhooks must answer within 5 s and each waiter holds a connection); a timeout
+  // fails the request or job, and Shopify / the job queue retries it.
+  if (waitSeconds) await tx.$executeRawUnsafe(`SET LOCAL lock_timeout = '${Math.floor(waitSeconds)}s'`);
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sales:${shopId}`}))`;
 }
 
@@ -212,7 +215,7 @@ export async function replaceOrderLines(shopId: string, fromDate: string, lines:
  */
 export async function applyOrderLines(shopId: string, orderGid: string, updatedAt: Date, lines: OrderLineRecord[]) {
   return db().$transaction(async (tx) => {
-    await lockShopSales(tx, shopId);
+    await lockShopSales(tx, shopId, 3);
     const existing = await tx.orderLine.findMany({
       where: { shopId, orderGid },
       select: { lineGid: true, productGid: true, date: true, orderUpdatedAt: true },
@@ -234,10 +237,13 @@ export async function applyOrderLines(shopId: string, orderGid: string, updatedA
 
 /** After a product is (re)synced, its sales history is rebuilt from stored order lines. */
 export async function rebuildProductSales(shopId: string, productGids: string[]) {
-  await db().$transaction(async (tx) => {
-    await lockShopSales(tx, shopId);
-    await rebuildDailySales(tx, shopId, { productGids });
-  });
+  await db().$transaction(
+    async (tx) => {
+      await lockShopSales(tx, shopId, 60);
+      await rebuildDailySales(tx, shopId, { productGids });
+    },
+    { timeout: 90_000 },
+  );
 }
 
 export async function setSyncState(

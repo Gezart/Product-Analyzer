@@ -5,15 +5,15 @@ import { PermanentJobError } from "@/lib/jobs/errors";
 import { enqueue, type ClaimedJob } from "@/lib/jobs/queue";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { bulkStatus, readJsonl, startBulkQuery } from "@/lib/sync/bulk";
-import { ORDER_DAYS } from "@/lib/sync/constants";
+import { isLocalDate, ORDER_DAYS } from "@/lib/sync/constants";
 import { applyOrderLines, replaceOrderLines, setSyncState, upsertProducts } from "@/lib/sync/store";
 import { assembleProducts, orderLinesFromBulk, type OrderLineRecord } from "@/lib/sync/transform";
 import { registerWebhooks } from "@/lib/sync/webhooks";
 
 const POLL_EVERY_MS = 10_000;
 const MAX_POLLS = 360; // 1 hour
-/** Nightly catch-up re-reads orders changed in this many days (covers missed webhooks). */
-const CATCHUP_DAYS = 3;
+/** Nightly catch-up re-reads orders changed since the last successful catch-up, minus this margin. */
+const CATCHUP_MARGIN_DAYS = 1;
 
 type Stage = "products" | "orders" | "catchup";
 /** `startedAt`: when the bulk query started; data changed by webhooks after it is newer than the snapshot. */
@@ -70,7 +70,7 @@ function ordersFrom(timeZone: string | null) {
  */
 export async function orderWindowStart(shopId: string, timeZone: string | null) {
   const orders = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } });
-  return orders?.status === "done" && orders.lastCursor ? orders.lastCursor : ordersFrom(timeZone);
+  return orders?.status === "done" && isLocalDate(orders.lastCursor) ? orders.lastCursor : ordersFrom(timeZone);
 }
 
 /**
@@ -158,8 +158,11 @@ export async function runOrdersCatchup(job: ClaimedJob) {
   const shopId = requireShop(job);
   const orders = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } });
   if (orders?.status !== "done") return; // the import covers it
+  // From the last successful catch-up (or the import), so longer outages are covered too.
+  const catchup = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "catchup" } } });
+  const last = (catchup?.status === "done" ? catchup.lastSyncedAt : null) ?? orders.lastSyncedAt ?? new Date();
+  const since = new Date(last.getTime() - CATCHUP_MARGIN_DAYS * 86_400_000).toISOString();
   await step(job, "catchup", async () => {
-    const since = new Date(Date.now() - CATCHUP_DAYS * 86_400_000).toISOString();
     await startStage(shopId, "catchup", ordersQuery(`updated_at:>='${since}'`));
   });
 }
@@ -194,13 +197,12 @@ export async function runSyncPoll(job: ClaimedJob, signal: AbortSignal) {
     }
 
     const rows = await readJsonl(op.url, signal);
-    const snapshotAt = new Date(payload.startedAt);
+    // Jobs queued before `startedAt` existed: assume the earliest possible start.
+    const snapshotAt = payload.startedAt ? new Date(payload.startedAt) : new Date(Date.now() - MAX_POLLS * POLL_EVERY_MS);
     if (payload.stage === "products") {
       await upsertProducts(shopId, assembleProducts(rows), { snapshotAt });
       await setSyncState(shopId, "products", { status: "done", error: null, lastSyncedAt: new Date() });
-      const from = ordersFrom(shop.timezone);
-      await setSyncState(shopId, "orders", { status: "pending", error: null, lastCursor: null });
-      await startStage(shopId, "orders", ordersQuery(`created_at:>='${from}'`));
+      await startStage(shopId, "orders", ordersQuery(`created_at:>='${ordersFrom(shop.timezone)}'`));
     } else if (payload.stage === "orders") {
       // The window start is kept in the cursor: order history is known from that day on.
       const from = ordersFrom(shop.timezone);
