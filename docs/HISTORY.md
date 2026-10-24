@@ -5,7 +5,7 @@
 - `GET/PUT /api/settings` with strict validation (field errors → 400); `GET /api/collections` from the Admin API
 - Saving queues a `score-shop` job (first registered job handler), or pulls a pending one forward; the worker re-scores within seconds
 - 4 unit tests for validation; percentages rounded to 2 decimals
-- Open: `initial-sync` must store collection GIDs in `products.collections` for exclusions to match
+- Open: `initial-sync` must store collection GIDs in `products.collections`; excluded product titles show once products are synced
 
 ## 2026-10-24 · ci
 - GitHub Actions on every PR and on pushes to `staging`/`main`: `npm ci`, build, typecheck, tests (Node 22)

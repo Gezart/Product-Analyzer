@@ -13,7 +13,7 @@ const QUERY = `#graphql
     }
   }`;
 
-// All collections of the shop (id + title), for the exclusion list in settings.
+// Collections of the shop (id + title, up to 2,500), for the exclusion list in settings.
 export async function GET(request: Request) {
   try {
     const { session } = await authenticate(request);
@@ -24,7 +24,8 @@ export async function GET(request: Request) {
       collections.push(...data.collections.nodes);
       after = data.collections.pageInfo.hasNextPage ? data.collections.pageInfo.endCursor : null;
     } while (after && collections.length < 2_500);
-    return Response.json({ collections });
+    // `truncated`: very large shops; the form then keeps exclusions it can't see.
+    return Response.json({ collections, truncated: after != null });
   } catch (error) {
     if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
     throw error;

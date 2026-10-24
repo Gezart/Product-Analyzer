@@ -59,13 +59,17 @@ export async function PUT(request: Request) {
     const data = result.value;
     await db().settings.upsert({ where: { shopId: shop.id }, create: { shopId: shop.id, ...data }, update: data });
 
-    // A pending re-score (maybe waiting to retry) is pulled forward with fresh attempts; it reads the
-    // latest settings when it runs. Otherwise queue a new one.
-    const { count } = await db().job.updateMany({
+    // A pending re-score reads the latest settings when it runs: pull it forward with fresh attempts,
+    // unless it timed out (the old run may still be going; it retries once its lock would have expired).
+    // Otherwise queue a new one.
+    const pending = await db().job.findFirst({
       where: { shopId: shop.id, type: "score-shop", status: "queued" },
-      data: { runAt: new Date(), attempts: 0 },
+      select: { id: true, lastError: true },
     });
-    if (count === 0) await enqueue({ type: "score-shop", shopId: shop.id });
+    if (!pending) await enqueue({ type: "score-shop", shopId: shop.id });
+    else if (!pending.lastError?.startsWith("JobTimeoutError")) {
+      await db().job.updateMany({ where: { id: pending.id, status: "queued" }, data: { runAt: new Date(), attempts: 0 } });
+    }
 
     return Response.json(await withProductTitles(shop.id, data));
   } catch (error) {

@@ -82,6 +82,7 @@ export function SettingsForm() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [collections, setCollections] = useState<Collection[] | null>(null);
   const [collectionsError, setCollectionsError] = useState(false);
+  const [collectionsTruncated, setCollectionsTruncated] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ tone: "success" | "critical"; text: string[] } | null>(null);
 
@@ -97,7 +98,9 @@ export function SettingsForm() {
     fetch("/api/collections")
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
-        setCollections((await res.json()).collections);
+        const data = await res.json();
+        setCollections(data.collections);
+        setCollectionsTruncated(Boolean(data.truncated));
       })
       .catch(() => setCollectionsError(true));
   }, []);
@@ -121,8 +124,8 @@ export function SettingsForm() {
       if (f.field.startsWith("thresholds.")) thresholds[f.field.slice("thresholds.".length) as keyof Thresholds] = value;
       else payload[f.field as "marginFloorPct" | "maxDiscountPct"] = value;
     }
-    // Collections deleted in Shopify can't be unticked, so drop them once the list has loaded.
-    if (collections) {
+    // Collections deleted in Shopify can't be unticked, so drop them once the full list has loaded.
+    if (collections && !collectionsTruncated) {
       const known = new Set(collections.map((c) => c.id));
       payload.excludedCollectionIds = s.excludedCollectionIds.filter((id) => known.has(id));
     }
