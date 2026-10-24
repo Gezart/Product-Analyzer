@@ -1,5 +1,11 @@
 # History
 
+## 2026-10-24 · dashboard
+- Home page is now the catalog health dashboard (Polaris): "money stuck in stock" headline (stock value of dead stock and slow movers, estimate noted), products by status with stock value, top 10 to act on today with next action, money at stake and days of stock
+- `GET /api/dashboard` reads each product's latest score (LATERAL index lookup, independent of other shops); scores now store `stock_value` and `cost_is_estimate` (migration applied to Supabase)
+- The page checks again every 5 s until the first analysis is done; product names link to the product page once it exists
+- Pure summary logic with 3 unit tests; scoring + dashboard query verified end to end on a local Postgres 16
+
 ## 2026-10-24 · daily-metrics
 - Nightly `daily-metrics` job (just after midnight store time): full catalog refresh (repairs missed product/inventory webhooks, snapshot-aware), yesterday's closing stock into `product_daily_metrics.inventory_qty`, score history pruned to 90 days (newest kept), then `score-shop`
 - Nightly jobs that find the shop's bulk query slot busy are queued again in 10 min instead of using up retries; a stage left "running" by a dead run is restarted, not resumed
