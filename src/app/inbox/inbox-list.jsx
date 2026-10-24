@@ -55,6 +55,7 @@ export function InboxList() {
               <button type="button" onClick={() => open(item)} className="flex w-full gap-3 py-3 text-left hover:bg-zinc-50">
                 <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.read ? "bg-transparent" : "bg-blue-600"}`} aria-hidden="true" />
                 <span className="flex-1">
+                  {!item.read && <span className="sr-only">Unread: </span>}
                   <span className={`block text-sm ${item.read ? "text-zinc-700" : "font-semibold text-zinc-900"}`}>{item.title}</span>
                   {item.body && <span className="block text-sm text-zinc-600">{item.body}</span>}
                   <span className="block text-xs text-zinc-500">{new Date(item.createdAt).toLocaleString()}</span>

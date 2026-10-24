@@ -295,7 +295,10 @@ export async function pruneScores(shopId, days = 90) {
   `;
 }
 
-/** Read inbox items older than `days` are deleted (unread ones stay until read). */
-export async function pruneNotifications(shopId, days = 90) {
-  await db().notification.deleteMany({ where: { shopId, readAt: { not: null }, createdAt: { lt: new Date(Date.now() - days * 86_400_000) } } });
+/** Inbox items are deleted 90 days after they were read, or after a year if never read. */
+export async function pruneNotifications(shopId, days = 90, unreadDays = 365) {
+  const ago = (n) => new Date(Date.now() - n * 86_400_000);
+  await db().notification.deleteMany({
+    where: { shopId, OR: [{ readAt: { not: null }, createdAt: { lt: ago(days) } }, { createdAt: { lt: ago(unreadDays) } }] },
+  });
 }

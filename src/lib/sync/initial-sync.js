@@ -237,8 +237,9 @@ export async function runSyncPoll(job, signal) {
       await upsertProducts(shopId, assembleProducts(rows), { snapshotAt });
       // Runs just after midnight local time: the stock read now approximates yesterday's closing stock.
       await snapshotInventory(shopId, previousLocalDate(localDateKey(new Date(), shop.timezone)));
-      await pruneScores(shopId);
-      await pruneNotifications(shopId);
+      // Housekeeping must not fail the refresh.
+      await pruneScores(shopId).catch((e) => console.error("[prune] scores", e));
+      await pruneNotifications(shopId).catch((e) => console.error("[prune] notifications", e));
       await setSyncState(shopId, "refresh", { status: "done", error: null, lastSyncedAt: new Date() });
       await enqueue({ type: "score-shop", shopId });
     } else {

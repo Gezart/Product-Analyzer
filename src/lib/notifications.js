@@ -5,14 +5,15 @@ import { STATUS_INFO } from "./status-info.js";
 export const ACTION_STATUSES = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "stockout_risk"];
 
 /**
- * After a scoring run: products that now need an action, by status. On the shop's first run that is
- * every product in an action status; later only those whose status changed into one.
+ * After a scoring run: products that now need an action, by status. On the shop's first analysis
+ * (no product scored before, only "excluded" rows at most) that is every product in an action status;
+ * later only those that newly need one — a move from one problem status to another doesn't count.
  */
 export function attentionSummary(previous, current) {
-  const firstRun = previous.size === 0;
+  const firstRun = ![...previous.values()].some((s) => s !== "excluded");
   const counts = {};
   for (const r of current) {
-    if (!ACTION_STATUSES.includes(r.status) || (!firstRun && previous.get(r.id) === r.status)) continue;
+    if (!ACTION_STATUSES.includes(r.status) || (!firstRun && ACTION_STATUSES.includes(previous.get(r.id)))) continue;
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
   return { firstRun, counts, total: Object.values(counts).reduce((s, n) => s + n, 0) };
@@ -27,10 +28,10 @@ const statusList = (counts) =>
     .join(", ");
 
 const VERDICTS = {
-  improved: ["Fixes worked", "Conversion and sales are up. Keep the changes."],
+  improved: ["Fixes worked", "Sales improved after the fixes. Keep the changes."],
   worse: ["Fixes made it worse", "Undo the fixes with one click on the product page."],
   no_change: ["No change after fixes", "A markdown is proposed on the product page."],
-  not_enough_data: ["Not enough data to judge the fixes", "The product had too few views in the window."],
+  not_enough_data: ["Not enough data to judge the fixes", "Too few visits, or too little history before the fixes."],
 };
 
 /** Inbox text for a notification: title, body and where it leads. Unknown types still get a line. */

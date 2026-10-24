@@ -110,10 +110,12 @@ export async function scoreShop(shopId, now = new Date()) {
   const previous = new Map(
     (
       await db().$queryRaw`
-        SELECT DISTINCT ON (s."product_id") s."product_id" AS "productId", s."status"
-        FROM "product_scores" s JOIN "products" p ON p."id" = s."product_id"
-        WHERE p."shop_id" = ${shopId}
-        ORDER BY s."product_id", s."computed_at" DESC`
+        SELECT p."id" AS "productId", s."status"
+        FROM "products" p
+        CROSS JOIN LATERAL (
+          SELECT x."status" FROM "product_scores" x WHERE x."product_id" = p."id" ORDER BY x."computed_at" DESC LIMIT 1
+        ) s
+        WHERE p."shop_id" = ${shopId}`
     ).map((r) => [r.productId, r.status]),
   );
 
@@ -135,8 +137,8 @@ export async function scoreShop(shopId, now = new Date()) {
     ],
   });
   const summary = attentionSummary(previous, results);
-  // A shop with no products yet has nothing to report; its first analysis is the first with products.
-  if (summary.firstRun && results.length + excluded.length > 0) await notify({ shopId, type: "analysis_ready", data: { products: results.length, counts: summary.counts } });
+  // The first analysis is the first run that scored a product (none yet, or all excluded: nothing to report).
+  if (summary.firstRun && results.length > 0) await notify({ shopId, type: "analysis_ready", data: { products: results.length, counts: summary.counts } });
   else if (!summary.firstRun && summary.total) await notify({ shopId, type: "new_attention", data: { counts: summary.counts } });
   return results.length;
 }

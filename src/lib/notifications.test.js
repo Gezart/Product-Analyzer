@@ -17,6 +17,10 @@ test("attention: first run counts every product in an action status; later only 
   ]);
   // a unchanged, b now healthy, c newly page problem, d new product in dead stock.
   assert.deepEqual(attentionSummary(before, now), { firstRun: false, counts: { page_problem: 1, dead_stock: 1 }, total: 2 });
+  // slow mover → dead stock was already a problem: not "newly".
+  assert.equal(attentionSummary(new Map([["a", "slow_mover"]]), [{ id: "a", status: "dead_stock" }]).total, 0);
+  // Only excluded rows before (everything excluded on the first run): the next run is the first analysis.
+  assert.equal(attentionSummary(new Map([["a", "excluded"]]), [{ id: "a", status: "dead_stock" }]).firstRun, true);
 });
 
 test("describe: text and link per type; unknown types still render", () => {

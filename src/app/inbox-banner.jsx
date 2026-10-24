@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 export function InboxBanner() {
   const [unread, setUnread] = useState(0);
   useEffect(() => {
-    fetch("/api/notifications")
+    fetch("/api/notifications?count=1")
       .then((res) => (res.ok ? res.json() : null))
       .then((body) => body && setUnread(body.unread))
       .catch(() => {});

@@ -2,10 +2,13 @@ import { authenticate, AuthError } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { describe } from "@/lib/notifications";
 
-// The inbox: the latest 50 items with their text and link, plus the number unread.
+// The inbox: the latest 50 items with their text and link, plus the number unread (`?count=1`: only that).
 export async function GET(request) {
   try {
     const { shop } = await authenticate(request);
+    if (new URL(request.url).searchParams.get("count") === "1") {
+      return Response.json({ unread: await db().notification.count({ where: { shopId: shop.id, readAt: null } }) });
+    }
     const [items, unread] = await Promise.all([
       db().notification.findMany({
         where: { shopId: shop.id },
