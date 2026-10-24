@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { scoreProducts, stockFromVariants, type ProductInput } from "@/lib/scoring";
-import { ORDER_DAYS } from "@/lib/sync/constants";
+import { localDateKey } from "@/lib/jobs/schedule";
+import { knownOrderDays } from "@/lib/sync/constants";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -19,9 +20,11 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
   const d60 = new Date(today.getTime() - 60 * DAY_MS);
   const daysBefore = (d: Date) => Math.max(0, Math.round((today.getTime() - d.getTime()) / DAY_MS));
 
-  const [settings, ordersSync, products] = await Promise.all([
+  const [shop, settings, ordersSync, webhooks, products] = await Promise.all([
+    db().shop.findUnique({ where: { id: shopId }, select: { timezone: true } }),
     db().settings.findUnique({ where: { shopId } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } }),
+    db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "webhooks" } } }),
     db().product.findMany({
       where: { shopId },
       select: {
@@ -68,12 +71,13 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
   const prev = byId(prev30);
   const lastSale = byId(lastSales);
   const first = byId(firstSeen);
-  const firstDates = firstSeen.map((r) => r._min.date).filter((d): d is Date => d != null);
-  // Rows exist only for days with activity, so the synced order window counts too. Orders after the
-  // sync aren't captured until live sync exists, so the window is not extended past ORDER_DAYS yet.
-  const fromRows = firstDates.length ? daysBefore(new Date(Math.min(...firstDates.map((d) => d.getTime())))) : 0;
-  const fromSync = ordersSync?.status === "done" ? ORDER_DAYS : 0;
-  const historyDays = Math.max(fromRows, fromSync);
+  // Order history is known from the imported window's start; it keeps growing only with live sync.
+  // (Metric rows can't tell: views go further back and rows exist only for days with activity.)
+  const historyDays = knownOrderDays({
+    windowStart: ordersSync?.status === "done" ? ordersSync.lastCursor : null,
+    today: localDateKey(now, shop?.timezone),
+    live: webhooks?.status === "done",
+  });
 
   const inputs: ProductInput[] = scored.map((p) => {
     const c = cur.get(p.id)?._sum;

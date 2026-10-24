@@ -22,7 +22,7 @@ No other dependencies are added without the owner's approval.
 ## How it works
 
 - **Auth:** App Bridge adds a session token to every `fetch` from the embedded UI. `src/lib/auth.ts` verifies it and, on first use, exchanges it for an expiring offline token (refreshed automatically). Tokens are encrypted at rest (`src/lib/crypto.ts`).
-- **Webhooks:** one endpoint, `/api/webhooks`. Register `app/uninstalled`, `app_subscriptions/update` and the compliance topics `customers/data_request`, `customers/redact`, `shop/redact` to it in the Partner Dashboard. Invalid HMAC returns 401.
+- **Webhooks:** one endpoint, `/api/webhooks`. App, order, product and inventory topics are registered per shop by the initial sync (`src/lib/sync/webhooks.ts`). The compliance topics `customers/data_request`, `customers/redact`, `shop/redact` must be set to this URL in the Partner Dashboard. Invalid HMAC returns 401.
 - **Framing:** `src/proxy.ts` sets `frame-ancestors` to the shop and Shopify Admin.
 
 ## Database
