@@ -1,0 +1,7 @@
+# How `shopify app dev` runs this app: one Next.js process serves the pages and the API.
+name = "web"
+roles = ["frontend", "backend"]
+webhooks_path = "/api/webhooks"
+
+[commands]
+dev = "npm run dev"

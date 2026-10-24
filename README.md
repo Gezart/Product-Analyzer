@@ -13,9 +13,14 @@ No other dependencies are added without the owner's approval.
 
 ## Setup
 
-1. `cp .env.example .env` and fill in the values (Supabase → Connect for the connection strings).
+1. `cp .env.example .env` and fill in `DATABASE_URL`, `DIRECT_URL` (Supabase → Connect) and `ENCRYPTION_KEY` (`openssl rand -base64 32`).
 2. `npm install` (also generates the Prisma client).
-3. `npm run dev`, expose it with an HTTPS tunnel, and put the tunnel URL in `SHOPIFY_APP_URL` and in the Partner Dashboard app URL.
+3. Run it on a dev store with the Shopify CLI (run through `npx`, not a project dependency):
+   1. `npx @shopify/cli@latest app config link` — log in, choose "Create a new app" (or your existing one). This fills `client_id` in `shopify.app.toml`.
+   2. `npx @shopify/cli@latest app deploy` — sends the scopes and the privacy webhooks from `shopify.app.toml` to Shopify.
+   3. `npx @shopify/cli@latest app dev --store <your-store>` — starts `npm run dev` behind an HTTPS tunnel, points the app's URLs at it and passes `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_APP_URL` and the scopes to the app. Press `p` to open the app and install it on the store.
+
+   Without the CLI: create the app in the Partner Dashboard, put its credentials in `.env`, run `npm run dev` behind any HTTPS tunnel, and set the tunnel URL as `SHOPIFY_APP_URL` and as the app URL.
 
 `SHOPIFY_API_KEY` is read at build time for the App Bridge meta tag, so it must be set when running `npm run build`.
 

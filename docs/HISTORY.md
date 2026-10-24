@@ -1,5 +1,11 @@
 # History
 
+## 2026-10-24 · dev-store-test (setup)
+- `shopify.app.toml` (embedded app, scopes, Shopify-managed install, privacy webhooks to `/api/webhooks`) and `shopify.web.toml` (`npm run dev`) so the app can run on a dev store with `shopify app dev`
+- The app also reads the values the Shopify CLI passes (`SCOPES`, `HOST`); the dev server accepts requests through the tunnel (`allowedDevOrigins`)
+- README: step-by-step setup with the Shopify CLI (through `npx`, no new dependency)
+- Open: the owner links the app (`client_id`) and installs it on the dev store; then the end-to-end test on the store
+
 ## 2026-10-24 · monthly-report
 - Monthly report (`/reports`, in the app menu): every month since install plus this month so far; the formula is shown next to each number and on every row (with the baseline dates)
 - Revenue recovered = actual revenue − baseline daily revenue × days, floored at 0, per product and period (PLAN formula). Rescue plans that improved count with their whole measurement window in the month it ends (baseline = their window before the fix); markdowns count day by day in each month (baseline = the 30 days before, within known history; without known history nothing counts as recovered); a day is counted once per product, across months too
