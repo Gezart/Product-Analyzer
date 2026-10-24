@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { dueStep, guardWrites, LADDER, liveStock, proposeLadder, restoreWrites, safeToWrite, settleWrites, stepWrites, stockCleared, withOutcomes } from "@/lib/markdown";
 import { readLiveVariants, writeVariantPrices } from "@/lib/markdown-shopify";
+import { notify } from "@/lib/notify";
 
 export class MarkdownError extends Error {
   status;
@@ -32,10 +33,6 @@ async function shopSettings(shopId) {
     maxDiscountPct: s ? Number(s.maxDiscountPct) : 40,
     endAction: s?.markdownEndAction === "hold" ? "hold" : "restore",
   };
-}
-
-async function notify(shopId, productId, type) {
-  await db().notification.create({ data: { shopId, productId, type } }).catch(() => {});
 }
 
 /**
@@ -154,11 +151,11 @@ async function applyStep(planId, step) {
 
     if (r.cantDiscount.some((id) => !data.floorAlerted?.includes(id))) {
       data.floorAlerted = [...new Set([...(data.floorAlerted ?? []), ...r.cantDiscount])];
-      await notify(plan.product.shopId, plan.productId, "markdown_floor_reached");
+      await notify({ shopId: plan.product.shopId, productId: plan.productId, type: "markdown_floor_reached" });
     }
     if (r.changedByMerchant.length) {
       await saveData(plan.id, { ...data, applied: { ...data.applied, ...r.alreadyApplied } }, { status: "paused", endReason: "A price was changed in Shopify" });
-      await notify(plan.product.shopId, plan.productId, "markdown_paused");
+      await notify({ shopId: plan.product.shopId, productId: plan.productId, type: "markdown_paused" });
       return null;
     }
 
@@ -175,7 +172,7 @@ async function applyStep(planId, step) {
         { ...data, applied, failures },
         failures >= MAX_FAILURES ? { status: "paused", endReason: `Shopify kept refusing the price change: ${message(error)}` } : {},
       );
-      if (failures >= MAX_FAILURES) await notify(plan.product.shopId, plan.productId, "markdown_paused");
+      if (failures >= MAX_FAILURES) await notify({ shopId: plan.product.shopId, productId: plan.productId, type: "markdown_paused" });
     }
     return { allDone, anyApplied: Object.keys(applied).length > 0, unknown: outcomes.includes("unknown"), error };
   });
@@ -204,7 +201,7 @@ async function endPlan(planId, reason, restore) {
           { ...data, applied, restoreFailures, restoreFailedAt: new Date().toISOString() },
           giveUp && plan.status === "active" ? { status: "paused", endReason: `Shopify kept refusing to restore the original prices: ${message(error)}` } : {},
         );
-        if (giveUp) await notify(plan.product.shopId, plan.productId, "markdown_restore_failed");
+        if (giveUp) await notify({ shopId: plan.product.shopId, productId: plan.productId, type: "markdown_restore_failed" });
         throw new MarkdownError(`Some prices couldn't be restored: ${message(error)}`, 502);
       }
       data.applied = {};
@@ -367,7 +364,7 @@ export async function runMarkdownPlans(shopId) {
         if (retryLater) continue;
         // Ladder done and still unsold: bundle / Outlet (v2) or consider delisting.
         await endPlan(plan.id, "ladder_finished", plan.endAction !== "hold");
-        await notify(shopId, plan.productId, "markdown_unsold");
+        await notify({ shopId, productId: plan.productId, type: "markdown_unsold" });
       } else if (plan.status === "active" && step > plan.currentStep) {
         await applyStep(plan.id, step);
       }
@@ -412,7 +409,7 @@ export async function guardPrices(shopId, opts = {}) {
         const r = guardWrites(data.variants, live, data.applied, { marginFloorPct: settings.marginFloorPct, paused: plan.status === "paused" });
         const { applied, outcomes } = await writePrices(session, plan, live, r.writes, data.applied);
         const fresh = r.alerts.filter((v) => !data.guardAlerted?.includes(v));
-        if (fresh.length || outcomes.includes("applied")) await notify(shopId, plan.productId, "price_guard");
+        if (fresh.length || outcomes.includes("applied")) await notify({ shopId, productId: plan.productId, type: "price_guard" });
         const next = { ...data, applied, guardAlerted: r.alerts };
         if (JSON.stringify(next) !== JSON.stringify(plan.steps)) await saveData(plan.id, next);
       });

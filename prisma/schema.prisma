@@ -279,6 +279,8 @@ model Notification {
   shopId    String    @map("shop_id")
   type      String
   productId String?   @map("product_id")
+  /// Details for the message (counts, verdict); the text is built when the inbox is read.
+  data      Json?
   readAt    DateTime? @map("read_at")
   createdAt DateTime  @default(now()) @map("created_at")
 

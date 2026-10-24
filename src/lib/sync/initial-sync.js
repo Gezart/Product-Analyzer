@@ -6,7 +6,7 @@ import { enqueue } from "@/lib/jobs/queue";
 import { localDateKey, previousLocalDate } from "@/lib/jobs/schedule";
 import { BulkBusyError, bulkStatus, readJsonl, startBulkQuery } from "@/lib/sync/bulk";
 import { isLocalDate, ORDER_DAYS } from "@/lib/sync/constants";
-import { applyOrderLines, pruneScores, replaceOrderLines, setSyncState, snapshotInventory, upsertProducts } from "@/lib/sync/store";
+import { applyOrderLines, pruneNotifications, pruneScores, replaceOrderLines, setSyncState, snapshotInventory, upsertProducts } from "@/lib/sync/store";
 import { assembleProducts, orderLinesFromBulk } from "@/lib/sync/transform";
 import { registerWebhooks } from "@/lib/sync/webhooks";
 
@@ -238,6 +238,7 @@ export async function runSyncPoll(job, signal) {
       // Runs just after midnight local time: the stock read now approximates yesterday's closing stock.
       await snapshotInventory(shopId, previousLocalDate(localDateKey(new Date(), shop.timezone)));
       await pruneScores(shopId);
+      await pruneNotifications(shopId);
       await setSyncState(shopId, "refresh", { status: "done", error: null, lastSyncedAt: new Date() });
       await enqueue({ type: "score-shop", shopId });
     } else {

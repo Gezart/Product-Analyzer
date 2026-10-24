@@ -33,6 +33,7 @@ export default function RootLayout({ children }) {
           <a href="/" rel="home">
             Home
           </a>
+          <a href="/inbox">Inbox</a>
           <a href="/compare">Compare</a>
           <a href="/settings">Settings</a>
           <a href="/plans">Plans</a>

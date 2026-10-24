@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { scoreProducts, stockFromVariants } from "@/lib/scoring";
 import { localDateKey } from "@/lib/jobs/schedule";
+import { attentionSummary } from "@/lib/notifications";
+import { notify } from "@/lib/notify";
 import { knownOrderDays } from "@/lib/sync/constants";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -104,6 +106,16 @@ export async function scoreShop(shopId, now = new Date()) {
   });
 
   const results = scoreProducts(inputs, settings?.thresholds, historyDays);
+  // Each product's status before this run, to tell the merchant what newly needs attention.
+  const previous = new Map(
+    (
+      await db().$queryRaw`
+        SELECT DISTINCT ON (s."product_id") s."product_id" AS "productId", s."status"
+        FROM "product_scores" s JOIN "products" p ON p."id" = s."product_id"
+        WHERE p."shop_id" = ${shopId}
+        ORDER BY s."product_id", s."computed_at" DESC`
+    ).map((r) => [r.productId, r.status]),
+  );
 
   await db().productScore.createMany({
     data: [
@@ -122,5 +134,9 @@ export async function scoreShop(shopId, now = new Date()) {
       ...excluded.map((p) => ({ productId: p.id, computedAt: now, status: "excluded", moneyAtStake: "0.00" })),
     ],
   });
+  const summary = attentionSummary(previous, results);
+  // A shop with no products yet has nothing to report; its first analysis is the first with products.
+  if (summary.firstRun && results.length + excluded.length > 0) await notify({ shopId, type: "analysis_ready", data: { products: results.length, counts: summary.counts } });
+  else if (!summary.firstRun && summary.total) await notify({ shopId, type: "new_attention", data: { counts: summary.counts } });
   return results.length;
 }
