@@ -260,9 +260,34 @@ export async function setSyncState(
 
 /** Fresh "pending" steps for a new install (old ones may remain after a reinstall within 48 h). */
 export async function resetSyncSteps(shopId: string) {
-  await db().syncState.deleteMany({ where: { shopId, resource: { in: ["products", "orders", "webhooks", "catchup"] } } });
+  await db().syncState.deleteMany({ where: { shopId, resource: { in: ["products", "orders", "webhooks", "catchup", "refresh"] } } });
   await db().syncState.createMany({
     data: ["products", "orders"].map((resource) => ({ shopId, resource, status: "pending" })),
     skipDuplicates: true,
   });
+}
+
+/**
+ * End-of-day stock per product for a local date (negative variant stock counts as 0). Products deleted
+ * in Shopify are skipped. Sales and view columns are left untouched.
+ */
+export async function snapshotInventory(shopId: string, date: string) {
+  await db().$executeRaw`
+    INSERT INTO "product_daily_metrics" ("product_id", "date", "inventory_qty")
+    SELECT p."id", ${date}::date, COALESCE(SUM(GREATEST(v."inventory_qty", 0)), 0)
+    FROM "products" p LEFT JOIN "variants" v ON v."product_id" = p."id"
+    WHERE p."shop_id" = ${shopId} AND p."status" <> 'DELETED'
+    GROUP BY p."id"
+    ON CONFLICT ("product_id", "date") DO UPDATE SET "inventory_qty" = EXCLUDED."inventory_qty"
+  `;
+}
+
+/** Keeps score history for `days` days (the newest score per product is always kept). */
+export async function pruneScores(shopId: string, days = 90) {
+  await db().$executeRaw`
+    DELETE FROM "product_scores" s USING "products" p
+    WHERE s."product_id" = p."id" AND p."shop_id" = ${shopId}
+      AND s."computed_at" < (now() AT TIME ZONE 'UTC') - make_interval(days => ${days})
+      AND s."computed_at" < (SELECT MAX(x."computed_at") FROM "product_scores" x WHERE x."product_id" = s."product_id")
+  `;
 }

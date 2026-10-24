@@ -1,7 +1,7 @@
 import type { ClaimedJob } from "@/lib/jobs/queue";
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { scoreShop } from "@/lib/score-shop";
-import { runInitialSync, runOrdersCatchup, runRegisterWebhooks, runSyncPoll } from "@/lib/sync/initial-sync";
+import { runDailyMetrics, runInitialSync, runOrdersCatchup, runRegisterWebhooks, runSyncPoll } from "@/lib/sync/initial-sync";
 import { runSyncInventory, runSyncProduct } from "@/lib/sync/live";
 
 /**
@@ -26,6 +26,7 @@ export const handlers: Record<string, JobHandler> = {
   "sync-poll": runSyncPoll,
   "register-webhooks": runRegisterWebhooks,
   "orders-catchup": runOrdersCatchup,
+  "daily-metrics": runDailyMetrics,
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
   "sync-inventory": runSyncInventory,
@@ -33,6 +34,8 @@ export const handlers: Record<string, JobHandler> = {
 
 /** Jobs enqueued once per shop per night, at `hour`:00 in the store's timezone. */
 export const nightlyJobs: { type: string; hour: number }[] = [
+  // Catalog refresh + stock snapshot + re-score.
+  { type: "daily-metrics", hour: 2 },
   // Re-subscribe (repairs subscriptions Shopify removed, or a changed app URL), then fill gaps.
   { type: "register-webhooks", hour: 3 },
   { type: "orders-catchup", hour: 4 },

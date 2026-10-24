@@ -90,3 +90,8 @@ export function nextLocalSlot(now: Date, timeZone: string | null | undefined, ho
 export function nextLocalRun(now: Date, timeZone: string | null | undefined, hour: number): Date {
   return nextLocalSlot(now, timeZone, hour).at;
 }
+
+/** The local date before `date` (YYYY-MM-DD). */
+export function previousLocalDate(date: string): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+}

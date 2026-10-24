@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { backoffMs, localDateKey, nextLocalRun, nextLocalSlot, retryPlan } from "./schedule.ts";
+import { backoffMs, localDateKey, nextLocalRun, nextLocalSlot, previousLocalDate, retryPlan } from "./schedule.ts";
 
 test("backoff doubles from 30s and caps at 1h", () => {
   assert.deepEqual([1, 2, 3, 4].map(backoffMs), [30_000, 60_000, 120_000, 240_000]);
@@ -76,4 +76,10 @@ test("a run pushed past midnight by a DST gap keeps its own date", () => {
   const slot = nextLocalSlot(new Date("2026-03-28T12:00:00Z"), "America/Scoresbysund", 23);
   assert.equal(slot.date, "2026-03-28");
   assert.ok(slot.at > new Date("2026-03-28T12:00:00Z"));
+});
+
+test("previous local date crosses months and years", () => {
+  assert.equal(previousLocalDate("2026-10-24"), "2026-10-23");
+  assert.equal(previousLocalDate("2026-03-01"), "2026-02-28");
+  assert.equal(previousLocalDate("2027-01-01"), "2026-12-31");
 });
