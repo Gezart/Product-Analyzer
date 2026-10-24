@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 import { Diagnosis } from "./diagnosis";
 import { FixCenter } from "./fix-center";
+import { RescuePlan, type RescuePlanData } from "./rescue-plan";
 import { SalesChart } from "./sales-chart";
 
 type Window = {
@@ -50,6 +51,7 @@ type Data = {
   trend: number | null;
   lastSale: string | null;
   daily: { date: string; units: number; revenue: number; known: boolean }[];
+  rescuePlan: RescuePlanData | null;
   variants: { id: string; sku: string | null; options: Record<string, string>; price: number; stock: number }[];
 };
 
@@ -85,6 +87,7 @@ export function ProductView() {
           </Link>
         </div>
 
+        {data.rescuePlan && <RescuePlan plan={data.rescuePlan} onChanged={() => setVersion((v) => v + 1)} />}
         <Diagnosis productId={data.product.id} key={`diagnosis-${version}`} />
         <FixCenter
           productId={data.product.id}

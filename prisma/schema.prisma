@@ -196,11 +196,12 @@ model RescuePlan {
   endsAt    DateTime? @map("ends_at")
   baseline  Json?
   result    Json?
-  verdict   String? // improved | no_change | worse | not_enough_data
+  verdict   String? // improved | no_change | worse | not_enough_data | cancelled
 
   product       Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
   markdownPlans MarkdownPlan[]
 
+  @@index([productId, startedAt])
   @@map("rescue_plans")
 }
 

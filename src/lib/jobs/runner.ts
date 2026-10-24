@@ -11,7 +11,7 @@ import {
   releaseJob,
   type ClaimedJob,
 } from "@/lib/jobs/queue";
-import { handlers, nightlyJobs, type JobHandler } from "@/lib/jobs/registry";
+import { handlers, hourlyJobs, nightlyJobs, type JobHandler } from "@/lib/jobs/registry";
 import { nextLocalSlot } from "@/lib/jobs/schedule";
 
 /** Must stay well below the lock timeout so a slow handler is stopped before its lock can expire. */
@@ -85,18 +85,24 @@ export async function runJobs({ maxMs }: { maxMs: number }) {
 }
 
 /**
- * Makes sure every installed shop has its next nightly jobs queued. Idempotent:
+ * Makes sure every installed shop has its next nightly and hourly jobs queued. Idempotent:
  * the unique key (type:shop:local date) stops duplicates.
  */
 export async function scheduleNightly(now = new Date()) {
-  if (nightlyJobs.length === 0) return 0;
+  if (nightlyJobs.length === 0 && hourlyJobs.length === 0) return 0;
   const shops = await db().shop.findMany({ where: { uninstalledAt: null }, select: { id: true, timezone: true } });
+  // Hourly jobs run at the next full hour (UTC); one per shop per hour.
+  const nextHour = new Date(Math.floor(now.getTime() / 3_600_000) * 3_600_000 + 3_600_000);
   let added = 0;
   for (const shop of shops) {
     for (const { type, hour } of nightlyJobs) {
       const slot = nextLocalSlot(now, shop.timezone, hour);
       const uniqueKey = `${type}:${shop.id}:${slot.date}`;
       if (await enqueue({ type, shopId: shop.id, runAt: slot.at, uniqueKey })) added++;
+    }
+    for (const type of hourlyJobs) {
+      const uniqueKey = `${type}:${shop.id}:${nextHour.toISOString().slice(0, 13)}`;
+      if (await enqueue({ type, shopId: shop.id, runAt: nextHour, uniqueKey })) added++;
     }
   }
   return added;

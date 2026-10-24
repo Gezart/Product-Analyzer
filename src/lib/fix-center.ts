@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { readLiveProduct, stateOf, writeState } from "@/lib/fix-shopify";
 import { sameState, type FixType } from "@/lib/fixes";
 import { enqueue } from "@/lib/jobs/queue";
+import { removeFromRescuePlan, startRescuePlan } from "@/lib/rescue-plans";
 
 export class FixError extends Error {
   constructor(message: string, readonly status: number) {
@@ -29,6 +30,11 @@ async function readState(session: Session, productGid: string, type: FixType) {
 /** Refresh local product data afterwards; a failure here must not change the fix's outcome. */
 async function refreshProduct(shopId: string, productGid: string) {
   await enqueue({ type: "sync-product", shopId, payload: { productGid } }).catch(() => {});
+}
+
+/** Rescue-plan bookkeeping must not change a fix's outcome once Shopify has been written. */
+async function track(step: Promise<void>) {
+  await step.catch((error) => console.error("[fix-center] rescue plan update failed", error));
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 500);
@@ -95,6 +101,7 @@ export async function applyFix(
     });
     await refreshProduct(shopId, product.shopifyGid);
     if (unchanged) throw new FixError(message(writeError), 502);
+    await track(startRescuePlan(shopId, productId, fix.id));
     return result;
   }
 
@@ -104,6 +111,8 @@ export async function applyFix(
     data: { status: "applied", appliedAt: new Date(), after: (pending || !saved ? after : saved) as object },
   });
   await refreshProduct(shopId, product.shopifyGid);
+  // The fix's effect is measured from today.
+  await track(startRescuePlan(shopId, productId, fix.id));
   return { ...result, pending };
 }
 
@@ -140,6 +149,7 @@ export async function undoFix(shopId: string, fixId: string, { force = false } =
     const { pending } = await writeState(session, fix.product.shopifyGid, type, current, fix.before);
     await refreshProduct(shopId, fix.product.shopifyGid);
     const result = await db().fix.update({ where: { id: fix.id }, data: { status: "undone", undoneAt: new Date() } });
+    await track(removeFromRescuePlan(fix.productId, fix.id));
     return { ...result, pending };
   } catch (error) {
     // Back to applied so it can be retried; the product may be partly restored.
