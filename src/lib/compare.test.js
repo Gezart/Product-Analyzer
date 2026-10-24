@@ -23,10 +23,10 @@ test("page quality: share of passing checks; detail checks only when the text is
   assert.equal(pageQuality(good).score, 100);
   const bare = { imageCount: 1, descriptionWords: 10, description: "Nice.", pageDataKnown: true, seoTitle: null, seoDescription: "", collections: 0 };
   assert.equal(pageQuality(bare).score, 0);
-  // Text not stored yet: 5 checks, 4 pass → 80, no detail checks.
-  const unknown = { ...good, description: null, pageDataKnown: false, seoDescription: null };
-  assert.deepEqual(pageQuality(unknown).checks.map((c) => c.key), ["images", "words", "seoTitle", "seoDescription", "collection"]);
-  assert.equal(pageQuality(unknown).score, 80);
+  // Page text not synced yet: only images, length and collections count (missing SEO isn't a failure).
+  const unknown = { ...good, description: null, pageDataKnown: false, seoTitle: null, seoDescription: null };
+  assert.deepEqual(pageQuality(unknown).checks.map((c) => c.key), ["images", "words", "collection"]);
+  assert.equal(pageQuality(unknown).score, 100);
 });
 
 test("margin: average over variants with a known cost", () => {

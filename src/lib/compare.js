@@ -11,8 +11,8 @@ export function parseCompareIds(raw) {
 }
 
 /**
- * Page quality, 0–100: the share of page checks that pass — the same checks the diagnosis uses.
- * The description detail checks count only when the description text is known.
+ * Page quality, 0–100: the share of the diagnosis's per-product page checks that pass. Text and SEO
+ * checks count only when that page data has been synced (as in the diagnosis).
  */
 export function pageQuality(p) {
   const text = p.description ?? "";
@@ -24,10 +24,10 @@ export function pageQuality(p) {
           { key: "size", label: "Mentions size or dimensions", ok: SIZE_WORDS.test(text) },
           { key: "material", label: "Mentions material", ok: MATERIAL_WORDS.test(text) },
           { key: "use", label: "Mentions use or care", ok: USE_WORDS.test(text) },
+          { key: "seoTitle", label: "SEO title", ok: Boolean(p.seoTitle) },
+          { key: "seoDescription", label: "Meta description", ok: Boolean(p.seoDescription) },
         ]
       : []),
-    { key: "seoTitle", label: "SEO title", ok: Boolean(p.seoTitle) },
-    { key: "seoDescription", label: "Meta description", ok: Boolean(p.seoDescription) },
     { key: "collection", label: "In a collection", ok: p.collections > 0 },
   ];
   return { score: Math.round((100 * checks.filter((c) => c.ok).length) / checks.length), checks };
@@ -35,7 +35,7 @@ export function pageQuality(p) {
 
 /**
  * Gross margin at today's prices: (price − cost) ÷ price, averaged over the variants with a known
- * unit cost. Null when no variant has one.
+ * unit cost. Null when no variant has one. A cost of 0 counts as not set, as for the price floor.
  */
 export function grossMargin(variants) {
   const known = variants.filter((v) => v.cost != null && v.cost > 0 && v.price > 0);

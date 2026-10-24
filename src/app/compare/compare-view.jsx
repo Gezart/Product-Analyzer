@@ -21,14 +21,13 @@ export function CompareView() {
   useEffect(() => {
     if (!ids) return;
     let live = true;
+    setData(null);
+    setError(null);
     fetch(`/api/compare?ids=${encodeURIComponent(ids)}&days=${days}`)
       .then(async (res) => {
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? `Failed (${res.status})`);
-        if (live) {
-          setError(null);
-          setData(body);
-        }
+        if (live) setData(body);
       })
       .catch((e) => live && setError(e.message));
     return () => {
@@ -78,8 +77,9 @@ export function CompareView() {
     {
       label: "Stock age (days since last sale)",
       values: products.map((p) => p.stockAge.days),
+      // Products that never sold aren't "fresher" stock: they don't compete for best.
+      best: () => bestIndex(products.map((p) => (p.stockAge.sold ? p.stockAge.days : null)), true),
       show: (v, p) => (v == null ? "—" : `${p.stockAge.atLeast ? "over " : ""}${v} days${p.stockAge.sold ? "" : " (no sale yet)"}`),
-      lowerIsBetter: true,
     },
     { label: "Page quality", values: products.map((p) => p.pageQuality.score), show: (v) => `${v} / 100`, quality: true },
   ];
@@ -139,7 +139,7 @@ export function CompareView() {
                 </thead>
                 <tbody>
                   {rows.map((r) => {
-                    const best = r.noBest ? null : bestIndex(r.values, r.lowerIsBetter);
+                    const best = r.noBest ? null : r.best ? r.best() : bestIndex(r.values, r.lowerIsBetter);
                     return (
                       <tr key={r.label} className="border-t border-zinc-200">
                         <td className="py-2 pr-4 align-top text-zinc-600">{r.label}</td>
@@ -165,7 +165,7 @@ export function CompareView() {
             </div>
             <s-text tone="neutral">
               Best value in each row is highlighted. Views and conversion appear once view sync is connected. Margin uses the unit cost
-              in Shopify; page quality counts the same page checks as the diagnosis.
+              in Shopify; page quality counts the diagnosis&apos;s per-product page checks.
             </s-text>
           </s-section>
         )}

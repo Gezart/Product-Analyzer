@@ -51,7 +51,7 @@ export async function GET(request) {
       days,
       // A window longer than the known order history would undercount sales.
       partial: days > knownDays,
-      notFound: ids.length - products.length,
+      notFound: ids.filter((i) => !products.some((p) => p.id === i || p.shopifyGid === i)).length,
       products: products.map((p) => {
         const rows = metrics
           .filter((m) => m.productId === p.id)
