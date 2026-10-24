@@ -3,10 +3,10 @@ import { getOfflineSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { enqueue, type ClaimedJob } from "@/lib/jobs/queue";
-import { localDateKey } from "@/lib/jobs/schedule";
-import { bulkStatus, readJsonl, startBulkQuery } from "@/lib/sync/bulk";
+import { localDateKey, previousLocalDate } from "@/lib/jobs/schedule";
+import { BulkBusyError, bulkStatus, readJsonl, startBulkQuery } from "@/lib/sync/bulk";
 import { isLocalDate, ORDER_DAYS } from "@/lib/sync/constants";
-import { applyOrderLines, replaceOrderLines, setSyncState, upsertProducts } from "@/lib/sync/store";
+import { applyOrderLines, pruneScores, replaceOrderLines, setSyncState, snapshotInventory, upsertProducts } from "@/lib/sync/store";
 import { assembleProducts, orderLinesFromBulk, type OrderLineRecord } from "@/lib/sync/transform";
 import { registerWebhooks } from "@/lib/sync/webhooks";
 
@@ -15,7 +15,7 @@ const MAX_POLLS = 360; // 1 hour
 /** Nightly catch-up re-reads orders changed since the last successful catch-up, minus this margin. */
 const CATCHUP_MARGIN_DAYS = 1;
 
-type Stage = "products" | "orders" | "catchup";
+type Stage = "products" | "orders" | "catchup" | "refresh";
 /** `startedAt`: when the bulk query started; data changed by webhooks after it is newer than the snapshot. */
 type PollPayload = { stage: Stage; operationId: string; polls: number; startedAt: string };
 
@@ -86,18 +86,21 @@ async function step(job: ClaimedJob, stage: Stage, run: () => Promise<void>) {
       const message = error instanceof Error ? error.message : String(error);
       await setSyncState(job.shopId!, stage, { status: "error", error: message.slice(0, 500) });
       if (stage === "products") await setSyncState(job.shopId!, "orders", { status: "error", error: "Skipped" });
-      if (stage === "orders") await enqueue({ type: "score-shop", shopId: job.shopId });
+      // Without fresh data, statuses are still recomputed from what is stored.
+      if (stage === "orders" || stage === "refresh") await enqueue({ type: "score-shop", shopId: job.shopId });
     }
     throw error;
   }
 }
 
-async function startStage(shopId: string, stage: Stage, query: string) {
-  // A retried job may have started this stage already (crash after starting): keep that operation.
-  // Its first poll is re-scheduled (a no-op if it exists); the start time is unknown, so an earlier
-  // one is assumed (safe: only makes more webhook data count as newer than the snapshot).
+async function startStage(job: ClaimedJob, stage: Stage, query: string) {
+  const shopId = job.shopId!;
+  // Only a retry of the job that started this stage (crash after starting) resumes its operation;
+  // a "running" row left by an earlier run that died is replaced by a fresh one.
+  // The resumed first poll is re-scheduled (a no-op if it exists); the start time is unknown, so an
+  // earlier one is assumed (safe: only makes more webhook data count as newer than the snapshot).
   const current = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: stage } } });
-  if (current?.status === "running" && current.lastCursor) {
+  if (job.attempts > 1 && current?.status === "running" && current.lastCursor) {
     const startedAt = new Date(Date.now() - MAX_POLLS * POLL_EVERY_MS).toISOString();
     await schedulePoll(shopId, { stage, operationId: current.lastCursor, polls: 0, startedAt });
     return;
@@ -133,7 +136,7 @@ export async function runInitialSync(job: ClaimedJob) {
     await db().shop.update({ where: { id: shopId }, data: { currency: shop.currencyCode, timezone: shop.ianaTimezone } });
     // Own job: a registration problem must not block the import.
     await enqueue({ type: "register-webhooks", shopId });
-    await startStage(shopId, "products", PRODUCTS_QUERY);
+    await startStage(job, "products", PRODUCTS_QUERY);
   });
 }
 
@@ -162,9 +165,33 @@ export async function runOrdersCatchup(job: ClaimedJob) {
   const catchup = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "catchup" } } });
   const last = (catchup?.status === "done" ? catchup.lastSyncedAt : null) ?? orders.lastSyncedAt ?? new Date();
   const since = new Date(last.getTime() - CATCHUP_MARGIN_DAYS * 86_400_000).toISOString();
-  await step(job, "catchup", async () => {
-    await startStage(shopId, "catchup", ordersQuery(`updated_at:>='${since}'`));
-  });
+  await step(job, "catchup", () => startNightlyStage(job, "catchup", ordersQuery(`updated_at:>='${since}'`)));
+}
+
+/**
+ * Nightly jobs share the shop's bulk query slot with each other and with imports: when it's taken,
+ * the job is queued again later instead of using up its retries.
+ */
+async function startNightlyStage(job: ClaimedJob, stage: Stage, query: string) {
+  try {
+    await startStage(job, stage, query);
+  } catch (error) {
+    if (!(error instanceof BulkBusyError)) throw error;
+    await enqueue({ type: job.type, shopId: job.shopId, runAt: new Date(Date.now() + 10 * 60_000) });
+  }
+}
+
+/**
+ * Job "daily-metrics" (nightly, just after midnight store time): re-reads the whole catalog (repairs missed product
+ * and inventory webhooks), then snapshots yesterday's closing stock and re-scores the shop.
+ */
+export async function runDailyMetrics(job: ClaimedJob) {
+  const shopId = requireShop(job);
+  const orders = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } });
+  // Import still running: it scores when done. Import failed: no refresh, but keep statuses current.
+  if (orders?.status === "error") await enqueue({ type: "score-shop", shopId });
+  if (orders?.status !== "done") return;
+  await step(job, "refresh", () => startNightlyStage(job, "refresh", PRODUCTS_QUERY));
 }
 
 /** Applies catch-up lines order by order; versions already stored (same or newer) are skipped. */
@@ -202,16 +229,24 @@ export async function runSyncPoll(job: ClaimedJob, signal: AbortSignal) {
     if (payload.stage === "products") {
       await upsertProducts(shopId, assembleProducts(rows), { snapshotAt });
       await setSyncState(shopId, "products", { status: "done", error: null, lastSyncedAt: new Date() });
-      await startStage(shopId, "orders", ordersQuery(`created_at:>='${ordersFrom(shop.timezone)}'`));
+      await startStage(job, "orders", ordersQuery(`created_at:>='${ordersFrom(shop.timezone)}'`));
     } else if (payload.stage === "orders") {
       // The window start is kept in the cursor: order history is known from that day on.
       const from = ordersFrom(shop.timezone);
       await replaceOrderLines(shopId, from, orderLinesFromBulk(rows, shop.timezone), snapshotAt);
       await setSyncState(shopId, "orders", { status: "done", error: null, lastCursor: from, lastSyncedAt: new Date() });
       await enqueue({ type: "score-shop", shopId });
+    } else if (payload.stage === "refresh") {
+      await upsertProducts(shopId, assembleProducts(rows), { snapshotAt });
+      // Runs just after midnight local time: the stock read now approximates yesterday's closing stock.
+      await snapshotInventory(shopId, previousLocalDate(localDateKey(new Date(), shop.timezone)));
+      await pruneScores(shopId);
+      await setSyncState(shopId, "refresh", { status: "done", error: null, lastSyncedAt: new Date() });
+      await enqueue({ type: "score-shop", shopId });
     } else {
       await applyCatchup(shopId, await orderWindowStart(shopId, shop.timezone), orderLinesFromBulk(rows, shop.timezone));
       await setSyncState(shopId, "catchup", { status: "done", error: null, lastSyncedAt: new Date() });
+      await enqueue({ type: "score-shop", shopId });
     }
   });
 }

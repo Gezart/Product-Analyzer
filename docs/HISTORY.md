@@ -1,5 +1,11 @@
 # History
 
+## 2026-10-24 · daily-metrics
+- Nightly `daily-metrics` job (just after midnight store time): full catalog refresh (repairs missed product/inventory webhooks, snapshot-aware), yesterday's closing stock into `product_daily_metrics.inventory_qty`, score history pruned to 90 days (newest kept), then `score-shop`
+- Nightly jobs that find the shop's bulk query slot busy are queued again in 10 min instead of using up retries; a stage left "running" by a dead run is restarted, not resumed
+- The order catch-up re-scores the shop; shops whose import failed are still re-scored nightly
+- Verified snapshot and pruning SQL on a local Postgres 16; 1 new unit test
+
 ## 2026-10-24 · live-sync
 - Webhooks (app, orders create/updated/cancelled, products create/update/delete, inventory levels) registered by their own job after install and nightly; order payloads limited to the fields we store (`includeFields`)
 - New table `order_lines` (no customer data): daily sales are rebuilt from it under a per-shop lock (webhooks wait at most 3 s, then Shopify retries), so repeated, stale, concurrent and out-of-order webhooks stay correct; refunds and cancellations reduce sales
@@ -7,7 +13,6 @@
 - Orders older than the known history window are ignored; dead-stock history counts only known order days (grows with live sync)
 - Product/inventory webhooks queue a single-product re-sync (paginated, under the API cost limit; cut-off variant lists never delete variants), which also rebuilds that product's sales
 - Nightly catch-up re-reads orders changed since the last successful catch-up (minus 1 day), so outages are covered
-- Open: missed inventory webhooks are only repaired when the product changes again; a nightly stock refresh belongs to `daily-metrics`
 - Verified on a local Postgres 16 (repeat, refund, stale replay, cancel, late product, 10 concurrent orders, import vs webhooks); 6 new unit tests
 - Not yet tested against a real store (REST `current_quantity` after refunds and query costs to confirm)
 
