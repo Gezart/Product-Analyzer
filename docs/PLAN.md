@@ -137,7 +137,7 @@ Revenue recovered = actual revenue during the rescue or markdown period − (bas
 
 ## Technical architecture
 
-One TypeScript codebase: an embedded admin app, an app server, and background workers that do all syncing, scoring, AI and price changes. The UI never calls Shopify or the AI directly.
+One JavaScript codebase: an embedded admin app, an app server, and background workers that do all syncing, scoring, AI and price changes. The UI never calls Shopify or the AI directly.
 
 ```mermaid
 flowchart LR
@@ -175,7 +175,7 @@ Webhooks and the UI enter through the app server; everything heavy goes through 
 | Layer | Choice | Why |
 | --- | --- | --- |
 | Embedded app | Shopify React Router template, Polaris, App Bridge | Auth, billing helpers, webhooks and session tokens built in; the look Built for Shopify expects |
-| Language | TypeScript end to end | One language for UI, server and workers |
+| Language | JavaScript end to end (`.jsx` / `.js`) | One language for UI, server and workers; owner's choice |
 | Database | PostgreSQL with Prisma | Relational data, migrations, strong constraints for the price floor |
 | Queue | Redis + BullMQ | Retries, schedules, rate-limit control per store |
 | AI | Claude API: Sonnet for diagnosis and copy, Haiku for bulk work | Quality where the merchant reads it, low cost for volume |

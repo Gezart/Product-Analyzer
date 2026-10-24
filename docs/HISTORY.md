@@ -1,5 +1,13 @@
 # History
 
+## 2026-10-24 · javascript
+- Code converted from TypeScript to JavaScript (owner's request): React files are `.jsx`, the rest `.js`; types removed, comments and formatting kept (docs of removed types moved next to the code that uses them)
+- `typescript` and `@types/*` removed; `tsconfig.json` replaced by `jsconfig.json` (only the `@/*` path alias); `package.json` is `"type": "module"`
+- CI and the agent instructions now run build + tests (no typecheck step); CLAUDE.md, README and PLAN say JavaScript
+- Build passes without TypeScript, 119/119 tests, Prisma schema valid; every file checked for names used but not defined (none)
+- With no typecheck, nothing in CI catches an undefined name; a linter (ESLint) would, but it is a new dependency and needs the owner's OK
+- Note: the Prisma client generated at build time (`src/generated/prisma`, not committed) is still TypeScript; Next.js compiles it
+
 ## 2026-10-24 · markdown-engine
 - Markdown ladder 10% → 20% → 30% with a compare-at price, one step every 14 days, proposed when a rescue plan ends with no change or the product is dead stock; preview from live Shopify prices and costs, merchant approves the exact schedule
 - Money rule: never below cost × (1 + minimum margin) (rounded up to the cent), never more than the max discount (rounded so it can't be exceeded); variants without a unit cost are never discounted

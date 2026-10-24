@@ -23,7 +23,5 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Build first: it generates the route types that typecheck needs.
       - run: npm run build
-      - run: npx tsc --noEmit
       - run: npm test
