@@ -1,7 +1,15 @@
 // Product metrics, statuses and money at stake — docs/PLAN.md → "Analysis logic".
 // Pure functions with no imports so node:test can load them directly.
 
-export type Status = "dead_stock" | "stockout_risk" | "page_problem" | "slow_mover" | "hidden_gem" | "healthy";
+export type Status =
+  | "dead_stock"
+  | "stockout_risk"
+  | "page_problem"
+  | "slow_mover"
+  | "hidden_gem"
+  | "healthy"
+  /** Inactive or in an excluded collection; written so old scores don't linger. */
+  | "excluded";
 
 export type Thresholds = {
   /** Page problem: views in the top X of the store (0.4 = top 40%). */
@@ -30,6 +38,13 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   minViews: 20,
 };
 
+const SHARE_KEYS = new Set<keyof Thresholds>([
+  "pageProblemViewsTop",
+  "pageProblemConversionRatio",
+  "hiddenGemViewsBottom",
+  "slowSellThrough",
+]);
+
 export const STATUS_WEIGHTS: Record<Status, number> = {
   dead_stock: 1,
   slow_mover: 0.7,
@@ -37,23 +52,58 @@ export const STATUS_WEIGHTS: Record<Status, number> = {
   hidden_gem: 0.4,
   stockout_risk: 0,
   healthy: 0,
+  excluded: 0,
 };
+
+/** Keeps only valid overrides (finite numbers; shares in [0,1]; counts ≥ 0); anything else falls back to the default. */
+export function sanitizeThresholds(raw: unknown): Thresholds {
+  const t = { ...DEFAULT_THRESHOLDS };
+  if (!raw || typeof raw !== "object") return t;
+  for (const key of Object.keys(DEFAULT_THRESHOLDS) as (keyof Thresholds)[]) {
+    const v = (raw as Record<string, unknown>)[key];
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0) continue;
+    if (SHARE_KEYS.has(key) && v > 1) continue;
+    if (key === "deadDays" && v === 0) continue;
+    t[key] = v;
+  }
+  return t;
+}
+
+export type VariantStock = { stock: number; price: number; cost: number | null };
+
+/**
+ * Stock and its value summed per variant. Negative stock (overselling) counts as 0.
+ * Missing cost uses the variant price × 0.5 and flags the value as an estimate.
+ */
+export function stockFromVariants(variants: VariantStock[]) {
+  let stock = 0;
+  let stockValue = 0;
+  let costIsEstimate = false;
+  for (const v of variants) {
+    const qty = Math.max(0, v.stock);
+    stock += qty;
+    stockValue += qty * (v.cost ?? v.price * 0.5);
+    if (qty > 0 && v.cost == null) costIsEstimate = true;
+  }
+  return { stock, stockValue, costIsEstimate };
+}
 
 export type ProductInput = {
   id: string;
-  /** Units in stock now. */
+  /** Units in stock now (≥ 0). */
   stock: number;
-  price: number;
-  /** Unit cost from Shopify; null → price × 0.5, flagged as estimate. */
-  cost: number | null;
+  stockValue: number;
+  costIsEstimate: boolean;
   units30: number;
   unitsPrev30: number;
-  /** Units in the last 60 days (= units30 + unitsPrev30 when both windows are known). */
+  /** Units in the last 60 days. */
   units60: number;
   views30: number;
   purchases30: number;
   /** Days since the last order with this product; null if none in the synced history. */
   daysSinceLastSale: number | null;
+  /** Days since the product was created; null if unknown. */
+  ageDays: number | null;
 };
 
 export type Metrics = {
@@ -74,16 +124,17 @@ export type Benchmarks = {
 
 export type ScoreResult = Metrics & { id: string; status: Status; moneyAtStake: number };
 
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+
 export function computeMetrics(p: ProductInput): Metrics {
-  const sold60 = p.units60 + p.stock;
+  const stock = Math.max(0, p.stock);
+  const sold60 = p.units60 + stock;
   const daily = p.units30 / 30;
-  const costIsEstimate = p.cost == null;
-  const unitCost = p.cost ?? p.price * 0.5;
   return {
-    sellThrough: sold60 > 0 ? p.units60 / sold60 : null,
-    daysOfCover: daily > 0 ? p.stock / daily : null,
-    stockValue: Math.max(0, p.stock) * unitCost,
-    costIsEstimate,
+    sellThrough: sold60 > 0 ? clamp01(p.units60 / sold60) : null,
+    daysOfCover: daily > 0 ? stock / daily : null,
+    stockValue: p.stockValue,
+    costIsEstimate: p.costIsEstimate,
     trend: p.unitsPrev30 > 0 ? p.units30 / p.unitsPrev30 : null,
     conversion: p.views30 > 0 ? p.purchases30 / p.views30 : null,
   };
@@ -92,19 +143,20 @@ export function computeMetrics(p: ProductInput): Metrics {
 /** Value at quantile q (0–1) of a sorted ascending array, linear interpolation. */
 export function quantile(sorted: number[], q: number): number {
   if (sorted.length === 0) return 0;
-  const pos = (sorted.length - 1) * q;
+  const pos = (sorted.length - 1) * clamp01(q);
   const lo = Math.floor(pos);
   const hi = Math.ceil(pos);
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
 }
 
-/** Store-relative cut-offs: thresholds follow each store's own distribution, not fixed numbers. */
+/**
+ * Store-relative cut-offs over products with enough views to judge, so thresholds follow
+ * each store's own distribution and low-traffic products don't skew them.
+ */
 export function computeBenchmarks(products: ProductInput[], t: Thresholds): Benchmarks {
-  const views = products.map((p) => p.views30).sort((a, b) => a - b);
-  const conversions = products
-    .filter((p) => p.views30 >= t.minViews)
-    .map((p) => p.purchases30 / p.views30)
-    .sort((a, b) => a - b);
+  const judged = products.filter((p) => p.views30 >= t.minViews && p.views30 > 0);
+  const views = judged.map((p) => p.views30).sort((a, b) => a - b);
+  const conversions = judged.map((p) => p.purchases30 / p.views30).sort((a, b) => a - b);
   return {
     viewsTopCut: quantile(views, 1 - t.pageProblemViewsTop),
     viewsBottomCut: quantile(views, t.hiddenGemViewsBottom),
@@ -114,41 +166,35 @@ export function computeBenchmarks(products: ProductInput[], t: Thresholds): Benc
 
 /**
  * First matching status wins: dead stock, stock-out risk, page problem, slow mover, hidden gem, healthy.
- * `historyDays` is how many days of orders are synced; dead stock needs proof of `deadDays` without a sale.
+ * `historyDays` is how many days of orders are synced; dead stock needs proof of `deadDays` without a sale,
+ * capped at the product's age so new products are never dead.
  */
 export function classify(p: ProductInput, m: Metrics, b: Benchmarks, t: Thresholds, historyDays: number): Status {
   if (p.stock > 0) {
-    const noSaleDays = p.daysSinceLastSale ?? (historyDays >= t.deadDays ? historyDays : null);
-    if (noSaleDays != null && noSaleDays >= t.deadDays) return "dead_stock";
+    const known = p.daysSinceLastSale ?? historyDays;
+    const noSaleDays = p.ageDays != null ? Math.min(known, p.ageDays) : known;
+    if (noSaleDays >= t.deadDays) return "dead_stock";
   }
 
   const growing = m.trend == null ? p.units30 > 0 : m.trend >= 1;
   if (m.daysOfCover != null && m.daysOfCover < t.stockoutCoverDays && growing) return "stockout_risk";
 
-  const enoughViews = p.views30 >= t.minViews && m.conversion != null && b.medianConversion != null;
-  if (
-    enoughViews &&
-    p.views30 > 0 &&
-    p.views30 >= b.viewsTopCut &&
-    m.conversion! < b.medianConversion! * t.pageProblemConversionRatio
-  ) {
+  const judged = p.views30 >= t.minViews && m.conversion != null && b.medianConversion != null;
+  if (judged && p.views30 >= b.viewsTopCut && m.conversion! < b.medianConversion! * t.pageProblemConversionRatio) {
     return "page_problem";
   }
 
-  // No sale in a history shorter than deadDays: can't call it dead yet, treat as slow.
+  // Low sell-through with stock and not dead (yet): includes products without a sale in the last
+  // 60 days but sold within deadDays, and no-sale products whose history or age is too short to call dead.
   if (p.stock > 0 && m.sellThrough != null && m.sellThrough < t.slowSellThrough) return "slow_mover";
 
-  if (enoughViews && p.views30 <= b.viewsBottomCut && m.conversion! > b.medianConversion!) return "hidden_gem";
+  if (judged && p.views30 <= b.viewsBottomCut && m.conversion! > b.medianConversion!) return "hidden_gem";
 
   return "healthy";
 }
 
-export function scoreProducts(
-  products: ProductInput[],
-  thresholds: Partial<Thresholds> = {},
-  historyDays = 60,
-): ScoreResult[] {
-  const t = { ...DEFAULT_THRESHOLDS, ...thresholds };
+export function scoreProducts(products: ProductInput[], thresholds?: unknown, historyDays = 60): ScoreResult[] {
+  const t = sanitizeThresholds(thresholds);
   const b = computeBenchmarks(products, t);
   return products
     .map((p) => {
