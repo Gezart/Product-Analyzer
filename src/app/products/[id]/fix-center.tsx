@@ -52,23 +52,38 @@ export function FixCenter({ productId, onChanged }: { productId: string; onChang
     load();
   }, [load]);
 
+  // The state this page shows, so the server can refuse if Shopify changed meanwhile.
+  function loadedState(type: string) {
+    const live = data!.live;
+    switch (type) {
+      case "title": return { title: live.title };
+      case "description": return { descriptionHtml: live.descriptionHtml };
+      case "seo": return { seoTitle: live.seo.title ?? "", seoDescription: live.seo.description ?? "" };
+      case "images": return { mediaIds: live.media.map((m) => m.id) };
+      default: return { collectionIds: live.collections.filter((c) => c.manual).map((c) => c.id).sort() };
+    }
+  }
+
   async function apply(type: string, after: unknown) {
+    if (busy) return;
     setBusy(type);
     setMessage(null);
     const res = await fetch(`/api/products/${productId}/fixes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, after, diagnosisId: data?.diagnosisId }),
+      body: JSON.stringify({ type, after, expected: loadedState(type), diagnosisId: data?.diagnosisId }),
     });
     const body = await res.json().catch(() => ({}));
     setBusy(null);
-    if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
-    setMessage({ tone: "success", text: `${LABELS[type]} updated in Shopify. The old version is saved; you can undo it below.` });
     await load();
+    if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
+    const note = body.pending ? " Shopify is still finishing it; it can take a minute to show." : "";
+    setMessage({ tone: "success", text: `${LABELS[type]} updated in Shopify. The old version is saved; you can undo it below.${note}` });
     onChanged();
   }
 
   async function undo(fixId: string, force = false) {
+    if (busy) return;
     setBusy(fixId);
     setMessage(null);
     const res = await fetch(`/api/fixes/${fixId}/undo`, {
@@ -81,9 +96,9 @@ export function FixCenter({ productId, onChanged }: { productId: string; onChang
     if (res.status === 409 && !force && /changed since/.test(body.error ?? "")) {
       return setMessage({ tone: "critical", text: body.error, forceFix: fixId });
     }
+    await load();
     if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
     setMessage({ tone: "success", text: "Undone: the product is back to how it was before the fix." });
-    await load();
     onChanged();
   }
 
@@ -113,7 +128,7 @@ export function FixCenter({ productId, onChanged }: { productId: string; onChang
           <s-banner tone={message.tone}>
             {message.text}{" "}
             {message.forceFix && (
-              <s-button variant="tertiary" ref={listen("click", () => undo(message.forceFix!, true))}>
+              <s-button variant="tertiary" disabled={busy !== null || undefined} ref={listen("click", () => undo(message.forceFix!, true))}>
                 Undo anyway
               </s-button>
             )}
@@ -186,6 +201,7 @@ export function FixCenter({ productId, onChanged }: { productId: string; onChang
           <s-text>Collections</s-text>
           {hintFor("collection")}
           {smart.length > 0 && <s-text tone="neutral">Also in automated collections (by their rules): {smart.map((c) => c.title).join(", ")}.</s-text>}
+          <s-text tone="neutral">Undoing a removal adds the product back at the end of a manually sorted collection.</s-text>
           <div className="grid gap-1 sm:grid-cols-2">
             {data.manualCollections.map((c) => (
               <label key={c.id} className="flex items-center gap-2 text-sm">
@@ -218,7 +234,12 @@ export function FixCenter({ productId, onChanged }: { productId: string; onChang
                   <span className="text-zinc-500">{new Date(f.appliedAt ?? f.createdAt).toLocaleString()}</span>
                   {f.error && <span className="text-red-700">{f.error}</span>}
                   {f.status === "applied" && (
-                    <s-button variant="tertiary" loading={busy === f.id || undefined} ref={listen("click", () => undo(f.id))}>
+                    <s-button
+                      variant="tertiary"
+                      disabled={busy !== null || undefined}
+                      loading={busy === f.id || undefined}
+                      ref={listen("click", () => undo(f.id))}
+                    >
                       Undo
                     </s-button>
                   )}

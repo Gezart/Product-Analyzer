@@ -14,7 +14,12 @@ export async function GET(request: Request, ctx: RouteContext<"/api/products/[id
     const [live, collections, fixes, diagnosis] = await Promise.all([
       readLiveProduct(session, product.shopifyGid),
       manualCollections(session),
-      db().fix.findMany({ where: { productId: id }, orderBy: { createdAt: "desc" }, take: 50 }),
+      db().fix.findMany({
+        where: { productId: id },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: { id: true, type: true, status: true, createdAt: true, appliedAt: true, undoneAt: true, error: true },
+      }),
       db().diagnosis.findFirst({ where: { productId: id }, orderBy: { createdAt: "desc" } }),
     ]);
     if (!live) return new Response("Product no longer exists in Shopify", { status: 404 });

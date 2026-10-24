@@ -60,15 +60,19 @@ function check(errors: UserError[] | undefined, what: string) {
   if (errors?.length) throw new Error(`${what}: ${errors.map((e) => e.message).join("; ")}`);
 }
 
-/** Waits (briefly) for an async Shopify job, e.g. media reorder or collection removal. */
-async function waitForJob(session: Session, job: { id: string; done: boolean } | null) {
-  if (!job || job.done) return;
+/**
+ * Waits (briefly) for an async Shopify job, e.g. media reorder or collection removal. Returns false
+ * when it isn't confirmed done in time: the change is then still being applied by Shopify.
+ */
+async function waitForJob(session: Session, job: { id: string; done: boolean } | null): Promise<boolean> {
+  if (!job || job.done) return true; // no job returned: the change was applied synchronously
   for (let i = 0; i < 10; i++) {
     await new Promise((r) => setTimeout(r, 500));
     const data = await adminGraphql<{ job: { done: boolean } | null }>(session, `#graphql
       query Job($id: ID!) { job(id: $id) { done } }`, { id: job.id });
-    if (!data.job || data.job.done) return;
+    if (data.job?.done) return true;
   }
+  return false;
 }
 
 const PRODUCT_UPDATE = `#graphql
@@ -76,30 +80,42 @@ const PRODUCT_UPDATE = `#graphql
     productUpdate(product: $product) { product { id } userErrors { field message } }
   }`;
 
-/** Writes one fix type's state to Shopify (`current` is needed to compute moves and collection diffs). */
-export async function writeState(session: Session, productGid: string, type: FixType, current: unknown, target: unknown) {
+/**
+ * Writes one fix type's state to Shopify (`current` is needed to compute moves and collection diffs).
+ * Returns `{ pending: true }` when Shopify accepted the change but its async job wasn't done yet.
+ */
+export async function writeState(
+  session: Session,
+  productGid: string,
+  type: FixType,
+  current: unknown,
+  target: unknown,
+): Promise<{ pending: boolean }> {
   type UpdateResult = { productUpdate: { userErrors: UserError[] } };
   switch (type) {
     case "title": {
       const { title } = target as FixState["title"];
       const r = await adminGraphql<UpdateResult>(session, PRODUCT_UPDATE, { product: { id: productGid, title } });
-      return check(r.productUpdate.userErrors, "Title");
+      check(r.productUpdate.userErrors, "Title");
+      return { pending: false };
     }
     case "description": {
       const { descriptionHtml } = target as FixState["description"];
       const r = await adminGraphql<UpdateResult>(session, PRODUCT_UPDATE, { product: { id: productGid, descriptionHtml } });
-      return check(r.productUpdate.userErrors, "Description");
+      check(r.productUpdate.userErrors, "Description");
+      return { pending: false };
     }
     case "seo": {
       const { seoTitle, seoDescription } = target as FixState["seo"];
       const r = await adminGraphql<UpdateResult>(session, PRODUCT_UPDATE, {
         product: { id: productGid, seo: { title: seoTitle, description: seoDescription } },
       });
-      return check(r.productUpdate.userErrors, "SEO");
+      check(r.productUpdate.userErrors, "SEO");
+      return { pending: false };
     }
     case "images": {
       const moves = mediaMoves((current as FixState["images"]).mediaIds, (target as FixState["images"]).mediaIds);
-      if (!moves.length) return;
+      if (!moves.length) return { pending: false };
       const r = await adminGraphql<{
         productReorderMedia: { job: { id: string; done: boolean } | null; mediaUserErrors: UserError[] };
       }>(
@@ -111,10 +127,12 @@ export async function writeState(session: Session, productGid: string, type: Fix
         { id: productGid, moves },
       );
       check(r.productReorderMedia.mediaUserErrors, "Image order");
-      return waitForJob(session, r.productReorderMedia.job);
+      return { pending: !(await waitForJob(session, r.productReorderMedia.job)) };
     }
     case "collection": {
+      // Note: re-adding to a manually sorted collection puts the product at the end of it.
       const { add, remove } = collectionChanges((current as FixState["collection"]).collectionIds, (target as FixState["collection"]).collectionIds);
+      let pending = false;
       for (const id of add) {
         const r = await adminGraphql<{ collectionAddProducts: { userErrors: UserError[] } }>(
           session,
@@ -136,8 +154,9 @@ export async function writeState(session: Session, productGid: string, type: Fix
           { id, productIds: [productGid] },
         );
         check(r.collectionRemoveProducts.userErrors, "Remove from collection");
-        await waitForJob(session, r.collectionRemoveProducts.job);
+        if (!(await waitForJob(session, r.collectionRemoveProducts.job))) pending = true;
       }
+      return { pending };
     }
   }
 }

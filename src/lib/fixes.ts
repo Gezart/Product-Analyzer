@@ -86,12 +86,29 @@ export function collectionChanges(current: string[], target: string[]) {
 }
 
 /**
- * Moves for Shopify's productReorderMedia to turn `current` into `target` (same ids). Only media whose
- * position changes are moved; ids missing from either list are left alone.
+ * Moves for Shopify's productReorderMedia to turn `current` into `target`. Shopify applies moves in
+ * order, each to the list the previous one left, so every item from the first differing position on
+ * is placed in turn — correct whether moves apply one by one or all at once. Ids not in both lists
+ * are left alone.
  */
 export function mediaMoves(current: string[], target: string[]) {
-  const ordered = target.filter((id) => current.includes(id));
-  return ordered.flatMap((id, i) => (current[i] === id ? [] : [{ id, newPosition: String(i) }]));
+  const have = new Set(current);
+  const ordered = target.filter((id) => have.has(id));
+  const start = ordered.findIndex((id, i) => current[i] !== id);
+  if (start === -1) return [];
+  return ordered.slice(start).map((id, j) => ({ id, newPosition: String(start + j) }));
+}
+
+/** Applies moves in order, the way Shopify does (for tests and checks). */
+export function applyMoves(list: string[], moves: { id: string; newPosition: string }[]) {
+  const out = [...list];
+  for (const m of moves) {
+    const from = out.indexOf(m.id);
+    if (from === -1) continue;
+    out.splice(from, 1);
+    out.splice(Number(m.newPosition), 0, m.id);
+  }
+  return out;
 }
 
 /** A hint per diagnosis reason: what to change, for the fix center. */

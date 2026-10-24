@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 import { Diagnosis } from "./diagnosis";
 import { FixCenter } from "./fix-center";
@@ -60,6 +60,8 @@ export function ProductView() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const refresh = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(refresh.current), []);
 
   useEffect(() => {
     fetch(`/api/products/${id}`)
@@ -84,7 +86,14 @@ export function ProductView() {
         </div>
 
         <Diagnosis productId={data.product.id} key={`diagnosis-${version}`} />
-        <FixCenter productId={data.product.id} onChanged={() => setTimeout(() => setVersion((v) => v + 1), 3000)} />
+        <FixCenter
+          productId={data.product.id}
+          onChanged={() => {
+            // Local data is refreshed by a background sync job; reload shortly after.
+            clearTimeout(refresh.current);
+            refresh.current = setTimeout(() => setVersion((v) => v + 1), 3000);
+          }}
+        />
 
         <s-section id="overview">
           <s-stack gap="small">
