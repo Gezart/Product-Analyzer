@@ -14,7 +14,7 @@ type Plan = {
   endReason: string | null;
   startedAt: string;
   endedAt: string | null;
-  steps: { variants: VariantPlan[] };
+  steps: { variants: VariantPlan[]; applied: Record<string, { price: number }> };
 };
 type PriceChange = { id: string; variantGid: string | null; oldPrice: string; newPrice: string; reason: string; status: string; changedAt: string };
 type Data = {
@@ -26,6 +26,8 @@ type Data = {
   today: string;
 };
 
+type Msg = { tone: "success" | "warning" | "critical"; text: string };
+
 const DAY = 86_400_000;
 const addDays = (date: string, n: number) => new Date(Date.parse(date) + n * DAY).toISOString().slice(0, 10);
 
@@ -33,7 +35,7 @@ const addDays = (date: string, n: number) => new Date(Date.parse(date) + n * DAY
 export function Markdown({ productId, money, onChanged }: { productId: string; money: Intl.NumberFormat; onChanged: () => void }) {
   const [data, setData] = useState<Data | null>(null);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ tone: "success" | "critical"; text: string } | null>(null);
+  const [msg, setMsg] = useState<Msg | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/products/${productId}/markdown`);
@@ -43,14 +45,14 @@ export function Markdown({ productId, money, onChanged }: { productId: string; m
     load();
   }, [load]);
 
-  async function act(url: string, body: unknown, ok: (out: { status?: string; endReason?: string | null }) => string) {
+  async function act(url: string, body: unknown, ok: (out: { status?: string; endReason?: string | null; notice?: string | null }) => Msg) {
     if (busy) return;
     setBusy(true);
     setMsg(null);
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const out = await res.json().catch(() => ({}));
     setBusy(false);
-    setMsg(res.ok ? { tone: "success", text: ok(out) } : { tone: "critical", text: out.error ?? `Failed (${res.status})` });
+    setMsg(res.ok ? ok(out) : { tone: "critical", text: out.error ?? `Failed (${res.status})` });
     await load();
     if (res.ok) onChanged();
   }
@@ -68,17 +70,27 @@ export function Markdown({ productId, money, onChanged }: { productId: string; m
         {running && (
           <s-stack gap="small">
             <s-badge tone={running.status === "paused" ? "warning" : "info"}>{running.status === "paused" ? "Paused" : "Running"}</s-badge>
-            {running.status === "paused" && <s-text>{running.endReason}. The app won&apos;t change this product&apos;s prices until you cancel.</s-text>}
+            {running.status === "paused" && <s-text>{running.endReason}. No further steps; when the plan ends (stock sold or ladder done) the app still restores or holds prices as set. Cancel to restore now.</s-text>}
             <s-text>
-              Step {running.currentStep + 1} of {data.ladder.steps.length} since {running.startedAt.slice(0, 10)}.{" "}
+              {running.currentStep < 0
+                ? "Step 1 isn't live yet; the app retries within the hour. "
+                : `Step ${running.currentStep + 1} of ${data.ladder.steps.length} since ${running.startedAt.slice(0, 10)}. `}
               {running.currentStep + 1 < data.ladder.steps.length &&
                 `Next step on ${addDays(running.startedAt, (running.currentStep + 1) * data.ladder.stepDays)}. `}
               Stops when {Math.ceil(running.startStock * data.ladder.sellThroughStop)} of the {running.startStock} units in stock at the start have
               sold, then {running.endAction === "hold" ? "keeps the last price" : "restores the original price"}.
             </s-text>
-            <LadderTable variants={running.steps.variants} current={running.currentStep} startedAt={running.startedAt} ladder={data.ladder} p={p} />
+            <LadderTable
+              variants={running.steps.variants}
+              applied={running.steps.applied}
+              current={running.currentStep}
+              startedAt={running.startedAt}
+              ladder={data.ladder}
+              p={p}
+            />
+            <s-text tone="neutral">Later steps are recalculated against the live cost and your settings when they go live.</s-text>
             <div>
-              <s-button loading={busy || undefined} disabled={busy || undefined} ref={listen("click", () => act(`/api/markdown/${running.id}/cancel`, {}, () => "Markdown cancelled; original prices restored."))}>
+              <s-button loading={busy || undefined} disabled={busy || undefined} ref={listen("click", () => act(`/api/markdown/${running.id}/cancel`, {}, () => ({ tone: "success", text: "Markdown cancelled; original prices restored." })))}>
                 Cancel and restore prices
               </s-button>
             </div>
@@ -102,7 +114,11 @@ export function Markdown({ productId, money, onChanged }: { productId: string; m
                     disabled={busy || undefined}
                     ref={listen("click", () =>
                       act(`/api/products/${productId}/markdown`, { expected: data.preview!.proposal }, (plan) =>
-                        plan.status === "active" ? "Approved. Step 1 is live in your store." : `Approved, but paused: ${plan.endReason ?? "see below"}.`,
+                        plan.status !== "active"
+                          ? { tone: "warning", text: `Not started: ${plan.endReason ?? plan.status}.` }
+                          : plan.notice
+                            ? { tone: "warning", text: `Approved. ${plan.notice}` }
+                            : { tone: "success", text: "Approved. Step 1 is live in your store." },
                       ),
                     )}
                   >
@@ -149,12 +165,14 @@ export function Markdown({ productId, money, onChanged }: { productId: string; m
 
 function LadderTable({
   variants,
+  applied,
   current,
   startedAt,
   ladder,
   p,
 }: {
   variants: VariantPlan[];
+  applied?: Record<string, { price: number }>;
   current: number;
   startedAt: string;
   ladder: Data["ladder"];
@@ -166,7 +184,7 @@ function LadderTable({
         <thead className="text-zinc-500">
           <tr>
             <th className="py-2 pr-4 font-medium">Variant</th>
-            <th className="py-2 pr-4 text-right font-medium">Now</th>
+            <th className="py-2 pr-4 text-right font-medium">Regular price</th>
             <th className="py-2 pr-4 text-right font-medium">Lowest allowed</th>
             {ladder.steps.map((d, i) => (
               <th key={i} className={`py-2 pr-4 text-right font-medium ${i === current ? "text-zinc-900" : ""}`}>
@@ -181,12 +199,16 @@ function LadderTable({
               <td className="py-2 pr-4">{v.title}</td>
               <td className="py-2 pr-4 text-right">{p(v.originalPrice)}</td>
               <td className="py-2 pr-4 text-right">{p(v.floor)}</td>
-              {v.stepPrices.map((s, i) => (
-                <td key={i} className={`py-2 pr-4 text-right ${i === current ? "font-semibold" : ""}`}>
-                  {p(s)}
-                  {s === v.floor ? " (floor)" : ""}
-                </td>
-              ))}
+              {v.stepPrices.map((planned, i) => {
+                // The current step shows what the app actually wrote (it can differ after a cost or settings change).
+                const s = i === current && applied?.[v.id] ? applied[v.id].price : planned;
+                return (
+                  <td key={i} className={`py-2 pr-4 text-right ${i === current ? "font-semibold" : ""}`}>
+                    {p(s)}
+                    {s === v.floor ? " (floor)" : ""}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

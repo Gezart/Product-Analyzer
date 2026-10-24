@@ -155,3 +155,57 @@ test("guard: raises the app's own price to the live floor, never above the origi
   // At or above the floor: nothing.
   assert.deepEqual(guardWrites([plan], [lp(70, 40)], ours, { marginFloorPct: 10, paused: false }), { writes: [], alerts: [] });
 });
+
+import { settleWrites, withOutcomes, type Applied, type PriceWrite } from "./markdown.ts";
+
+test("step writes: the max discount approved with the plan stays the limit when settings are raised", () => {
+  const r = stepWrites([plan], [lp(90)], { v: { price: 90, compareAt: 100 } }, 2, { ...s, maxDiscountPct: 60, approvedMaxDiscountPct: 25 });
+  assert.equal(r.writes[0].price, 75);
+});
+
+test("property: with any live cost and margin, writes stay within floor and original", () => {
+  let seed = 7;
+  const rand = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+  for (let i = 0; i < 20_000; i++) {
+    const original = Math.round((1 + rand() * 500) * 100) / 100;
+    const cost = rand() < 0.1 ? null : Math.round(rand() * original * 120) / 100;
+    const margin = Math.round(rand() * 60);
+    const proposal = proposeLadder([{ id: "v", title: "S", price: original, compareAtPrice: null, cost: cost ?? 1 }], { marginFloorPct: 10, maxDiscountPct: 40 });
+    const v = proposal.variants[0];
+    if (!v) continue;
+    const liveCost = rand() < 0.2 ? null : Math.round(rand() * original * 150) / 100;
+    const step = Math.floor(rand() * 3);
+    const last = step > 0 ? v.stepPrices[step - 1] : original;
+    const settings = { marginFloorPct: margin, maxDiscountPct: Math.round(rand() * 80), approvedMaxDiscountPct: 40 };
+    const live = [{ id: "v", price: last, compareAtPrice: null, cost: liveCost, inventory: 5 }];
+    const applied: Applied = step > 0 ? { v: { price: last, compareAt: v.compareAt } } : {};
+    const floorNow = Math.max(v.floor, floorPrice(liveCost, margin) ?? v.floor);
+    for (const w of [...stepWrites([v], live, applied, step, settings).writes, ...guardWrites([v], live, applied, { marginFloorPct: margin, paused: false }).writes]) {
+      assert.ok(w.price <= original + 1e-9, `above original: ${w.price} > ${original}`);
+      if (w.reason !== "restore") assert.ok(Math.round(w.price * 100) >= Math.round(floorNow * 100), `below floor: ${w.price} < ${floorNow}`);
+    }
+  }
+});
+
+test("settle writes: compared with live prices read afterwards; unknown when that read failed", () => {
+  const w = [
+    { id: "v", price: 80 },
+    { id: "x", price: 50 },
+  ];
+  assert.deepEqual(settleWrites(w, [lp(80), { ...lp(60), id: "x" }]), ["applied", "failed"]);
+  assert.deepEqual(settleWrites(w, [lp(80)]), ["applied", "failed"]); // variant gone
+  assert.deepEqual(settleWrites(w, null), ["unknown", "unknown"]);
+});
+
+test("applied after outcomes: markdowns recorded, restores removed, failed and unknown leave it as it was", () => {
+  const md: PriceWrite = { id: "v", price: 80, compareAtPrice: 100, floor: 44, reason: "markdown" };
+  const rs: PriceWrite = { id: "x", price: 100, compareAtPrice: null, floor: null, reason: "restore" };
+  const before = { x: { price: 70, compareAt: 100 } };
+  assert.deepEqual(withOutcomes(before, [md, rs], ["applied", "applied"]), { v: { price: 80, compareAt: 100 } });
+  assert.deepEqual(withOutcomes(before, [md, rs], ["failed", "unknown"]), before);
+  // A guard write that landed but whose answer was lost is settled on the next run, so the restore at
+  // the end still sees the price as the app's.
+  const guard: PriceWrite = { id: "v", price: 77, compareAtPrice: 100, floor: 77, reason: "guard_revert" };
+  const settled = withOutcomes({ v: { price: 70, compareAt: 100 } }, [guard], settleWrites([guard], [lp(77)]));
+  assert.deepEqual(restoreWrites([plan], [lp(77)], settled), [{ id: "v", price: 100, compareAtPrice: null, floor: null, reason: "restore" }]);
+});

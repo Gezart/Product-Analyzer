@@ -199,3 +199,27 @@ export function guardWrites(variants: VariantPlan[], live: LivePrice[], applied:
 export function liveStock(live: LivePrice[]) {
   return live.reduce((s, v) => s + Math.max(0, v.inventory), 0);
 }
+
+export type WriteOutcome = "applied" | "failed" | "unknown";
+
+/**
+ * Outcome of writes whose answer from Shopify was an error or got lost, judged by the live prices read
+ * afterwards. Without live prices (that read failed too) the outcome is unknown: the rows stay pending
+ * and are settled on the next run.
+ */
+export function settleWrites(writes: Pick<PriceWrite, "id" | "price">[], after: LivePrice[] | null): WriteOutcome[] {
+  if (!after) return writes.map(() => "unknown");
+  const byId = new Map(after.map((l) => [l.id, l]));
+  return writes.map((w) => (byId.has(w.id) && cents(byId.get(w.id)!.price) === cents(w.price) ? "applied" : "failed"));
+}
+
+/** What the app has written after these outcomes: a restored variant is no longer the app's price. */
+export function withOutcomes(applied: Applied, writes: PriceWrite[], outcomes: WriteOutcome[]): Applied {
+  const next = { ...applied };
+  writes.forEach((w, i) => {
+    if (outcomes[i] !== "applied") return;
+    if (w.reason === "restore") delete next[w.id];
+    else next[w.id] = { price: w.price, compareAt: w.compareAtPrice };
+  });
+  return next;
+}

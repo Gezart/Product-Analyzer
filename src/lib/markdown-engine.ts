@@ -10,13 +10,16 @@ import {
   proposeLadder,
   restoreWrites,
   safeToWrite,
+  settleWrites,
   stepWrites,
   stockCleared,
+  withOutcomes,
   type Applied,
   type LadderProposal,
   type LivePrice,
   type PriceWrite,
   type VariantPlan,
+  type WriteOutcome,
 } from "@/lib/markdown";
 import { readLiveVariants, writeVariantPrices } from "@/lib/markdown-shopify";
 
@@ -30,13 +33,12 @@ export class MarkdownError extends Error {
 }
 
 const DAY_MS = 86_400_000;
-const cents = (n: number) => Math.round(n * 100);
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 500);
 /** After this many hourly runs in a row where Shopify refused a step, the plan pauses. */
 const MAX_FAILURES = 3;
 
-/** Plan data kept in `steps`: the ladder, what the app last wrote per variant, failure count. */
-type PlanData = { variants: VariantPlan[]; applied: Applied; failures: number; floorAlerted?: string[] };
+/** Plan data kept in `steps`: the ladder, what the app last wrote per variant, failure count, what was already reported. */
+type PlanData = { variants: VariantPlan[]; applied: Applied; failures: number; floorAlerted?: string[]; guardAlerted?: string[] };
 
 type Plan = NonNullable<Awaited<ReturnType<typeof loadPlan>>>;
 
@@ -74,12 +76,12 @@ async function withPlanLock<T>(planId: string, fn: () => Promise<T>): Promise<T>
 /**
  * Writes prices safely. Each change is first logged as pending in price_changes — the database
  * refuses a markdown below its floor — then written to Shopify. If Shopify errors (or the answer is
- * lost), live prices are read again: what actually changed is logged as applied, the rest as failed.
- * Returns what was applied, plus the error if any.
+ * lost), live prices are read again: what actually changed is logged as applied, the rest as failed;
+ * if that read fails too, the rows stay pending and the next run settles them (`liveState`).
+ * Returns what the app has written after this (`applied`), each write's outcome, and the error if any.
  */
-async function writePrices(session: Session, plan: Plan, live: LivePrice[], writes: PriceWrite[]) {
-  const applied: Applied = {};
-  if (writes.length === 0) return { applied, error: null };
+async function writePrices(session: Session, plan: Plan, live: LivePrice[], writes: PriceWrite[], applied: Applied) {
+  if (writes.length === 0) return { applied, outcomes: [] as WriteOutcome[], error: null };
   for (const w of writes) {
     if (w.reason !== "restore" && !safeToWrite(w.price, w.floor)) {
       throw new MarkdownError(`Refused: ${w.price} is below the floor ${w.floor}`, 409);
@@ -107,43 +109,68 @@ async function writePrices(session: Session, plan: Plan, live: LivePrice[], writ
       }),
     ),
   );
-  const rowFor = new Map(writes.map((w, i) => [w.id, rows[i].id]));
+  let outcomes: WriteOutcome[];
+  let error: unknown = null;
   try {
     await writeVariantPrices(session, plan.product.shopifyGid, writes.map((w) => ({ id: w.id, price: w.price, compareAtPrice: w.compareAtPrice })));
-    await db().priceChange.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { status: "applied" } });
-    for (const w of writes) applied[w.id] = { price: w.price, compareAt: w.compareAtPrice };
-    return { applied, error: null };
-  } catch (error) {
-    const after = (await readLiveVariants(session, plan.product.shopifyGid).catch(() => null)) ?? [];
-    const now = new Map(after.map((l) => [l.id, l]));
-    for (const w of writes) {
-      const ok = now.has(w.id) && cents(now.get(w.id)!.price) === cents(w.price);
-      if (ok) applied[w.id] = { price: w.price, compareAt: w.compareAtPrice };
-      await db().priceChange.update({
-        where: { id: rowFor.get(w.id)! },
-        data: ok ? { status: "applied" } : { status: "failed", error: message(error) },
-      });
-    }
-    return { applied, error };
+    outcomes = writes.map(() => "applied");
+  } catch (e) {
+    error = e;
+    outcomes = settleWrites(writes, await readLiveVariants(session, plan.product.shopifyGid).catch(() => null));
   }
+  await markRows(rows.map((r) => r.id), outcomes, error ? message(error) : null);
+  return { applied: withOutcomes(applied, writes, outcomes), outcomes, error };
+}
+
+async function markRows(ids: string[], outcomes: WriteOutcome[], error: string | null) {
+  const of = (o: WriteOutcome) => ids.filter((_, i) => outcomes[i] === o);
+  await db().priceChange.updateMany({ where: { id: { in: of("applied") } }, data: { status: "applied" } });
+  await db().priceChange.updateMany({ where: { id: { in: of("failed") } }, data: { status: "failed", error } });
+}
+
+/**
+ * Live variants, with writes left pending by an earlier run (crash, or an unknown outcome) settled
+ * against them first, so `applied` matches what Shopify shows. Null if the product is gone.
+ */
+async function liveState(session: Session, plan: Plan) {
+  const live = await readLiveVariants(session, plan.product.shopifyGid);
+  if (!live) return null;
+  const data = plan.steps as PlanData;
+  const rows = await db().priceChange.findMany({ where: { planId: plan.id, status: "pending" }, orderBy: { changedAt: "asc" } });
+  if (rows.length === 0) return { live, data };
+  const writes: PriceWrite[] = rows.map((r) => ({
+    id: r.variantGid ?? "",
+    price: Number(r.newPrice),
+    compareAtPrice: r.newCompareAt == null ? null : Number(r.newCompareAt),
+    floor: r.floorPrice == null ? null : Number(r.floorPrice),
+    reason: r.reason as PriceWrite["reason"],
+  }));
+  const outcomes = settleWrites(writes, live);
+  await markRows(rows.map((r) => r.id), outcomes, "Shopify didn't confirm the change and the price wasn't updated");
+  return { live, data: { ...data, applied: withOutcomes(data.applied, writes, outcomes) } };
 }
 
 async function saveData(planId: string, data: PlanData, extra: Record<string, unknown> = {}) {
   await db().markdownPlan.update({ where: { id: planId }, data: { steps: data, ...extra } });
 }
 
-/** Moves an active plan to `step` (idempotent: variants already at the target are just recorded). */
-async function applyStep(planId: string, step: number) {
+type StepResult = { allDone: boolean; anyApplied: boolean; unknown: boolean; error: unknown };
+
+/**
+ * Moves an active plan to `step` (idempotent: variants already at the target are just recorded).
+ * Returns null when the plan didn't run (not active, product gone, or paused because of a manual change).
+ */
+async function applyStep(planId: string, step: number): Promise<StepResult | null> {
   return withPlanLock(planId, async () => {
     const plan = await loadPlan(planId);
-    if (!plan || plan.status !== "active") return plan;
-    const data = plan.steps as PlanData;
+    if (!plan || plan.status !== "active") return null;
     const session = await getOfflineSession(plan.product.shop.domain);
-    const live = await readLiveVariants(session, plan.product.shopifyGid);
-    if (!live) {
+    const state = await liveState(session, plan);
+    if (!state) {
       await db().markdownPlan.update({ where: { id: plan.id }, data: { status: "cancelled", endReason: "Product deleted in Shopify", endedAt: new Date() } });
-      return plan;
+      return null;
     }
+    const { live, data } = state;
     const settings = await shopSettings(plan.product.shopId);
     const r = stepWrites(data.variants, live, data.applied, step, { ...settings, approvedMaxDiscountPct: Number(plan.maxDiscountPct) });
 
@@ -154,25 +181,25 @@ async function applyStep(planId: string, step: number) {
     if (r.changedByMerchant.length) {
       await saveData(plan.id, { ...data, applied: { ...data.applied, ...r.alreadyApplied } }, { status: "paused", endReason: "A price was changed in Shopify" });
       await notify(plan.product.shopId, plan.productId, "markdown_paused");
-      return plan;
+      return null;
     }
 
-    const { applied, error } = await writePrices(session, plan, live, r.writes);
-    const merged = { ...data.applied, ...r.alreadyApplied, ...applied };
-    const allDone = r.writes.every((w) => applied[w.id]);
+    const { applied, outcomes, error } = await writePrices(session, plan, live, r.writes, { ...data.applied, ...r.alreadyApplied });
+    const allDone = outcomes.every((o) => o === "applied");
     if (allDone) {
-      await saveData(plan.id, { ...data, applied: merged, failures: 0 }, { currentStep: step });
+      await saveData(plan.id, { ...data, applied, failures: 0 }, { currentStep: step });
     } else {
-      // Partly applied: kept as applied; the next run retries only the rest. Repeated refusals pause.
+      // Partly applied: kept as applied; the next run settles unknown outcomes and retries the rest.
+      // Repeated failures pause the plan.
       const failures = (data.failures ?? 0) + 1;
       await saveData(
         plan.id,
-        { ...data, applied: merged, failures },
+        { ...data, applied, failures },
         failures >= MAX_FAILURES ? { status: "paused", endReason: `Shopify kept refusing the price change: ${message(error)}` } : {},
       );
       if (failures >= MAX_FAILURES) await notify(plan.product.shopId, plan.productId, "markdown_paused");
     }
-    return plan;
+    return { allDone, anyApplied: Object.keys(applied).length > 0, unknown: outcomes.includes("unknown"), error };
   });
 }
 
@@ -184,16 +211,14 @@ async function endPlan(planId: string, reason: "stock_cleared" | "ladder_finishe
   return withPlanLock(planId, async () => {
     const plan = await loadPlan(planId);
     if (!plan || !["active", "paused", "failed"].includes(plan.status)) return;
-    const data = plan.steps as PlanData;
-    if (restore) {
-      const session = await getOfflineSession(plan.product.shop.domain);
-      const live = (await readLiveVariants(session, plan.product.shopifyGid)) ?? [];
-      const writes = restoreWrites(data.variants, live, data.applied);
-      const { applied, error } = await writePrices(session, plan, live, writes);
-      const restored = Object.keys(applied);
-      const remaining = Object.fromEntries(Object.entries(data.applied).filter(([id]) => !restored.includes(id)));
-      if (error && writes.some((w) => !applied[w.id])) {
-        await saveData(plan.id, { ...data, applied: remaining });
+    const session = await getOfflineSession(plan.product.shop.domain);
+    const state = await liveState(session, plan);
+    const data = state?.data ?? (plan.steps as PlanData);
+    if (restore && state) {
+      const writes = restoreWrites(data.variants, state.live, data.applied);
+      const { applied, outcomes, error } = await writePrices(session, plan, state.live, writes, data.applied);
+      if (outcomes.some((o) => o !== "applied")) {
+        await saveData(plan.id, { ...data, applied });
         throw new MarkdownError(`Some prices couldn't be restored: ${message(error)}`, 502);
       }
       data.applied = {};
@@ -280,17 +305,31 @@ export async function approveMarkdown(shopId: string, productId: string, expecte
     if ((error as { code?: string }).code === "P2002") throw new MarkdownError("A markdown plan is already running for this product.", 409);
     throw error;
   }
+  // Step 1 goes live now. If nothing reached Shopify (and nothing is pending), the plan fails and the
+  // merchant sees why; if some prices did (or might have), it stays active and the runner settles and
+  // retries the rest within the hour.
+  let result: StepResult | null;
   try {
-    await applyStep(plan.id, 0);
+    result = await applyStep(plan.id, 0);
   } catch (error) {
-    const current = await loadPlan(plan.id);
-    const nothingApplied = Object.keys((current?.steps as PlanData | undefined)?.applied ?? {}).length === 0;
+    const [current, pending] = await Promise.all([loadPlan(plan.id), db().priceChange.count({ where: { planId: plan.id, status: "pending" } })]);
+    const nothingApplied = pending === 0 && Object.keys((current?.steps as PlanData | undefined)?.applied ?? {}).length === 0;
     if (nothingApplied) {
       await db().markdownPlan.update({ where: { id: plan.id }, data: { status: "failed", endReason: message(error), endedAt: new Date() } });
     }
     throw error instanceof MarkdownError ? error : new MarkdownError(message(error), 502);
   }
-  return db().markdownPlan.findUniqueOrThrow({ where: { id: plan.id } });
+  let notice: string | null = null;
+  if (result && !result.allDone) {
+    if (!result.anyApplied && !result.unknown) {
+      await db().markdownPlan.update({ where: { id: plan.id }, data: { status: "failed", endReason: message(result.error), endedAt: new Date() } });
+      throw new MarkdownError(`Shopify refused the price change: ${message(result.error)}`, 502);
+    }
+    notice = result.unknown
+      ? "Shopify didn't confirm every price; the app checks again within the hour."
+      : `Some prices weren't changed (${message(result.error)}); the app retries within the hour.`;
+  }
+  return { ...(await db().markdownPlan.findUniqueOrThrow({ where: { id: plan.id } })), notice };
 }
 
 /** Merchant cancels: original prices come back (where they are still the app's). */
@@ -338,30 +377,40 @@ export async function runMarkdownPlans(shopId: string) {
 
 /**
  * Price guard (after every runner pass and daily): live prices must be at or above the current floor
- * (from the live cost). The app's own prices on active plans are raised to it (never above the
- * original); prices set by hand and paused plans are only reported.
+ * (from the live cost). The app's own prices on active plans — and, with `held` (daily), prices kept
+ * by a finished "hold" plan — are raised to it (never above the original); prices set by hand and
+ * paused plans are only reported, once per variant until it's fixed.
  */
-export async function guardPrices(shopId: string) {
-  const plans = await db().markdownPlan.findMany({ where: { status: { in: ["active", "paused"] }, product: { shopId } }, select: { id: true } });
+export async function guardPrices(shopId: string, opts: { held?: boolean } = {}) {
+  const plans = await db().markdownPlan.findMany({
+    where: {
+      product: { shopId },
+      OR: [{ status: { in: ["active", "paused"] } }, ...(opts.held ? [{ status: "completed", endAction: "hold" }] : [])],
+    },
+    orderBy: { startedAt: "desc" },
+    select: { id: true, productId: true },
+  });
+  // Only the newest plan per product: an older plan's held price is the newer plan's original.
+  const latest = plans.filter((p, i) => plans.findIndex((q) => q.productId === p.productId) === i);
   const settings = await shopSettings(shopId);
-  for (const { id } of plans) {
+  for (const { id } of latest) {
     try {
       await withPlanLock(id, async () => {
         const plan = await loadPlan(id);
-        if (!plan || !["active", "paused"].includes(plan.status)) return;
-        const data = plan.steps as PlanData;
+        if (!plan) return;
+        const held = plan.status === "completed" && plan.endAction === "hold";
+        if (!held && !["active", "paused"].includes(plan.status)) return;
+        if (held && Object.keys((plan.steps as PlanData).applied).length === 0) return;
         const session = await getOfflineSession(plan.product.shop.domain);
-        const live = await readLiveVariants(session, plan.product.shopifyGid);
-        if (!live) return;
+        const state = await liveState(session, plan);
+        if (!state) return;
+        const { live, data } = state;
         const r = guardWrites(data.variants, live, data.applied, { marginFloorPct: settings.marginFloorPct, paused: plan.status === "paused" });
-        if (r.writes.length) {
-          const { applied } = await writePrices(session, plan, live, r.writes);
-          const restored = r.writes.filter((w) => w.reason === "restore" && applied[w.id]).map((w) => w.id);
-          const next = { ...data.applied, ...applied };
-          for (const rid of restored) delete next[rid];
-          await saveData(plan.id, { ...data, applied: next });
-        }
-        if (r.alerts.length) await notify(shopId, plan.productId, "price_guard");
+        const { applied, outcomes } = await writePrices(session, plan, live, r.writes, data.applied);
+        const fresh = r.alerts.filter((v) => !data.guardAlerted?.includes(v));
+        if (fresh.length || outcomes.includes("applied")) await notify(shopId, plan.productId, "price_guard");
+        const next = { ...data, applied, guardAlerted: r.alerts };
+        if (JSON.stringify(next) !== JSON.stringify(plan.steps)) await saveData(plan.id, next);
       });
     } catch (error) {
       console.error("[markdown] guard", id, error);

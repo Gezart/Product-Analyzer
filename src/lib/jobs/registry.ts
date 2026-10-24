@@ -42,7 +42,7 @@ export const handlers: Record<string, JobHandler> = {
   },
   /** Daily price guard (also runs after every plan-runner pass). */
   "price-guard": async (job) => {
-    await guardPrices(requireShop(job));
+    await guardPrices(requireShop(job), { held: true });
   },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
