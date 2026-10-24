@@ -1,8 +1,9 @@
 # History
 
 ## 2026-10-24 · daily-metrics
-- Nightly `daily-metrics` job (02:00 store time): full catalog refresh (repairs missed product/inventory webhooks, snapshot-aware), yesterday's closing stock into `product_daily_metrics.inventory_qty`, score history pruned to 90 days (newest kept), then `score-shop`
-- Nightly jobs that find the shop's bulk query slot busy are queued again in 10 min instead of using up retries
+- Nightly `daily-metrics` job (just after midnight store time): full catalog refresh (repairs missed product/inventory webhooks, snapshot-aware), yesterday's closing stock into `product_daily_metrics.inventory_qty`, score history pruned to 90 days (newest kept), then `score-shop`
+- Nightly jobs that find the shop's bulk query slot busy are queued again in 10 min instead of using up retries; a stage left "running" by a dead run is restarted, not resumed
+- The order catch-up re-scores the shop; shops whose import failed are still re-scored nightly
 - Verified snapshot and pruning SQL on a local Postgres 16; 1 new unit test
 
 ## 2026-10-24 · live-sync

@@ -93,12 +93,14 @@ async function step(job: ClaimedJob, stage: Stage, run: () => Promise<void>) {
   }
 }
 
-async function startStage(shopId: string, stage: Stage, query: string) {
-  // A retried job may have started this stage already (crash after starting): keep that operation.
-  // Its first poll is re-scheduled (a no-op if it exists); the start time is unknown, so an earlier
-  // one is assumed (safe: only makes more webhook data count as newer than the snapshot).
+async function startStage(job: ClaimedJob, stage: Stage, query: string) {
+  const shopId = job.shopId!;
+  // Only a retry of the job that started this stage (crash after starting) resumes its operation;
+  // a "running" row left by an earlier run that died is replaced by a fresh one.
+  // The resumed first poll is re-scheduled (a no-op if it exists); the start time is unknown, so an
+  // earlier one is assumed (safe: only makes more webhook data count as newer than the snapshot).
   const current = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: stage } } });
-  if (current?.status === "running" && current.lastCursor) {
+  if (job.attempts > 1 && current?.status === "running" && current.lastCursor) {
     const startedAt = new Date(Date.now() - MAX_POLLS * POLL_EVERY_MS).toISOString();
     await schedulePoll(shopId, { stage, operationId: current.lastCursor, polls: 0, startedAt });
     return;
@@ -134,7 +136,7 @@ export async function runInitialSync(job: ClaimedJob) {
     await db().shop.update({ where: { id: shopId }, data: { currency: shop.currencyCode, timezone: shop.ianaTimezone } });
     // Own job: a registration problem must not block the import.
     await enqueue({ type: "register-webhooks", shopId });
-    await startStage(shopId, "products", PRODUCTS_QUERY);
+    await startStage(job, "products", PRODUCTS_QUERY);
   });
 }
 
@@ -172,7 +174,7 @@ export async function runOrdersCatchup(job: ClaimedJob) {
  */
 async function startNightlyStage(job: ClaimedJob, stage: Stage, query: string) {
   try {
-    await startStage(job.shopId!, stage, query);
+    await startStage(job, stage, query);
   } catch (error) {
     if (!(error instanceof BulkBusyError)) throw error;
     await enqueue({ type: job.type, shopId: job.shopId, runAt: new Date(Date.now() + 10 * 60_000) });
@@ -180,13 +182,15 @@ async function startNightlyStage(job: ClaimedJob, stage: Stage, query: string) {
 }
 
 /**
- * Job "daily-metrics" (nightly, 02:00 store time): re-reads the whole catalog (repairs missed product
+ * Job "daily-metrics" (nightly, just after midnight store time): re-reads the whole catalog (repairs missed product
  * and inventory webhooks), then snapshots yesterday's closing stock and re-scores the shop.
  */
 export async function runDailyMetrics(job: ClaimedJob) {
   const shopId = requireShop(job);
   const orders = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } });
-  if (orders?.status !== "done") return; // the import is still running or failed; it scores on its own
+  // Import still running: it scores when done. Import failed: no refresh, but keep statuses current.
+  if (orders?.status === "error") await enqueue({ type: "score-shop", shopId });
+  if (orders?.status !== "done") return;
   await step(job, "refresh", () => startNightlyStage(job, "refresh", PRODUCTS_QUERY));
 }
 
@@ -225,7 +229,7 @@ export async function runSyncPoll(job: ClaimedJob, signal: AbortSignal) {
     if (payload.stage === "products") {
       await upsertProducts(shopId, assembleProducts(rows), { snapshotAt });
       await setSyncState(shopId, "products", { status: "done", error: null, lastSyncedAt: new Date() });
-      await startStage(shopId, "orders", ordersQuery(`created_at:>='${ordersFrom(shop.timezone)}'`));
+      await startStage(job, "orders", ordersQuery(`created_at:>='${ordersFrom(shop.timezone)}'`));
     } else if (payload.stage === "orders") {
       // The window start is kept in the cursor: order history is known from that day on.
       const from = ordersFrom(shop.timezone);
@@ -234,7 +238,7 @@ export async function runSyncPoll(job: ClaimedJob, signal: AbortSignal) {
       await enqueue({ type: "score-shop", shopId });
     } else if (payload.stage === "refresh") {
       await upsertProducts(shopId, assembleProducts(rows), { snapshotAt });
-      // Runs after midnight local time, so the stock read now is yesterday's closing stock.
+      // Runs just after midnight local time: the stock read now approximates yesterday's closing stock.
       await snapshotInventory(shopId, previousLocalDate(localDateKey(new Date(), shop.timezone)));
       await pruneScores(shopId);
       await setSyncState(shopId, "refresh", { status: "done", error: null, lastSyncedAt: new Date() });
@@ -242,6 +246,7 @@ export async function runSyncPoll(job: ClaimedJob, signal: AbortSignal) {
     } else {
       await applyCatchup(shopId, await orderWindowStart(shopId, shop.timezone), orderLinesFromBulk(rows, shop.timezone));
       await setSyncState(shopId, "catchup", { status: "done", error: null, lastSyncedAt: new Date() });
+      await enqueue({ type: "score-shop", shopId });
     }
   });
 }

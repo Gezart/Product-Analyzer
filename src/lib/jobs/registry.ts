@@ -34,8 +34,8 @@ export const handlers: Record<string, JobHandler> = {
 
 /** Jobs enqueued once per shop per night, at `hour`:00 in the store's timezone. */
 export const nightlyJobs: { type: string; hour: number }[] = [
-  // Catalog refresh + stock snapshot + re-score.
-  { type: "daily-metrics", hour: 2 },
+  // Catalog refresh + yesterday's closing stock + re-score (as close to midnight as possible).
+  { type: "daily-metrics", hour: 0 },
   // Re-subscribe (repairs subscriptions Shopify removed, or a changed app URL), then fill gaps.
   { type: "register-webhooks", hour: 3 },
   { type: "orders-catchup", hour: 4 },
