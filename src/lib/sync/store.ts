@@ -14,11 +14,29 @@ function chunks<T>(items: T[], size = CHUNK): T[][] {
 
 /**
  * Bulk upsert of products and variants (1,000 rows per statement). Variants removed from a synced
- * product are deleted (price changes keep the row with variant_id set to null). With `full` (whole
- * catalog), products no longer in Shopify are marked DELETED, not removed, so their price audit log
- * and fix history are kept.
+ * product are deleted (price changes keep the row with variant_id set to null), unless the variant
+ * list was cut off (`partialVariants`).
+ *
+ * A full catalog sync passes `snapshotAt` (when its bulk query started): products changed since then
+ * by live sync are left alone, and products no longer in Shopify are marked DELETED, not removed, so
+ * their price audit log and fix history are kept.
  */
-export async function upsertProducts(shopId: string, products: ProductRecord[], { full }: { full: boolean }) {
+export async function upsertProducts(
+  shopId: string,
+  input: ProductRecord[],
+  options: { snapshotAt: Date } | { partialVariants?: string[] } = {},
+) {
+  const snapshotAt = "snapshotAt" in options ? options.snapshotAt : null;
+  const fresh = snapshotAt
+    ? new Set(
+        (await db().product.findMany({ where: { shopId, updatedAt: { gte: snapshotAt } }, select: { shopifyGid: true } })).map(
+          (p) => p.shopifyGid,
+        ),
+      )
+    : new Set<string>();
+  const products = input.filter((p) => !fresh.has(p.gid));
+  const partial = new Set("partialVariants" in options ? options.partialVariants ?? [] : []);
+
   for (const batch of chunks(products)) {
     const rows = batch.map((p) => ({
       gid: p.gid,
@@ -76,19 +94,20 @@ export async function upsertProducts(shopId: string, products: ProductRecord[], 
     `;
   }
 
-  const productGids = JSON.stringify(products.map((p) => p.gid));
-  const variantGids = JSON.stringify(variants.map((v) => v.gid));
-  if (full) {
+  if (snapshotAt) {
+    const seen = JSON.stringify(input.map((p) => p.gid));
     await db().$executeRaw`
       UPDATE "products" SET "status" = 'DELETED', "updated_at" = (now() AT TIME ZONE 'UTC')
-      WHERE "shop_id" = ${shopId} AND "status" <> 'DELETED'
-        AND "shopify_gid" NOT IN (SELECT jsonb_array_elements_text(${productGids}::jsonb))
+      WHERE "shop_id" = ${shopId} AND "status" <> 'DELETED' AND "updated_at" < ${snapshotAt}
+        AND "shopify_gid" NOT IN (SELECT jsonb_array_elements_text(${seen}::jsonb))
     `;
   }
+  const complete = JSON.stringify(products.filter((p) => !partial.has(p.gid)).map((p) => p.gid));
+  const variantGids = JSON.stringify(variants.map((v) => v.gid));
   await db().$executeRaw`
     DELETE FROM "variants" v USING "products" p
     WHERE v."product_id" = p."id" AND p."shop_id" = ${shopId}
-      AND p."shopify_gid" IN (SELECT jsonb_array_elements_text(${productGids}::jsonb))
+      AND p."shopify_gid" IN (SELECT jsonb_array_elements_text(${complete}::jsonb))
       AND v."shopify_gid" NOT IN (SELECT jsonb_array_elements_text(${variantGids}::jsonb))
   `;
 }
@@ -109,6 +128,14 @@ function scopeSql(scope: SalesScope, gidCol: string, dateCol: string) {
   }
   const pairs = JSON.stringify(scope.pairs.map((p) => ({ g: p.productGid, d: p.date })));
   return Prisma.sql`(${gid}, ${date}) IN (SELECT t.g, t.d::date FROM jsonb_to_recordset(${pairs}::jsonb) AS t(g text, d text))`;
+}
+
+/**
+ * Serialises every writer of a shop's order lines and daily sales (different orders can touch the
+ * same product-day row, and a rebuild must see all committed lines). Held until the transaction ends.
+ */
+async function lockShopSales(tx: Tx, shopId: string) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sales:${shopId}`}))`;
 }
 
 /**
@@ -153,15 +180,24 @@ async function insertLines(tx: Tx, shopId: string, lines: OrderLineRecord[]) {
         "order_gid" = EXCLUDED."order_gid", "product_gid" = EXCLUDED."product_gid", "variant_gid" = EXCLUDED."variant_gid",
         "date" = EXCLUDED."date", "quantity" = EXCLUDED."quantity", "revenue" = EXCLUDED."revenue",
         "order_updated_at" = EXCLUDED."order_updated_at"
+      WHERE "order_lines"."order_updated_at" <= EXCLUDED."order_updated_at"
     `;
   }
 }
 
-/** Initial import: replaces all order lines from `fromDate` (local date) on and rebuilds daily sales. */
-export async function replaceOrderLines(shopId: string, fromDate: string, lines: OrderLineRecord[]) {
+/**
+ * Import: replaces order lines from `fromDate` (local date) on with a bulk snapshot taken at
+ * `snapshotAt`, then rebuilds daily sales. Lines written by webhooks after the snapshot started are
+ * kept, and a stored line is never replaced by an older version.
+ */
+export async function replaceOrderLines(shopId: string, fromDate: string, lines: OrderLineRecord[], snapshotAt: Date) {
   await db().$transaction(
     async (tx) => {
-      await tx.$executeRaw`DELETE FROM "order_lines" WHERE "shop_id" = ${shopId} AND "date" >= ${fromDate}::date`;
+      await lockShopSales(tx, shopId);
+      await tx.$executeRaw`
+        DELETE FROM "order_lines"
+        WHERE "shop_id" = ${shopId} AND "date" >= ${fromDate}::date AND "order_updated_at" < ${snapshotAt}
+      `;
       await insertLines(tx, shopId, lines);
       await rebuildDailySales(tx, shopId, { fromDate });
     },
@@ -176,7 +212,7 @@ export async function replaceOrderLines(shopId: string, fromDate: string, lines:
  */
 export async function applyOrderLines(shopId: string, orderGid: string, updatedAt: Date, lines: OrderLineRecord[]) {
   return db().$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${shopId}:${orderGid}`}))`;
+    await lockShopSales(tx, shopId);
     const existing = await tx.orderLine.findMany({
       where: { shopId, orderGid },
       select: { lineGid: true, productGid: true, date: true, orderUpdatedAt: true },
@@ -198,7 +234,10 @@ export async function applyOrderLines(shopId: string, orderGid: string, updatedA
 
 /** After a product is (re)synced, its sales history is rebuilt from stored order lines. */
 export async function rebuildProductSales(shopId: string, productGids: string[]) {
-  await db().$transaction((tx) => rebuildDailySales(tx, shopId, { productGids }));
+  await db().$transaction(async (tx) => {
+    await lockShopSales(tx, shopId);
+    await rebuildDailySales(tx, shopId, { productGids });
+  });
 }
 
 export async function setSyncState(
@@ -215,7 +254,7 @@ export async function setSyncState(
 
 /** Fresh "pending" steps for a new install (old ones may remain after a reinstall within 48 h). */
 export async function resetSyncSteps(shopId: string) {
-  await db().syncState.deleteMany({ where: { shopId, resource: { in: ["products", "orders"] } } });
+  await db().syncState.deleteMany({ where: { shopId, resource: { in: ["products", "orders", "webhooks", "catchup"] } } });
   await db().syncState.createMany({
     data: ["products", "orders"].map((resource) => ({ shopId, resource, status: "pending" })),
     skipDuplicates: true,

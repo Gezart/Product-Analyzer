@@ -1,12 +1,14 @@
 # History
 
 ## 2026-10-24 · live-sync
-- Webhooks registered per shop during the initial sync: app, orders (create/updated/cancelled), products (create/update/delete), inventory levels
-- New table `order_lines` (no customer data): daily sales are rebuilt from it, so repeated, stale (out-of-order) and concurrent webhooks stay correct; refunds and cancellations reduce sales
-- Product/inventory webhooks queue a single-product re-sync (deduplicated), which also rebuilds that product's sales history; deletes mark the product DELETED
-- Initial import now stores order lines too; with live sync the known order history grows past 60 days for dead-stock detection
-- Verified on a local Postgres 16 (repeat, refund, stale replay, cancel, late product, 3 concurrent duplicates); 4 new unit tests
-- Not yet tested against a real store
+- Webhooks (app, orders create/updated/cancelled, products create/update/delete, inventory levels) registered by their own job after install and nightly; order payloads limited to the fields we store (`includeFields`)
+- New table `order_lines` (no customer data): daily sales are rebuilt from it under a per-shop lock, so repeated, stale, concurrent and out-of-order webhooks stay correct; refunds and cancellations reduce sales
+- Import snapshots: webhook data newer than the bulk query start is never overwritten or deleted by the import (orders and products)
+- Orders older than the known history window are ignored; dead-stock history counts only known order days (grows with live sync)
+- Product/inventory webhooks queue a single-product re-sync (paginated, under the API cost limit; cut-off variant lists never delete variants), which also rebuilds that product's sales
+- Nightly catch-up re-reads orders changed in the last 3 days (missed webhooks)
+- Verified on a local Postgres 16 (repeat, refund, stale replay, cancel, late product, 10 concurrent orders, import vs webhooks); 6 new unit tests
+- Not yet tested against a real store (REST `current_quantity` after refunds and query costs to confirm)
 
 ## 2026-10-24 · initial-sync
 - First request after (re)install queues `initial-sync` exactly once (install detected by an atomic insert/reactivation, safe with parallel requests)
