@@ -1,6 +1,7 @@
 import type { ClaimedJob } from "@/lib/jobs/queue";
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { scoreShop } from "@/lib/score-shop";
+import { runInitialSync, runSyncPoll } from "@/lib/sync/initial-sync";
 
 /**
  * A job handler. It must be idempotent (a job can run again after a crash or timeout) and should
@@ -19,6 +20,9 @@ export const handlers: Record<string, JobHandler> = {
   "score-shop": async (job) => {
     await scoreShop(requireShop(job));
   },
+  /** First full import after install: shop info → products bulk query → orders bulk query → score. */
+  "initial-sync": runInitialSync,
+  "sync-poll": runSyncPoll,
 };
 
 /** Jobs enqueued once per shop per night, at `hour`:00 in the store's timezone. */
