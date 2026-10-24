@@ -10,3 +10,17 @@ declare module "react" {
     }
   }
 }
+
+// App Bridge global (loaded from the CDN). Only the parts the app uses.
+declare global {
+  interface Window {
+    shopify?: {
+      resourcePicker(options: {
+        type: "product" | "collection";
+        multiple?: boolean;
+        selectionIds?: { id: string }[];
+        action?: "add" | "select";
+      }): Promise<{ id: string; title: string }[] | undefined>;
+    };
+  }
+}

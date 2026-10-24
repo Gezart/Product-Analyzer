@@ -34,6 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <a href="/" rel="home">
             Home
           </a>
+          <a href="/settings">Settings</a>
           <a href="/plans">Plans</a>
         </ui-nav-menu>
         {children}

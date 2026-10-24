@@ -24,6 +24,7 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
       where: { shopId },
       select: {
         id: true,
+        shopifyGid: true,
         status: true,
         collections: true,
         shopifyCreatedAt: true,
@@ -33,8 +34,9 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
   ]);
 
   const excludedCollections = new Set(settings?.excludedCollectionIds ?? []);
+  const excludedProducts = new Set(settings?.excludedProductIds ?? []);
   const isScored = (p: (typeof products)[number]) =>
-    p.status === "ACTIVE" && !p.collections.some((c) => excludedCollections.has(c));
+    p.status === "ACTIVE" && !excludedProducts.has(p.shopifyGid) && !p.collections.some((c) => excludedCollections.has(c));
   const scored = products.filter(isScored);
   const excluded = products.filter((p) => !isScored(p));
   const ids = scored.map((p) => p.id);
