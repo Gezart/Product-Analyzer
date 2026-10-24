@@ -13,6 +13,7 @@ For every task the owner gives, run these agents in order (`.claude/agents/`):
 3. `developer` — builds the tickets.
 4. `qa` — on FAIL, send the findings back to `developer`, then run `qa` again. Repeat until PASS.
 5. `team-lead` — final report and `docs/HISTORY.md`.
+6. Commit, push and open a PR. Never merge; the owner merges.
 
 Manual only, never run unless the owner asks: `customer-tester`, `security-reviewer`.
 
