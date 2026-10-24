@@ -1,5 +1,10 @@
 # History
 
+## 2026-10-24 · ci
+- GitHub Actions on every PR and on pushes to `staging`/`main`: `npm ci`, build, typecheck, tests (Node 22)
+- Verified the steps in a clean copy without any env vars
+- Open: deploy to Fly.io waits for hosting decision D1
+
 ## 2026-10-24 · jobs
 - Background job queue in Postgres (`jobs` table), no Redis: enqueue with dedupe key, retries with backoff (30s → 1h, 5 tries), crashed-worker locks released after 10 min
 - One running job per shop, enforced by a partial unique index; claims use `FOR UPDATE SKIP LOCKED` so several workers can run
