@@ -1,10 +1,10 @@
 # History
 
 ## 2026-10-24 · settings
-- `/settings` page (Polaris): status thresholds, minimum margin, maximum discount, excluded collections
+- `/settings` page (Polaris): status thresholds, minimum margin, maximum discount, excluded collections and products (App Bridge resource picker; new column `settings.excluded_product_ids`, migration applied to Supabase)
 - `GET/PUT /api/settings` with strict validation (field errors → 400); `GET /api/collections` from the Admin API
-- Saving queues a `score-shop` job (first registered job handler); the worker re-scores within seconds
-- 3 unit tests for validation
+- Saving queues a `score-shop` job (first registered job handler), or pulls a pending one forward; the worker re-scores within seconds
+- 4 unit tests for validation; percentages rounded to 2 decimals
 - Open: `initial-sync` must store collection GIDs in `products.collections` for exclusions to match
 
 ## 2026-10-24 · ci

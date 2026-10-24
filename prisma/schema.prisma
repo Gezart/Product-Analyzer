@@ -53,6 +53,7 @@ model Settings {
   marginFloorPct        Decimal  @default(10) @map("margin_floor_pct") @db.Decimal(5, 2)
   maxDiscountPct        Decimal  @default(40) @map("max_discount_pct") @db.Decimal(5, 2)
   excludedCollectionIds String[] @default([]) @map("excluded_collection_ids")
+  excludedProductIds    String[] @default([]) @map("excluded_product_ids")
   digestDay             Int      @default(1) @map("digest_day") // 0 = Sunday … 6 = Saturday
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)

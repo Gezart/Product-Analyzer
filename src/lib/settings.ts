@@ -6,13 +6,18 @@ export type SettingsInput = {
   marginFloorPct: number;
   maxDiscountPct: number;
   excludedCollectionIds: string[];
+  excludedProductIds: string[];
 };
+
+/** A field error the form can turn into a message with its own label and units. */
+export type FieldError = { field: string; min?: number; max?: number; integer?: boolean };
 
 export const DEFAULT_SETTINGS: SettingsInput = {
   thresholds: DEFAULT_THRESHOLDS,
   marginFloorPct: 10,
   maxDiscountPct: 40,
   excludedCollectionIds: [],
+  excludedProductIds: [],
 };
 
 type Rule = { min: number; max: number; integer?: boolean };
@@ -27,7 +32,16 @@ const THRESHOLD_RULES: Record<keyof Thresholds, Rule> = {
   minViews: { min: 1, max: 10_000, integer: true },
 };
 
-const COLLECTION_GID = /^gid:\/\/shopify\/Collection\/\d+$/;
+const GID = { collection: /^gid:\/\/shopify\/Collection\/\d+$/, product: /^gid:\/\/shopify\/Product\/\d+$/ };
+const MAX_EXCLUDED = 250;
+
+function gidList(value: unknown, pattern: RegExp): string[] | null {
+  if (!Array.isArray(value) || value.length > MAX_EXCLUDED) return null;
+  if (!value.every((id) => typeof id === "string" && pattern.test(id))) return null;
+  return [...new Set(value as string[])];
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 function check(value: unknown, rule: Rule): value is number {
   return (
@@ -40,8 +54,8 @@ function check(value: unknown, rule: Rule): value is number {
 }
 
 /** Strict validation for the settings form: returns the clean settings or a list of field errors. */
-export function validateSettings(raw: unknown): { ok: true; value: SettingsInput } | { ok: false; errors: string[] } {
-  const errors: string[] = [];
+export function validateSettings(raw: unknown): { ok: true; value: SettingsInput } | { ok: false; errors: FieldError[] } {
+  const errors: FieldError[] = [];
   const input = (raw ?? {}) as Record<string, unknown>;
   const rawThresholds = (input.thresholds ?? {}) as Record<string, unknown>;
 
@@ -50,28 +64,32 @@ export function validateSettings(raw: unknown): { ok: true; value: SettingsInput
     const rule = THRESHOLD_RULES[key];
     const v = rawThresholds[key];
     if (check(v, rule)) thresholds[key] = v;
-    else errors.push(`thresholds.${key} must be ${rule.integer ? "a whole number" : "a number"} from ${rule.min} to ${rule.max}`);
+    else errors.push({ field: `thresholds.${key}`, ...rule });
   }
 
+  const marginRule = { min: 0, max: 100 };
   const marginFloorPct = input.marginFloorPct;
-  if (!check(marginFloorPct, { min: 0, max: 100 })) errors.push("marginFloorPct must be from 0 to 100");
+  if (!check(marginFloorPct, marginRule)) errors.push({ field: "marginFloorPct", ...marginRule });
 
+  const discountRule = { min: 1, max: 90 };
   const maxDiscountPct = input.maxDiscountPct;
-  if (!check(maxDiscountPct, { min: 1, max: 90 })) errors.push("maxDiscountPct must be from 1 to 90");
+  if (!check(maxDiscountPct, discountRule)) errors.push({ field: "maxDiscountPct", ...discountRule });
 
-  const ids = input.excludedCollectionIds;
-  if (!Array.isArray(ids) || ids.length > 250 || !ids.every((id) => typeof id === "string" && COLLECTION_GID.test(id))) {
-    errors.push("excludedCollectionIds must be a list of Shopify collection IDs");
-  }
+  const excludedCollectionIds = gidList(input.excludedCollectionIds, GID.collection);
+  if (!excludedCollectionIds) errors.push({ field: "excludedCollectionIds", max: MAX_EXCLUDED });
+  const excludedProductIds = gidList(input.excludedProductIds ?? [], GID.product);
+  if (!excludedProductIds) errors.push({ field: "excludedProductIds", max: MAX_EXCLUDED });
 
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
     value: {
       thresholds,
-      marginFloorPct: marginFloorPct as number,
-      maxDiscountPct: maxDiscountPct as number,
-      excludedCollectionIds: [...new Set(ids as string[])],
+      // Stored as Decimal(5,2).
+      marginFloorPct: round2(marginFloorPct as number),
+      maxDiscountPct: round2(maxDiscountPct as number),
+      excludedCollectionIds: excludedCollectionIds!,
+      excludedProductIds: excludedProductIds!,
     },
   };
 }
