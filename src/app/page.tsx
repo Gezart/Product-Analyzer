@@ -1,3 +1,5 @@
+import { ShopStatus } from "./shop-status";
+
 export default function Home() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
@@ -6,6 +8,7 @@ export default function Home() {
         Find the products that don&apos;t sell, learn why, fix them, and discount
         only what can&apos;t be saved.
       </p>
+      <ShopStatus />
     </main>
   );
 }

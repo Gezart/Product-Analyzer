@@ -1,0 +1,281 @@
+// Data model from docs/PLAN.md → "Data model".
+// Every store-owned table is reachable from Shop and deleted with it (shop/redact).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Shopify offline session (expiring token + refresh token). Tokens are encrypted at rest.
+model Session {
+  id                  String    @id
+  shop                String    @unique
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  accessToken         String
+  expires             DateTime?
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+  updatedAt           DateTime  @updatedAt
+
+  @@map("sessions")
+}
+
+model Shop {
+  id            String    @id @default(cuid())
+  domain        String    @unique
+  plan          String    @default("free")
+  currency      String?
+  timezone      String?
+  installedAt   DateTime  @default(now()) @map("installed_at")
+  uninstalledAt DateTime? @map("uninstalled_at")
+
+  settings      Settings?
+  products      Product[]
+  reports       Report[]
+  notifications Notification[]
+  syncStates    SyncState[]
+  aiUsage       AiUsage[]
+
+  @@map("shops")
+}
+
+model Settings {
+  shopId                String   @id @map("shop_id")
+  thresholds            Json     @default("{}")
+  marginFloorPct        Decimal  @default(10) @map("margin_floor_pct") @db.Decimal(5, 2)
+  maxDiscountPct        Decimal  @default(40) @map("max_discount_pct") @db.Decimal(5, 2)
+  excludedCollectionIds String[] @default([]) @map("excluded_collection_ids")
+  digestDay             Int      @default(1) @map("digest_day") // 0 = Sunday … 6 = Saturday
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@map("settings")
+}
+
+model Product {
+  id               String   @id @default(cuid())
+  shopId           String   @map("shop_id")
+  shopifyGid       String   @map("shopify_gid")
+  title            String
+  handle           String
+  productType      String?  @map("product_type")
+  vendor           String?
+  collections      String[] @default([])
+  imageCount       Int      @default(0) @map("image_count")
+  descriptionWords Int      @default(0) @map("description_words")
+  price            Decimal  @db.Decimal(12, 2)
+  compareAtPrice   Decimal? @map("compare_at_price") @db.Decimal(12, 2)
+  cost             Decimal? @db.Decimal(12, 2)
+  status           String
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  shop          Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  variants      Variant[]
+  dailyMetrics  ProductDailyMetric[]
+  scores        ProductScore[]
+  diagnoses     Diagnosis[]
+  fixes         Fix[]
+  rescuePlans   RescuePlan[]
+  markdownPlans MarkdownPlan[]
+  priceChanges  PriceChange[]
+  notifications Notification[]
+
+  @@unique([shopId, shopifyGid])
+  @@index([shopId])
+  @@map("products")
+}
+
+model Variant {
+  id           String   @id @default(cuid())
+  productId    String   @map("product_id")
+  shopifyGid   String   @map("shopify_gid")
+  sku          String?
+  options      Json     @default("{}")
+  price        Decimal  @db.Decimal(12, 2)
+  cost         Decimal? @db.Decimal(12, 2)
+  inventoryQty Int      @default(0) @map("inventory_qty")
+
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  priceChanges PriceChange[]
+
+  @@unique([productId, shopifyGid])
+  @@map("variants")
+}
+
+model ProductDailyMetric {
+  productId        String   @map("product_id")
+  date             DateTime @db.Date
+  units            Int      @default(0)
+  revenue          Decimal  @default(0) @db.Decimal(14, 2)
+  viewSessions     Int      @default(0) @map("view_sessions")
+  cartSessions     Int      @default(0) @map("cart_sessions")
+  purchaseSessions Int      @default(0) @map("purchase_sessions")
+  inventoryQty     Int      @default(0) @map("inventory_qty")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([productId, date])
+  @@map("product_daily_metrics")
+}
+
+model ProductScore {
+  id           String   @id @default(cuid())
+  productId    String   @map("product_id")
+  computedAt   DateTime @default(now()) @map("computed_at")
+  status       String
+  moneyAtStake Decimal  @map("money_at_stake") @db.Decimal(14, 2)
+  sellThrough  Decimal? @map("sell_through") @db.Decimal(6, 4)
+  daysOfCover  Decimal? @map("days_of_cover") @db.Decimal(10, 2)
+  trend        Decimal? @db.Decimal(10, 4)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, computedAt])
+  @@map("product_scores")
+}
+
+model Diagnosis {
+  id           String   @id @default(cuid())
+  productId    String   @map("product_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  reasons      Json // [{ code, evidence, severity }]
+  aiSummary    String?  @map("ai_summary")
+  modelVersion String?  @map("model_version")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fixes   Fix[]
+
+  @@map("diagnoses")
+}
+
+model Fix {
+  id          String    @id @default(cuid())
+  productId   String    @map("product_id")
+  diagnosisId String?   @map("diagnosis_id")
+  type        String // title | description | seo | images | collection
+  before      Json
+  after       Json
+  status      String    @default("suggested") // suggested | approved | applied | undone
+  appliedAt   DateTime? @map("applied_at")
+
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  diagnosis Diagnosis? @relation(fields: [diagnosisId], references: [id], onDelete: SetNull)
+
+  @@map("fixes")
+}
+
+model RescuePlan {
+  id        String    @id @default(cuid())
+  productId String    @map("product_id")
+  fixIds    String[]  @default([]) @map("fix_ids")
+  startedAt DateTime  @map("started_at")
+  endsAt    DateTime? @map("ends_at")
+  baseline  Json?
+  result    Json?
+  verdict   String? // improved | no_change | worse | not_enough_data
+
+  product       Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  markdownPlans MarkdownPlan[]
+
+  @@map("rescue_plans")
+}
+
+model MarkdownPlan {
+  id             String    @id @default(cuid())
+  productId      String    @map("product_id")
+  rescuePlanId   String?   @map("rescue_plan_id")
+  steps          Json
+  floorPrice     Decimal   @map("floor_price") @db.Decimal(12, 2)
+  maxDiscountPct Decimal   @map("max_discount_pct") @db.Decimal(5, 2)
+  status         String
+  startedAt      DateTime? @map("started_at")
+  endedAt        DateTime? @map("ended_at")
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  rescuePlan RescuePlan? @relation(fields: [rescuePlanId], references: [id], onDelete: SetNull)
+
+  @@map("markdown_plans")
+}
+
+model PriceChange {
+  id           String   @id @default(cuid())
+  productId    String   @map("product_id")
+  variantId    String?  @map("variant_id")
+  oldPrice     Decimal  @map("old_price") @db.Decimal(12, 2)
+  newPrice     Decimal  @map("new_price") @db.Decimal(12, 2)
+  oldCompareAt Decimal? @map("old_compare_at") @db.Decimal(12, 2)
+  newCompareAt Decimal? @map("new_compare_at") @db.Decimal(12, 2)
+  reason       String
+  planId       String?  @map("plan_id")
+  changedAt    DateTime @default(now()) @map("changed_at")
+
+  product Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant Variant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([productId, changedAt])
+  @@map("price_changes")
+}
+
+model Report {
+  id                String  @id @default(cuid())
+  shopId            String  @map("shop_id")
+  period            String // e.g. 2026-10
+  revenueRecovered  Decimal @default(0) @map("revenue_recovered") @db.Decimal(14, 2)
+  stockValueCleared Decimal @default(0) @map("stock_value_cleared") @db.Decimal(14, 2)
+  productsRescued   Int     @default(0) @map("products_rescued")
+  payload           Json    @default("{}")
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, period])
+  @@map("reports")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  shopId    String    @map("shop_id")
+  type      String
+  productId String?   @map("product_id")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  shop    Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, createdAt])
+  @@map("notifications")
+}
+
+model SyncState {
+  shopId       String    @map("shop_id")
+  resource     String
+  lastCursor   String?   @map("last_cursor")
+  lastSyncedAt DateTime? @map("last_synced_at")
+  status       String    @default("idle")
+  error        String?
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@id([shopId, resource])
+  @@map("sync_state")
+}
+
+model AiUsage {
+  shopId       String  @map("shop_id")
+  month        String // e.g. 2026-10
+  calls        Int     @default(0)
+  inputTokens  Int     @default(0) @map("input_tokens")
+  outputTokens Int     @default(0) @map("output_tokens")
+  costUsd      Decimal @default(0) @map("cost_usd") @db.Decimal(10, 4)
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@id([shopId, month])
+  @@map("ai_usage")
+}
