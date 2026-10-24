@@ -7,4 +7,4 @@
 - Dead stock needs proof, capped at product age (`products.shopify_created_at`, migration applied to Supabase)
 - Stock value per variant; negative stock counts as 0; invalid thresholds fall back to defaults
 - Inactive/excluded products get an "excluded" score row so old scores don't linger
-- Open: `scoreShop` is called by the `daily-metrics` and `settings` tasks
+- Open: `scoreShop` is called by the `daily-metrics` and `settings` tasks; `initial-sync` must fill `products.shopify_created_at`

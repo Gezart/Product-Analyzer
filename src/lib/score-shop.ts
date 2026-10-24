@@ -103,7 +103,8 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
         status: r.status,
         moneyAtStake: r.moneyAtStake.toFixed(2),
         sellThrough: r.sellThrough?.toFixed(4) ?? null,
-        daysOfCover: r.daysOfCover?.toFixed(2) ?? null,
+        // Capped so extreme stock with almost no sales fits Decimal(10,2).
+        daysOfCover: r.daysOfCover != null ? Math.min(r.daysOfCover, 99999).toFixed(2) : null,
         trend: r.trend?.toFixed(4) ?? null,
       })),
       ...excluded.map((p) => ({ productId: p.id, computedAt: now, status: "excluded", moneyAtStake: "0.00" })),
