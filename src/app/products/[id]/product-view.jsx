@@ -40,6 +40,9 @@ export function ProductView() {
           <Link href="/" className="text-sm text-zinc-600 hover:underline">
             ← Catalog health
           </Link>
+          <Link href={`/compare?ids=${data.product.id}`} className="ml-4 text-sm text-zinc-600 hover:underline">
+            Compare with other products
+          </Link>
         </div>
 
         {data.rescuePlan && <RescuePlan plan={data.rescuePlan} onChanged={() => setVersion((v) => v + 1)} />}

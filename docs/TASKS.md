@@ -46,7 +46,7 @@ Status: `todo` · `doing` · `done` · `blocked`.
 | `fix-center` | Merchant edits title, description, SEO, image order, collection with rule hints; apply, snapshot, undo | Apply + undo leaves product exactly as before | done (dev-store test pending) |
 | `rescue-plans` | Measurement window, traffic-adjusted baseline, verdicts; unit tests | Verdict shown with dates and numbers | done |
 | `markdown-engine` | Ladder 10/20/30%, floor check in code + DB constraint, audit log, price guard, auto-restore | No test ever prices below the floor | done (dev-store test pending) |
-| `compare` | 2–4 products side by side | Loads in < 2 s | todo |
+| `compare` | 2–4 products side by side | Loads in < 2 s | done (dev-store test pending) |
 | `inbox` | In-app notifications | Actions appear in inbox | todo |
 | `monthly-report` | Revenue recovered (documented formula), stock cleared, fixes | Formula shown next to each number | todo |
 | `plan-limits` | Enforce products and diagnoses per plan | Limits block correctly; upgrade prompt shown | todo |
