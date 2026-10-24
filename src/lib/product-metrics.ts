@@ -37,14 +37,24 @@ export function windowTotals(rows: DailyRow[], today: string, days: number): Win
   };
 }
 
-/** One entry per day for the last `days` days before `today`, missing days as 0 (for the chart). */
-export function dailySeries(rows: DailyRow[], today: string, days: number) {
+/**
+ * One entry per day for the last `days` days before `today`, missing days as 0 (for the chart).
+ * Days older than `knownDays` (before order history starts) are marked unknown, not "no sales".
+ */
+export function dailySeries(rows: DailyRow[], today: string, days: number, knownDays = days) {
   const byDate = new Map(rows.map((r) => [r.date, r]));
   return Array.from({ length: days }, (_, i) => {
     const date = shift(today, i - days);
     const r = byDate.get(date);
-    return { date, units: r?.units ?? 0, revenue: r?.revenue ?? 0 };
+    return { date, units: r?.units ?? 0, revenue: r?.revenue ?? 0, known: days - i <= knownDays };
   });
+}
+
+/** Units in the last 30 days ÷ the 30 days before; null when the earlier window had no sales. */
+export function trend30(rows: DailyRow[], today: string): number | null {
+  const last = windowTotals(rows, today, 30).units;
+  const previous = windowTotals(rows, today, 60).units - last;
+  return previous > 0 ? last / previous : null;
 }
 
 /** Latest day with a sale, or null. */

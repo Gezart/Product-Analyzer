@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type Day = { date: string; units: number; revenue: number };
+type Day = { date: string; units: number; revenue: number; known: boolean };
 
 const W = 720;
 const H = 160;
@@ -11,7 +11,8 @@ const PAD = { top: 8, right: 8, bottom: 20, left: 32 };
 /** Units sold per day: one series, thin rounded bars on a shared baseline, per-bar hover tooltip. */
 export function SalesChart({ days, formatMoney }: { days: Day[]; formatMoney: (n: number) => string }) {
   const [hover, setHover] = useState<number | null>(null);
-  const max = Math.max(1, ...days.map((d) => d.units));
+  const peak = Math.max(0, ...days.map((d) => d.units));
+  const max = Math.max(1, peak);
   const plotW = W - PAD.left - PAD.right;
   const plotH = H - PAD.top - PAD.bottom;
   const slot = plotW / days.length;
@@ -20,6 +21,8 @@ export function SalesChart({ days, formatMoney }: { days: Day[]; formatMoney: (n
   const ticks = [0, Math.round(max / 2), max].filter((v, i, a) => a.indexOf(v) === i);
   const total = days.reduce((s, d) => s + d.units, 0);
   const active = hover == null ? null : days[hover];
+  // Days before order history starts: shaded, not drawn as zero sales.
+  const unknown = days.filter((d) => !d.known).length;
 
   return (
     <figure className="relative m-0">
@@ -27,9 +30,17 @@ export function SalesChart({ days, formatMoney }: { days: Day[]; formatMoney: (n
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full"
         role="img"
-        aria-label={`Units sold per day, last ${days.length} days: ${total} in total, at most ${max} on one day`}
+        aria-label={`Units sold per day, last ${days.length} days: ${total} in total, at most ${peak} on one day${unknown ? `; no order history for the first ${unknown} days` : ""}`}
         onMouseLeave={() => setHover(null)}
       >
+        {unknown > 0 && (
+          <g>
+            <rect x={PAD.left} y={PAD.top} width={unknown * slot} height={plotH} className="fill-zinc-100" />
+            <text x={PAD.left + (unknown * slot) / 2} y={PAD.top + plotH / 2} textAnchor="middle" className="fill-zinc-500 text-[10px]">
+              No order history yet
+            </text>
+          </g>
+        )}
         {ticks.map((t) => (
           <g key={t}>
             <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} className="stroke-zinc-200" strokeWidth={1} />
@@ -70,9 +81,7 @@ export function SalesChart({ days, formatMoney }: { days: Day[]; formatMoney: (n
           style={{ left: `${((PAD.left + (hover! + 0.5) * slot) / W) * 100}%`, transform: "translateX(-50%)" }}
         >
           <div className="font-medium">{active.date}</div>
-          <div>
-            {active.units} units · {formatMoney(active.revenue)}
-          </div>
+          <div>{active.known ? `${active.units} units · ${formatMoney(active.revenue)}` : "No order history"}</div>
         </div>
       )}
     </figure>

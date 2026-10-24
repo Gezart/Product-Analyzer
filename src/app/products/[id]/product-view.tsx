@@ -6,7 +6,15 @@ import { useEffect, useState } from "react";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 import { SalesChart } from "./sales-chart";
 
-type Window = { days: number; units: number; revenue: number; views: number; viewToCart: number | null; viewToPurchase: number | null };
+type Window = {
+  days: number;
+  units: number;
+  revenue: number;
+  views: number;
+  viewToCart: number | null;
+  viewToPurchase: number | null;
+  partial: boolean;
+};
 type Data = {
   currency: string | null;
   product: { id: string; title: string; status: string; price: number };
@@ -20,10 +28,14 @@ type Data = {
     computedAt: string;
   } | null;
   stock: number;
+  stockValue: number;
+  stockValueIsEstimate: boolean;
+  daysOfCover: number | null;
+  knownDays: number;
   windows: Window[];
   trend: number | null;
   lastSale: string | null;
-  daily: { date: string; units: number; revenue: number }[];
+  daily: { date: string; units: number; revenue: number; known: boolean }[];
   variants: { id: string; sku: string | null; options: Record<string, string>; price: number; stock: number }[];
 };
 
@@ -67,10 +79,10 @@ export function ProductView() {
               <Stat label="In stock" value={data.stock.toLocaleString()} />
               <Stat
                 label="Stock value"
-                value={data.score ? money.format(data.score.stockValue) : "—"}
-                note={data.score?.costIsEstimate ? "estimated (price × 50%)" : undefined}
+                value={money.format(data.stockValue)}
+                note={data.stockValueIsEstimate ? "estimated (price × 50%)" : undefined}
               />
-              <Stat label="Days of stock" value={data.score?.daysOfCover == null ? "—" : Math.round(data.score.daysOfCover).toLocaleString()} />
+              <Stat label="Days of stock" value={data.daysOfCover == null ? "—" : Math.round(data.daysOfCover).toLocaleString()} />
               <Stat label="Last sale" value={data.lastSale ?? "none in history"} />
               <Stat label="Money at stake" value={data.score ? money.format(data.score.moneyAtStake) : "—"} />
               <Stat label="Sell-through (60 days)" value={pct(data.score?.sellThrough ?? null)} />
@@ -96,7 +108,9 @@ export function ProductView() {
               <tbody>
                 {data.windows.map((w) => (
                   <tr key={w.days} className="border-t border-zinc-200">
-                    <td className="py-2 pr-4">{w.days} days</td>
+                    <td className="py-2 pr-4">
+                      {w.days} days{w.partial ? <span className="text-zinc-500"> (only {data.knownDays} days known)</span> : null}
+                    </td>
                     <td className="py-2 pr-4 text-right">{w.units.toLocaleString()}</td>
                     <td className="py-2 pr-4 text-right">{money.format(w.revenue)}</td>
                     <td className="py-2 pr-4 text-right">{w.views.toLocaleString()}</td>
@@ -107,7 +121,9 @@ export function ProductView() {
               </tbody>
             </table>
           </div>
-          <s-text tone="neutral">Views come from Shopify analytics once view sync is connected.</s-text>
+          <s-text tone="neutral">
+            Views come from Shopify analytics once view sync is connected. Order history starts at install with the last 60 days.
+          </s-text>
         </s-section>
 
         <s-section heading="Units sold per day (last 90 days)">

@@ -8,6 +8,7 @@ export const STATUS_INFO: Record<string, { label: string; action: string; tone: 
   hidden_gem: { label: "Hidden gem", action: "Raise visibility", tone: "info" },
   stockout_risk: { label: "Stock-out risk", action: "Reorder", tone: "attention" },
   healthy: { label: "Healthy", action: "Nothing to do", tone: "success" },
+  excluded: { label: "Not analyzed", action: "Draft, archived or excluded in Settings", tone: "neutral" },
 };
 
 /** Store-currency formatter; a missing or unknown currency code falls back to plain numbers. */

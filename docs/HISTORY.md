@@ -3,7 +3,9 @@
 ## 2026-10-24 · product-page
 - `/products/[id]`: status and next action, stock, stock value, days of stock, last sale, money at stake, sell-through, 30-vs-previous-30 trend, units/revenue/views/view→cart/view→purchase for 30/60/90 days, 90-day units chart (single series, per-bar tooltip, validated color), variants with stock
 - `GET /api/products/[id]` (shop-scoped); dashboard rows link to it
-- Pure window/series logic with 4 unit tests; chart rendered and checked in a browser
+- Windows longer than the known order history are flagged (only N days known) and the chart shades days before history starts; stock, its value and days of stock are live; draft/archived/excluded products show "Not analyzed"
+- Scoring now uses the store's local date for "today" (same calendar as the daily metrics)
+- Pure window/series/trend logic with 6 unit tests; chart rendered and checked in a browser
 - Open: views stay 0 until `views-sync`; "within 2% of Shopify reports" needs a dev store
 
 ## 2026-10-24 · dashboard

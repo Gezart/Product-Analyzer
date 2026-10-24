@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dailySeries, lastSaleDate, windowTotals, type DailyRow } from "./product-metrics.ts";
+import { dailySeries, lastSaleDate, trend30, windowTotals, type DailyRow } from "./product-metrics.ts";
 
 const r = (date: string, units: number, extra: Partial<DailyRow> = {}): DailyRow => ({
   date, units, revenue: units * 10, viewSessions: 0, cartSessions: 0, purchaseSessions: 0, ...extra,
@@ -30,4 +30,15 @@ test("daily series fills missing days with zero", () => {
 test("last sale date", () => {
   assert.equal(lastSaleDate([r("2026-10-01", 1), r("2026-10-05", 0), r("2026-09-01", 2)]), "2026-10-01");
   assert.equal(lastSaleDate([r("2026-10-01", 0)]), null);
+});
+
+test("trend compares the last 30 days with the 30 before", () => {
+  const rows = [r("2026-10-20", 6), r("2026-09-10", 3)];
+  assert.equal(trend30(rows, "2026-10-24"), 2);
+  assert.equal(trend30([r("2026-10-20", 6)], "2026-10-24"), null);
+});
+
+test("days before known order history are marked unknown", () => {
+  const s = dailySeries([], "2026-10-24", 5, 2);
+  assert.deepEqual(s.map((d) => d.known), [false, false, false, true, true]);
 });
