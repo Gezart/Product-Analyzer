@@ -20,11 +20,12 @@ async function activeSubscriptions(session) {
 
 /**
  * Stores the plan. A new plan analyzes a different number of products, so the shop is re-scored right
- * away — once its first order import is done (before that, the first analysis follows the import).
+ * away — once its first order import has finished (before that, the first analysis follows the import).
  */
 async function setPlan(domain, plan) {
   const changed = await db().shop.findMany({
-    where: { domain, NOT: { plan }, syncStates: { some: { resource: "orders", status: "done" } } },
+    // A failed import still scores what was stored, so "error" counts as finished too.
+    where: { domain, NOT: { plan }, syncStates: { some: { resource: "orders", status: { in: ["done", "error"] } } } },
     select: { id: true },
   });
   await db().shop.updateMany({ where: { domain }, data: { plan } });

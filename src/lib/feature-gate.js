@@ -23,7 +23,7 @@ export async function productGate(shop, productId) {
     const [{ analyzed }] = await db().$queryRaw`
       SELECT count(*)::int AS "analyzed" FROM "products" p
       CROSS JOIN LATERAL (SELECT x."status" FROM "product_scores" x WHERE x."product_id" = p."id" ORDER BY x."computed_at" DESC LIMIT 1) s
-      WHERE p."shop_id" = ${shop.id} AND s."status" NOT IN ('over_limit', 'excluded')`;
+      WHERE p."shop_id" = ${shop.id} AND p."status" = 'ACTIVE' AND s."status" NOT IN ('over_limit', 'excluded')`;
     if (analyzed < limit) return null;
   }
   const index = PLANS.findIndex((p) => p.id === shop.plan);
