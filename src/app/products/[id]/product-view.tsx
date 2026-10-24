@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 import { Diagnosis } from "./diagnosis";
+import { FixCenter } from "./fix-center";
 import { SalesChart } from "./sales-chart";
 
 type Window = {
@@ -58,12 +59,15 @@ export function ProductView() {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+  const refresh = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(refresh.current), []);
 
   useEffect(() => {
     fetch(`/api/products/${id}`)
       .then(async (res) => (res.ok ? setData(await res.json()) : Promise.reject(new Error(res.status === 404 ? "Product not found" : String(res.status)))))
       .catch((e: Error) => setError(e.message));
-  }, [id]);
+  }, [id, version]);
 
   if (error) return <s-page heading="Product"><s-banner tone="critical">{error}</s-banner></s-page>;
   if (!data) return <s-page heading="Product"><s-spinner accessibilityLabel="Loading product" /></s-page>;
@@ -81,7 +85,15 @@ export function ProductView() {
           </Link>
         </div>
 
-        <Diagnosis productId={data.product.id} />
+        <Diagnosis productId={data.product.id} key={`diagnosis-${version}`} />
+        <FixCenter
+          productId={data.product.id}
+          onChanged={() => {
+            // Local data is refreshed by a background sync job; reload shortly after.
+            clearTimeout(refresh.current);
+            refresh.current = setTimeout(() => setVersion((v) => v + 1), 3000);
+          }}
+        />
 
         <s-section id="overview">
           <s-stack gap="small">

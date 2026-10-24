@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { listen } from "@/app/polaris-events";
 
 type Thresholds = {
   pageProblemViewsTop: number;
@@ -62,19 +63,6 @@ function errorMessage(e: FieldError): string {
   const scale = f.percent ? 100 : 1;
   const range = e.min != null && e.max != null ? ` from ${e.min * scale} to ${e.max * scale}` : "";
   return `${f.label}: enter ${e.integer ? "a whole number" : "a number"}${range}`;
-}
-
-/**
- * Ref that listens to a DOM event on a Polaris web component directly, so it works whether or not
- * the component's events bubble to React's root listener.
- */
-function listen(event: string, handler: (el: HTMLInputElement) => void) {
-  return (el: HTMLElement | null) => {
-    if (!el) return;
-    const fn = () => handler(el as HTMLInputElement);
-    el.addEventListener(event, fn);
-    return () => el.removeEventListener(event, fn);
-  };
 }
 
 export function SettingsForm() {

@@ -1,5 +1,15 @@
 # History
 
+## 2026-10-24 · fix-center
+- Fix center on the product page: merchant edits title, description (HTML), SEO title/meta, image order and manual collections, with hints from the diagnosis; "Apply to Shopify" is the approval
+- Each apply reads the current state live from Shopify as the undo snapshot, writes via the Admin API (productUpdate, productReorderMedia, collectionAdd/RemoveProducts, waiting for async jobs), then stores what Shopify actually saved
+- Undo writes the snapshot back; if the product changed since the fix, undo asks before overwriting ("Undo anyway")
+- Image reorder moves verified for every order of up to 6 images, including apply then undo
+- Safety: apply refuses if Shopify changed since the page loaded; one change per product at a time; undo claims the fix first; a write that fails part way (or with an unknown outcome) stays undoable, and so does an attempt interrupted by a crash; unsaved edits are kept when an apply fails; async Shopify jobs not done in time are reported as still finishing
+- Fix history per product with status (applied / undone / failed + error); new `fixes` columns (migration)
+- 5 unit tests for validation, state comparison, media moves and collection diffs
+- Not yet tested against a real store (incl. clearing SEO with ""); smart (automated) collections are shown but can't be edited; re-adding to a manually sorted collection puts the product at the end; plan gating comes with `plan-limits`
+
 ## 2026-10-24 · diagnosis-rules
 - Rule-based diagnosis (v1, no AI): price > 25% above peers (the narrowest product type or collection with enough peers; catch-all groups over half the store skipped; product itself excluded; ≥ 3 peers), fewer than 3 images, description < 80 words / missing size, material or use / copied from another product, missing SEO title or meta description, broken size run (variants that sell when out of stock don't count), no collection or only quiet collections, high add-to-cart but low purchase with ≥ 5 carts (store-level)
 - Every reason carries its numbers (evidence + data) and links to the product page section that shows them; ordered by severity
