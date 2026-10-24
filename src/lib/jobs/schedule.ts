@@ -8,6 +8,12 @@ export function backoffMs(attempts: number): number {
   return Math.min(RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1), RETRY_MAX_MS);
 }
 
+/** What to do after a failed try: retry later, or give up when out of attempts or the error is permanent. */
+export function retryPlan(attempts: number, maxAttempts: number, permanent: boolean, now: Date) {
+  if (permanent || attempts >= maxAttempts) return { status: "failed" as const, runAt: null };
+  return { status: "queued" as const, runAt: new Date(now.getTime() + backoffMs(attempts)) };
+}
+
 function safeZone(timeZone: string | null | undefined): string {
   if (!timeZone) return "UTC";
   try {
@@ -39,11 +45,23 @@ function offsetMs(date: Date, timeZone: string): number {
   return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(date.getTime() / 1000) * 1000;
 }
 
-/** UTC instant of a wall-clock time in `timeZone` (DST-aware). */
+/**
+ * UTC instant of a wall-clock time in `timeZone`. Ambiguous times (clocks go back) take the earlier
+ * instant; times that don't exist (clocks jump forward) take the later offset, i.e. the first valid
+ * moment after the gap, so the result always falls on the requested local date.
+ */
 function zonedToUtc(year: number, month: number, day: number, hour: number, timeZone: string): Date {
   const guess = Date.UTC(year, month - 1, day, hour);
-  const first = guess - offsetMs(new Date(guess), timeZone);
-  return new Date(guess - offsetMs(new Date(first), timeZone));
+  const halfDay = 12 * 60 * 60 * 1000;
+  const candidates = [
+    guess - offsetMs(new Date(guess - halfDay), timeZone),
+    guess - offsetMs(new Date(guess + halfDay), timeZone),
+  ];
+  const matches = candidates.filter((c) => {
+    const p = localParts(new Date(c), timeZone);
+    return p.year === year && p.month === month && p.day === day && p.hour === hour;
+  });
+  return new Date(matches.length ? Math.min(...matches) : Math.max(...candidates));
 }
 
 /** Local calendar date in `timeZone` as YYYY-MM-DD. */

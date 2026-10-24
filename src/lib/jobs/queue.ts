@@ -1,8 +1,9 @@
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { backoffMs } from "@/lib/jobs/schedule";
+import { PermanentJobError } from "@/lib/jobs/errors";
+import { retryPlan } from "@/lib/jobs/schedule";
 
-/** A running job whose lock is older than this is considered crashed and is requeued. Handlers must finish well within it. */
+/** A running job whose lock is older than this is considered crashed and is requeued. Handlers time out well before it. */
 export const LOCK_TIMEOUT_MINUTES = 10;
 
 export type ClaimedJob = {
@@ -102,27 +103,41 @@ export async function claimJob(workerId: string): Promise<ClaimedJob | null> {
   return null;
 }
 
-export async function completeJob(id: string) {
-  await db().job.update({
-    where: { id },
+// Completion is guarded by the worker's lock: if the job was released (lock expired) or deleted
+// (shop redacted) meanwhile, the update is a no-op instead of overwriting another worker's run.
+function ownedBy(job: ClaimedJob, workerId: string) {
+  return { id: job.id, status: "running", lockedBy: workerId };
+}
+
+export async function completeJob(job: ClaimedJob, workerId: string) {
+  await db().job.updateMany({
+    where: ownedBy(job, workerId),
     data: { status: "done", finishedAt: new Date(), lockedAt: null, lockedBy: null, lastError: null },
   });
 }
 
-/** Retries with backoff until `maxAttempts`, then marks the job failed. */
-export async function failJob(job: ClaimedJob, error: unknown, now = new Date()) {
+/** Retries with backoff until `maxAttempts`; `PermanentJobError` fails at once. */
+export async function failJob(job: ClaimedJob, workerId: string, error: unknown, now = new Date()) {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-  const final = job.attempts >= job.maxAttempts;
-  await db().job.update({
-    where: { id: job.id },
+  const plan = retryPlan(job.attempts, job.maxAttempts, error instanceof PermanentJobError, now);
+  await db().job.updateMany({
+    where: ownedBy(job, workerId),
     data: {
-      status: final ? "failed" : "queued",
-      runAt: final ? undefined : new Date(now.getTime() + backoffMs(job.attempts)),
-      finishedAt: final ? now : null,
+      status: plan.status,
+      runAt: plan.runAt ?? undefined,
+      finishedAt: plan.status === "failed" ? now : null,
       lockedAt: null,
       lockedBy: null,
       lastError: message.slice(0, 2000),
     },
+  });
+}
+
+/** Puts a job back without counting the try (worker shutting down). */
+export async function releaseJob(job: ClaimedJob, workerId: string, reason: string) {
+  await db().job.updateMany({
+    where: ownedBy(job, workerId),
+    data: { status: "queued", attempts: { decrement: 1 }, lockedAt: null, lockedBy: null, lastError: reason },
   });
 }
 

@@ -1,13 +1,16 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { tick } from "@/lib/jobs/runner";
 
 export const maxDuration = 60;
 
+const digest = (value: string) => createHash("sha256").update(value).digest();
+
 function authorized(request: Request) {
   const secret = process.env.CRON_SECRET;
-  const given = request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
-  if (!secret || given.length !== secret.length) return false;
-  return timingSafeEqual(Buffer.from(given), Buffer.from(secret));
+  const match = request.headers.get("authorization")?.match(/^Bearer (.+)$/);
+  if (!secret || !match) return false;
+  // Equal-length digests, so the comparison never throws and leaks nothing about length.
+  return timingSafeEqual(digest(match[1]), digest(secret));
 }
 
 // External cron trigger (alternative to the in-process worker): POST with `Authorization: Bearer $CRON_SECRET`.
