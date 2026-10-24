@@ -1,5 +1,12 @@
 # History
 
+## 2026-10-24 · settings
+- `/settings` page (Polaris): status thresholds, minimum margin, maximum discount, excluded collections
+- `GET/PUT /api/settings` with strict validation (field errors → 400); `GET /api/collections` from the Admin API
+- Saving queues a `score-shop` job (first registered job handler); the worker re-scores within seconds
+- 3 unit tests for validation
+- Open: `initial-sync` must store collection GIDs in `products.collections` for exclusions to match
+
 ## 2026-10-24 · ci
 - GitHub Actions on every PR and on pushes to `staging`/`main`: `npm ci`, build, typecheck, tests (Node 22)
 - Verified the steps in a clean copy without any env vars
