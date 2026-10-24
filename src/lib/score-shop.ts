@@ -5,23 +5,21 @@ import { knownOrderDays } from "@/lib/sync/constants";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function startOfUtcDay(d: Date) {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
-
 /**
  * Recomputes metrics, status and money at stake for every product of a shop and writes one
  * `product_scores` row per product (inactive, deleted or excluded products get status "excluded").
  * Returns the number of products scored (excluded not counted).
  */
 export async function scoreShop(shopId: string, now = new Date()): Promise<number> {
-  const today = startOfUtcDay(now);
+  // "Today" is the store's local date, the same calendar the daily metrics are stored in.
+  const shopRow = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true } });
+  const todayKey = localDateKey(now, shopRow?.timezone);
+  const today = new Date(`${todayKey}T00:00:00Z`);
   const d30 = new Date(today.getTime() - 30 * DAY_MS);
   const d60 = new Date(today.getTime() - 60 * DAY_MS);
   const daysBefore = (d: Date) => Math.max(0, Math.round((today.getTime() - d.getTime()) / DAY_MS));
 
-  const [shop, settings, ordersSync, webhooks, products] = await Promise.all([
-    db().shop.findUnique({ where: { id: shopId }, select: { timezone: true } }),
+  const [settings, ordersSync, webhooks, products] = await Promise.all([
     db().settings.findUnique({ where: { shopId } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "webhooks" } } }),
@@ -75,7 +73,7 @@ export async function scoreShop(shopId: string, now = new Date()): Promise<numbe
   // (Metric rows can't tell: views go further back and rows exist only for days with activity.)
   const historyDays = knownOrderDays({
     windowStart: ordersSync?.status === "done" ? ordersSync.lastCursor : null,
-    today: localDateKey(now, shop?.timezone),
+    today: todayKey,
     live: webhooks?.status === "done",
   });
 

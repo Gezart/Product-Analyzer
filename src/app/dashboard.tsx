@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
 type StatusSummary = { status: string; count: number; stockValue: number; moneyAtStake: number };
 type TopRow = { productId: string; title: string; status: string; moneyAtStake: number; daysOfCover: number | null; sellThrough: number | null };
@@ -13,24 +15,6 @@ type Dashboard = {
   byStatus: StatusSummary[];
   top: TopRow[];
 };
-
-// Labels and next actions from docs/PLAN.md → Product statuses.
-export const STATUS_INFO: Record<string, { label: string; action: string; tone: string }> = {
-  dead_stock: { label: "Dead stock", action: "Short rescue plan, then markdown", tone: "critical" },
-  slow_mover: { label: "Slow mover", action: "Diagnose, then rescue plan", tone: "warning" },
-  page_problem: { label: "Page problem", action: "Fix the product page", tone: "warning" },
-  hidden_gem: { label: "Hidden gem", action: "Raise visibility", tone: "info" },
-  stockout_risk: { label: "Stock-out risk", action: "Reorder", tone: "attention" },
-  healthy: { label: "Healthy", action: "Nothing to do", tone: "success" },
-};
-
-/** Store-currency formatter; a missing or unknown currency code falls back to plain numbers. */
-function moneyFormatter(currency: string | null) {
-  try {
-    if (currency) return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 });
-  } catch {}
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
-}
 
 export function Dashboard() {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -117,7 +101,11 @@ export function Dashboard() {
               <tbody>
                 {data.top.map((r) => (
                   <tr key={r.productId} className="border-t border-zinc-200">
-                    <td className="py-2 pr-4 font-medium">{r.title}</td>
+                    <td className="py-2 pr-4">
+                      <Link href={`/products/${r.productId}`} className="font-medium hover:underline">
+                        {r.title}
+                      </Link>
+                    </td>
                     <td className="py-2 pr-4">
                       <s-badge tone={STATUS_INFO[r.status]?.tone}>{STATUS_INFO[r.status]?.label ?? r.status}</s-badge>
                     </td>
