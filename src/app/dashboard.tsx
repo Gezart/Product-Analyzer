@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type StatusSummary = { status: string; count: number; stockValue: number; moneyAtStake: number };
 type TopRow = { productId: string; title: string; status: string; moneyAtStake: number; daysOfCover: number | null; sellThrough: number | null };
 type Dashboard = {
-  currency: string;
+  currency: string | null;
   scoredAt: string | null;
   moneyStuck: number;
   moneyStuckIsEstimate: boolean;
@@ -25,27 +24,55 @@ export const STATUS_INFO: Record<string, { label: string; action: string; tone: 
   healthy: { label: "Healthy", action: "Nothing to do", tone: "success" },
 };
 
+/** Store-currency formatter; a missing or unknown currency code falls back to plain numbers. */
+function moneyFormatter(currency: string | null) {
+  try {
+    if (currency) return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 });
+  } catch {}
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+}
+
 export function Dashboard() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Until the first analysis is finished, check again every few seconds so the dashboard appears by itself.
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then(async (res) => (res.ok ? setData(await res.json()) : Promise.reject(new Error(`${res.status}`))))
-      .catch((e: Error) => setError(e.message));
+    let timer: ReturnType<typeof setTimeout>;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/dashboard");
+        if (!res.ok) throw new Error(String(res.status));
+        const body: Dashboard = await res.json();
+        setData(body);
+        setError(null);
+        if (!body.scoredAt) timer = setTimeout(load, 5000);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    };
+    load();
+    return () => clearTimeout(timer);
   }, []);
 
   if (error) return <s-banner tone="critical">Could not load the dashboard ({error}).</s-banner>;
   if (!data) return <s-spinner accessibilityLabel="Loading dashboard" />;
-  if (data.productCount === 0) {
+  if (!data.scoredAt) {
     return (
       <s-section>
         <s-paragraph>Your dashboard appears here as soon as the first analysis of your store is finished.</s-paragraph>
       </s-section>
     );
   }
+  if (data.productCount === 0) {
+    return (
+      <s-section>
+        <s-paragraph>No active products to analyze. Draft, archived and excluded products are left out (see Settings).</s-paragraph>
+      </s-section>
+    );
+  }
 
-  const money = new Intl.NumberFormat(undefined, { style: "currency", currency: data.currency, maximumFractionDigits: 0 });
+  const money = moneyFormatter(data.currency);
 
   return (
     <s-stack gap="base">
@@ -90,11 +117,7 @@ export function Dashboard() {
               <tbody>
                 {data.top.map((r) => (
                   <tr key={r.productId} className="border-t border-zinc-200">
-                    <td className="py-2 pr-4">
-                      <Link href={`/products/${r.productId}`} className="font-medium hover:underline">
-                        {r.title}
-                      </Link>
-                    </td>
+                    <td className="py-2 pr-4 font-medium">{r.title}</td>
                     <td className="py-2 pr-4">
                       <s-badge tone={STATUS_INFO[r.status]?.tone}>{STATUS_INFO[r.status]?.label ?? r.status}</s-badge>
                     </td>

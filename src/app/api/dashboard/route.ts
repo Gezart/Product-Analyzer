@@ -20,15 +20,17 @@ const num = (v: string | null) => (v == null ? null : Number(v));
 export async function GET(request: Request) {
   try {
     const { shop } = await authenticate(request);
+    // Latest score per product via a backward index scan per product (independent of other shops' rows).
     const rows = await db().$queryRaw<Row[]>`
-      SELECT DISTINCT ON (s."product_id")
-        s."product_id" AS "productId", p."title", s."status",
+      SELECT p."id" AS "productId", p."title", s."status",
         s."money_at_stake"::text AS "moneyAtStake", s."stock_value"::text AS "stockValue",
         s."cost_is_estimate" AS "costIsEstimate", s."sell_through"::text AS "sellThrough",
         s."days_of_cover"::text AS "daysOfCover", s."computed_at" AS "computedAt"
-      FROM "product_scores" s JOIN "products" p ON p."id" = s."product_id"
+      FROM "products" p
+      CROSS JOIN LATERAL (
+        SELECT x.* FROM "product_scores" x WHERE x."product_id" = p."id" ORDER BY x."computed_at" DESC LIMIT 1
+      ) s
       WHERE p."shop_id" = ${shop.id} AND p."status" <> 'DELETED'
-      ORDER BY s."product_id", s."computed_at" DESC
     `;
     const scores: ScoreRow[] = rows.map((r) => ({
       productId: r.productId,
@@ -41,7 +43,7 @@ export async function GET(request: Request) {
       daysOfCover: num(r.daysOfCover),
     }));
     const scoredAt = rows.reduce<Date | null>((max, r) => (!max || r.computedAt > max ? r.computedAt : max), null);
-    return Response.json({ currency: shop.currency ?? "USD", scoredAt, ...summarize(scores) });
+    return Response.json({ currency: shop.currency, scoredAt, ...summarize(scores) });
   } catch (error) {
     if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
     throw error;
