@@ -4,9 +4,9 @@ Embedded Shopify app that finds underperforming products, diagnoses why they don
 
 ## Stack
 
-- Next.js (App Router, TypeScript) + Tailwind CSS
+- Next.js (App Router, JavaScript: `.jsx` for React files, `.js` otherwise) + Tailwind CSS
 - `@shopify/shopify-api` — token exchange, expiring offline tokens, webhook HMAC
-- Shopify App Bridge (CDN script, loaded in `src/app/layout.tsx`)
+- Shopify App Bridge (CDN script, loaded in `src/app/layout.jsx`)
 - PostgreSQL on Supabase, accessed only through Prisma (`@prisma/adapter-pg`)
 
 No other dependencies are added without the owner's approval.
@@ -21,9 +21,9 @@ No other dependencies are added without the owner's approval.
 
 ## How it works
 
-- **Auth:** App Bridge adds a session token to every `fetch` from the embedded UI. `src/lib/auth.ts` verifies it and, on first use, exchanges it for an expiring offline token (refreshed automatically). Tokens are encrypted at rest (`src/lib/crypto.ts`).
-- **Webhooks:** one endpoint, `/api/webhooks`. App, order, product and inventory topics are registered per shop by the initial sync (`src/lib/sync/webhooks.ts`). The compliance topics `customers/data_request`, `customers/redact`, `shop/redact` must be set to this URL in the Partner Dashboard. Invalid HMAC returns 401.
-- **Framing:** `src/proxy.ts` sets `frame-ancestors` to the shop and Shopify Admin.
+- **Auth:** App Bridge adds a session token to every `fetch` from the embedded UI. `src/lib/auth.js` verifies it and, on first use, exchanges it for an expiring offline token (refreshed automatically). Tokens are encrypted at rest (`src/lib/crypto.js`).
+- **Webhooks:** one endpoint, `/api/webhooks`. App, order, product and inventory topics are registered per shop by the initial sync (`src/lib/sync/webhooks.js`). The compliance topics `customers/data_request`, `customers/redact`, `shop/redact` must be set to this URL in the Partner Dashboard. Invalid HMAC returns 401.
+- **Framing:** `src/proxy.js` sets `frame-ancestors` to the shop and Shopify Admin.
 
 ## Database
 
@@ -36,15 +36,15 @@ All tables have Row Level Security enabled with no policies, which blocks Supaba
 
 ## Billing
 
-Plans are defined in `src/lib/plans.ts` and charged through Shopify Billing (14-day trial on paid plans). The plans page is `/plans`. Outside production all charges are test charges; in production only if `SHOPIFY_BILLING_TEST=true`. One trial per shop (`shops.trial_started_at`).
+Plans are defined in `src/lib/plans.js` and charged through Shopify Billing (14-day trial on paid plans). The plans page is `/plans`. Outside production all charges are test charges; in production only if `SHOPIFY_BILLING_TEST=true`. One trial per shop (`shops.trial_started_at`).
 
 ## Tests
 
-`npm test` runs `node:test` on `src/**/*.test.ts`.
+`npm test` runs `node:test` on `src/**/*.test.js`.
 
 ## Background jobs
 
-Postgres-backed queue in `src/lib/jobs/`. Register a handler in `registry.ts` (and add it to `nightlyJobs` for a nightly run), then `enqueue({ type, shopId })`.
+Postgres-backed queue in `src/lib/jobs/`. Register a handler in `registry.js` (and add it to `nightlyJobs` for a nightly run), then `enqueue({ type, shopId })`.
 
 - Always-on server: set `JOBS_WORKER=true`; the worker starts with the Next.js server.
 - Or call `POST /api/jobs/run` every minute with `Authorization: Bearer $CRON_SECRET`.

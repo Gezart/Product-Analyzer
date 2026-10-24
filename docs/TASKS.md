@@ -22,7 +22,7 @@ Status: `todo` · `doing` · `done` · `blocked`.
 | `dev-store-test` | Connect a dev store, fill `.env`, install the app | Home page shows "Connected to …"; uninstall marks the shop | todo (needs owner: Partner app + credentials) |
 | `billing` | Shopify Billing: Free/Starter/Growth/Pro, 14-day trial, plan stored on `shops`, upgrade/downgrade page | Subscribe, change plan and cancel work on the dev store (test charges) | done (dev-store test pending) |
 | `shopifyql-spike` | Query `shopifyqlQuery` for per-product `view_sessions`, cart and purchase rates; find the scope | Script returns 90 days of views per product; scope written in PLAN | todo |
-| `ci-deploy` | GitHub Actions (typecheck + build + tests), deploy `staging` and `main` | Push to `staging` deploys staging automatically (Fly.io, after D1 is final) | CI done; deploy waits on D1 |
+| `ci-deploy` | GitHub Actions (build + tests), deploy `staging` and `main` | Push to `staging` deploys staging automatically (Fly.io, after D1 is final) | CI done; deploy waits on D1 |
 
 ## Phase 1 · Analyze
 
