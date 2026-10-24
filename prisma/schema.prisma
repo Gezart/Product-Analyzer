@@ -175,12 +175,16 @@ model Fix {
   type        String // title | description | seo | images | collection
   before      Json
   after       Json
-  status      String    @default("suggested") // suggested | approved | applied | undone
+  status      String    @default("suggested") // suggested | approved | applied | undone | failed
   appliedAt   DateTime? @map("applied_at")
+  undoneAt    DateTime? @map("undone_at")
+  error       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   diagnosis Diagnosis? @relation(fields: [diagnosisId], references: [id], onDelete: SetNull)
 
+  @@index([productId, createdAt])
   @@map("fixes")
 }
 
