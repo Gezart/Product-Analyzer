@@ -1,5 +1,6 @@
 import { RequestedTokenType, type Session } from "@shopify/shopify-api";
 import { db } from "@/lib/db";
+import { enqueue } from "@/lib/jobs/queue";
 import { shopify } from "@/lib/shopify";
 import { loadOfflineSession, storeSession } from "@/lib/session-storage";
 
@@ -27,11 +28,18 @@ export async function authenticate(request: Request) {
   const shop = new URL(payload.dest).hostname;
 
   const session = await getOfflineSession(shop, sessionToken);
+  const existing = await db().shop.findUnique({ where: { domain: shop } });
+  const isNewInstall = !existing || existing.uninstalledAt != null;
   const shopRow = await db().shop.upsert({
     where: { domain: shop },
     create: { domain: shop },
-    update: { uninstalledAt: null },
+    update: isNewInstall ? { uninstalledAt: null, installedAt: new Date() } : {},
   });
+
+  // First request after (re)install starts the initial import; the key makes it once per install.
+  if (isNewInstall) {
+    await enqueue({ type: "initial-sync", shopId: shopRow.id, uniqueKey: `initial-sync:${shopRow.id}:${shopRow.installedAt.getTime()}` });
+  }
 
   return { shop: shopRow, session };
 }

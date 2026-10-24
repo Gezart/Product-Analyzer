@@ -1,5 +1,13 @@
 # History
 
+## 2026-10-24 · initial-sync
+- First request after (re)install queues `initial-sync` (once per install)
+- Job chain: shop currency + IANA timezone → products bulk query (variants, stock, cost, collections, media count, created date) → orders bulk query (last 60 days; date, cancellation, line items only — no customer data) → `score-shop`
+- `sync-poll` job polls bulk operations every 10 s (max 1 h); results stored with bulk upserts (1,000 rows per statement); daily sales per product per local day replace the 60-day window, view columns untouched
+- `sync_state` per step; home page shows progress until done
+- Verified the upsert SQL on a local Postgres 16 (re-sync updates, shop isolation, views kept); 3 unit tests for JSONL transforms
+- Not yet tested against a real store (needs dev store credentials); requires `read_orders` and protected customer data approval for orders
+
 ## 2026-10-24 · settings
 - `/settings` page (Polaris): status thresholds, minimum margin, maximum discount, excluded collections and products (App Bridge resource picker; new column `settings.excluded_product_ids`, migration applied to Supabase)
 - `GET/PUT /api/settings` with strict validation (field errors → 400); `GET /api/collections` from the Admin API

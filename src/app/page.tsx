@@ -1,4 +1,5 @@
 import { ShopStatus } from "./shop-status";
+import { SyncProgress } from "./sync-progress";
 
 export default function Home() {
   return (
@@ -9,6 +10,9 @@ export default function Home() {
         only what can&apos;t be saved.
       </p>
       <ShopStatus />
+      <div className="w-full max-w-md text-left">
+        <SyncProgress />
+      </div>
     </main>
   );
 }
