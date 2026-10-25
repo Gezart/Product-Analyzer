@@ -234,4 +234,7 @@ test("products sold without stock (untracked, e.g. gift cards) are never a stock
   const [untracked] = scoreProducts([{ ...base, sellsWhenOut: true }], undefined, 60);
   assert.equal(tracked.status, "stockout_risk");
   assert.notEqual(untracked.status, "stockout_risk");
+  // Selling past zero is allowed, but there is still stock running low: still a risk.
+  const [continueSelling] = scoreProducts([{ ...base, stock: 3, stockValue: 30, sellsWhenOut: true }], undefined, 60);
+  assert.equal(continueSelling.status, "stockout_risk");
 });

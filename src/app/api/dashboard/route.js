@@ -31,10 +31,12 @@ export async function GET(request) {
       daysOfCover: num(r.daysOfCover),
     }));
     const scoredAt = rows.reduce((max, r) => (!max || r.computedAt > max ? r.computedAt : max), null);
-    // A store without products has nothing to score: the import being done is what counts then.
+    // Scoring writes a row for every product that isn't deleted, so with no scores the analysis is only
+    // "done" when the import finished and there is no such product (an empty store).
     const imported =
       scoredAt != null ||
-      (await db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "orders" } } }))?.status === "done";
+      ((await db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "orders" } } }))?.status === "done" &&
+        (await db().product.count({ where: { shopId: shop.id, status: { not: "DELETED" } } })) === 0);
     return Response.json({ currency: shop.currency, scoredAt, imported, ...summarize(scores) });
   } catch (error) {
     if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });

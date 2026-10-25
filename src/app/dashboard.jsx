@@ -41,7 +41,7 @@ export function Dashboard() {
       <s-section>
         <s-paragraph>
           No active products to analyze yet. Add products in Shopify (draft, archived and excluded products are left out, see Settings); new
-          products are picked up automatically.
+          products are picked up at the next nightly analysis.
         </s-paragraph>
       </s-section>
     );

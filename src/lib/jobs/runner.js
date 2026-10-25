@@ -66,7 +66,7 @@ export async function runJobs({ maxMs }) {
       await completeJob(job, workerId);
     } catch (error) {
       failed++;
-      console.error(`[jobs] ${job.type} failed (attempt ${job.attempts ?? "?"}):`, error instanceof Error ? error.message : error);
+      console.error(`[jobs] ${job.type} failed for shop ${job.shopId} (attempt ${job.attempts}):`, error instanceof Error ? error.message : error);
       if (stopping) await releaseJob(job, workerId, "Worker stopped");
       // A timed-out handler that ignores its signal may still be running: retry only after its lock would expire.
       else if (error instanceof JobTimeoutError) await failJob(job, workerId, error, new Date(), LOCK_TIMEOUT_MINUTES * 60_000);
