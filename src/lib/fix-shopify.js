@@ -94,7 +94,7 @@ export async function writeState(
       return { pending: false };
     }
     case "images": {
-      const moves = mediaMoves((current).mediaIds, (target).mediaIds);
+      const moves = mediaMoves(current.mediaIds, target.mediaIds);
       if (!moves.length) return { pending: false };
       const r = await adminGraphql(
         session,
@@ -109,7 +109,7 @@ export async function writeState(
     }
     case "collection": {
       // Note: re-adding to a manually sorted collection puts the product at the end of it.
-      const { add, remove } = collectionChanges((current).collectionIds, (target).collectionIds);
+      const { add, remove } = collectionChanges(current.collectionIds, target.collectionIds);
       let pending = false;
       for (const id of add) {
         const r = await adminGraphql(

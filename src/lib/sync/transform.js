@@ -1,4 +1,5 @@
 // Turns bulk-operation JSONL rows into records we store. Pure, relative imports only, so node:test can load it.
+import { round2 } from "../dates.js";
 import { localDateKey } from "../jobs/schedule.js";
 
 const num = (v) => {
@@ -80,7 +81,6 @@ export function assembleProducts(rows) {
 }
 
 const money = (v) => num((v)?.shopMoney?.amount) ?? 0;
-const round2 = (n) => Math.round(n * 100) / 100;
 
 /**
  * Orders JSONL (orders + child line items) → order lines. Only date, cancellation, product, variant,

@@ -1,5 +1,13 @@
 # History
 
+## 2026-10-25 · code-review
+- Senior review of the whole codebase; fixes are behaviour-preserving
+- API routes: the same try/catch + auth boilerplate in 19 routes replaced by `appRoute()`; every error answer is now JSON `{ error }` (some were plain text); app errors (`FixError`, `MarkdownError`, `PlanError`) share `HttpError`; plan gates throw instead of returning responses that were parsed again
+- Duplicated helpers removed: day arithmetic and rounding (redefined in 14 modules) now in `src/lib/dates.js`, error messages in `src/lib/http-error.js`, JSON body reading in `readJson()`
+- Missing database indexes added for hot queries (latest diagnosis, markdown plans per product, pending price changes per plan) — migration `20261025090000_query_indexes`
+- Shopify Admin API calls retry rate-limited/unavailable answers twice; leftover TypeScript-cast parentheses cleaned up; README explains the code layout
+- Build, 140 unit tests, migrations vs schema and an undefined-name scan all pass
+
 ## 2026-10-25 · views-sync
 - New `views-sync` job: daily view, cart and purchase sessions per product from ShopifyQL into `product_daily_metrics` — 90 days once the first import is done (the analysis doesn't wait for it), then the last 7 days after each nightly catalog refresh; a re-score follows (also when views are unavailable), so conversion statuses (page problem, hidden gem) use them
 - Exact dates in every query, read one week at a time; an answer that is refused, has rows but no product views, or looks cut off (exactly 1,000, 10,000 or 100,000 rows when more were possible) stores nothing

@@ -24,6 +24,13 @@ No other dependencies are added without the owner's approval.
 
 `SHOPIFY_API_KEY` is read at build time for the App Bridge meta tag, so it must be set when running `npm run build`.
 
+## Code layout
+
+- `src/app/` — pages (client components with Polaris web components) and `api/*/route.js`. Every API route is wrapped in `appRoute()` (`src/lib/route.js`): it authenticates the session token (401), and answers expected failures (`HttpError`, `src/lib/http-error.js`) as `{ error }` with their status.
+- `src/lib/*.js` without `@/` imports are pure (scoring, diagnosis, rescue verdicts, markdown ladder, reports, dates…): all money and analysis decisions live there and are unit-tested next to them (`*.test.js`).
+- Other `src/lib` modules talk to the database (Prisma) or Shopify (`admin.js`, `*-shopify.js`); `src/lib/sync/` imports data, `src/lib/jobs/` runs background work.
+- Shared helpers: dates as `YYYY-MM-DD` store dates (`dates.js`), plan features and limits (`plans.js`, `feature-gate.js`).
+
 ## How it works
 
 - **Auth:** App Bridge adds a session token to every `fetch` from the embedded UI. `src/lib/auth.js` verifies it and, on first use, exchanges it for an expiring offline token (refreshed automatically). Tokens are encrypted at rest (`src/lib/crypto.js`).

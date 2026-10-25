@@ -1,12 +1,18 @@
 import { db } from "@/lib/db";
-import { enqueue } from "@/lib/jobs/queue";
 import { billingIsTest } from "@/lib/env";
+import { HttpError } from "@/lib/http-error";
+import { enqueue } from "@/lib/jobs/queue";
 import { PAID_PLANS, getPlan, planFromSubscriptions, remainingTrialDays } from "@/lib/plans";
 import { shopify } from "@/lib/shopify";
 
 const paidNames = PAID_PLANS.map((p) => p.name);
 
-export class PlanError extends Error {}
+/** A plan change that can't happen (e.g. already on that plan): answered with 409. */
+export class PlanError extends HttpError {
+  constructor(message) {
+    super(message, 409);
+  }
+}
 
 async function activeSubscriptions(session) {
   const result = await shopify().billing.check({

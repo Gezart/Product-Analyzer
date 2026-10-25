@@ -1,5 +1,7 @@
 // Plans from docs/PLAN.md → "Pricing and billing". No imports so node:test can load it directly.
 
+import { DAY_MS } from "./dates.js";
+
 export const TRIAL_DAYS = 14;
 
 export const PLANS = [
@@ -8,8 +10,6 @@ export const PLANS = [
   { id: "growth", name: "Growth", price: 39, products: 2000, diagnoses: 150, features: ["Compare", "Monthly reports"] },
   { id: "pro", name: "Pro", price: 79, products: Infinity, diagnoses: 500, features: ["Bulk fixes", "Priority support"] },
 ];
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** One trial per shop: days left from the first paid subscription, 0 once used up. */
 export function remainingTrialDays(trialStartedAt, now = new Date()) {

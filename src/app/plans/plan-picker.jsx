@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiError } from "@/app/api-error";
 
 export function PlanPicker() {
   const [plans, setPlans] = useState([]);
@@ -11,7 +12,7 @@ export function PlanPicker() {
 
   async function load() {
     const res = await fetch("/api/billing");
-    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    if (!res.ok) throw await apiError(res);
     const data = await res.json();
     setPlans(data.plans);
     setCurrent(data.current);
@@ -31,13 +32,13 @@ export function PlanPicker() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan: planId }),
       });
-      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+      if (!res.ok) throw await apiError(res);
       const { confirmationUrl } = await res.json();
       // Shopify's approval page must open in the top window, outside the iframe.
       if (confirmationUrl) window.open(confirmationUrl, "_top");
       else await load();
     } catch (e) {
-      setError((e).message);
+      setError(e.message);
     } finally {
       setPending(null);
     }

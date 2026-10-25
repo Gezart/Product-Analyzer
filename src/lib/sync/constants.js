@@ -1,9 +1,9 @@
 // Pure (no imports) so node:test can load it directly.
 
+import { DAY_MS } from "../dates.js";
+
 /** Days of order history synced (Shopify's default `read_orders` window). */
 export const ORDER_DAYS = 60;
-
-const DAY_MS = 86_400_000;
 
 /** A local date as stored in the orders step's cursor (YYYY-MM-DD); anything else is ignored. */
 export function isLocalDate(value) {

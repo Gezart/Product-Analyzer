@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { PLANS, getPlan, planFromSubscriptions, remainingTrialDays } from "./plans.js";
+import { getPlan, hasFeature, planFromSubscriptions, PLANS, productLimit, remainingTrialDays, withinLimit } from "./plans.js";
 
 test("plans match the pricing table", () => {
   assert.deepEqual(
@@ -37,7 +37,6 @@ test("trial is given once per shop", () => {
   assert.equal(remainingTrialDays(daysAgo(-3), now), 14);
 });
 
-import { hasFeature, productLimit, withinLimit } from "./plans.js";
 
 test("features by plan: each plan includes the ones below it", () => {
   assert.equal(hasFeature("free", "fixCenter"), false);

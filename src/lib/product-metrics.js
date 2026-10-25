@@ -1,11 +1,10 @@
 // Per-product analysis — docs/PLAN.md module 3. Pure (no imports) so node:test can load it.
 
-const DAY_MS = 86_400_000;
-const shift = (date, days) => new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+import { shiftDate } from "./dates.js";
 
 /** Totals for the `days` days before `today` (today itself is incomplete and left out). */
 export function windowTotals(rows, today, days) {
-  const from = shift(today, -days);
+  const from = shiftDate(today, -days);
   const inWindow = rows.filter((r) => r.date >= from && r.date < today);
   const sum = (key) => inWindow.reduce((s, r) => s + r[key], 0);
   const views = sum("viewSessions");
@@ -26,7 +25,7 @@ export function windowTotals(rows, today, days) {
 export function dailySeries(rows, today, days, knownDays = days) {
   const byDate = new Map(rows.map((r) => [r.date, r]));
   return Array.from({ length: days }, (_, i) => {
-    const date = shift(today, i - days);
+    const date = shiftDate(today, i - days);
     const r = byDate.get(date);
     return { date, units: r?.units ?? 0, revenue: r?.revenue ?? 0, known: days - i <= knownDays };
   });

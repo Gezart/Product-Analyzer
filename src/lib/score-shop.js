@@ -1,12 +1,11 @@
+import { DAY_MS } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { scoreProducts, stockFromVariants } from "@/lib/scoring";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { attentionSummary } from "@/lib/notifications";
-import { productLimit, withinLimit } from "@/lib/plans";
 import { notify } from "@/lib/notify";
+import { productLimit, withinLimit } from "@/lib/plans";
+import { scoreProducts, stockFromVariants } from "@/lib/scoring";
 import { knownOrderDays } from "@/lib/sync/constants";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Recomputes metrics, status and money at stake for every product of a shop and writes one

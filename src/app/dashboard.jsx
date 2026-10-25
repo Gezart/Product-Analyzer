@@ -21,7 +21,7 @@ export function Dashboard() {
         setError(null);
         if (!body.imported) timer = setTimeout(load, 5000);
       } catch (e) {
-        setError((e).message);
+        setError(e.message);
       }
     };
     load();

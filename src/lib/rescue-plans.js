@@ -1,12 +1,9 @@
+import { asDate, dateKey, DAY_MS } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
-import { evaluateWindow, WINDOW } from "@/lib/rescue";
 import { notify } from "@/lib/notify";
+import { evaluateWindow, WINDOW } from "@/lib/rescue";
 import { isLocalDate, ORDER_DAYS } from "@/lib/sync/constants";
-
-const DAY_MS = 86_400_000;
-const dateKey = (d) => d.toISOString().slice(0, 10);
-const asDate = (key) => new Date(`${key}T00:00:00Z`);
 
 /** Windows close only after the nightly order catch-up (04:00 store time) has filled the last day. */
 const CLOSE_AFTER_HOUR = 5;

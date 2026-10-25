@@ -1,3 +1,4 @@
+import { DAY_MS } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { diagnose, median, reasonSignature } from "@/lib/diagnosis";
 import { localDateKey } from "@/lib/jobs/schedule";
@@ -5,8 +6,6 @@ import { sanitizeThresholds } from "@/lib/scoring";
 
 /** Rules version stored with each diagnosis (AI-written summaries come in v2). */
 export const RULES_VERSION = "rules-v1";
-
-const DAY_MS = 86_400_000;
 
 async function sessions30(shopId, timeZone) {
   const today = new Date(`${localDateKey(new Date(), timeZone)}T00:00:00Z`);

@@ -60,8 +60,8 @@ export function validateFix(type, raw) {
 export function sameState(type, a, b) {
   if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
   if (type === "collection") {
-    const x = [...((a).collectionIds ?? [])].sort();
-    const y = [...((b).collectionIds ?? [])].sort();
+    const x = [...(a.collectionIds ?? [])].sort();
+    const y = [...(b.collectionIds ?? [])].sort();
     return x.length === y.length && x.every((id, i) => id === y[i]);
   }
   return JSON.stringify(a) === JSON.stringify(b, Object.keys(a));

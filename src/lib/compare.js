@@ -1,8 +1,8 @@
 // Compare products — docs/PLAN.md module 9. Pure (relative imports only) so node:test can load it.
+import { DAY_MS } from "./dates.js";
 import { MATERIAL_WORDS, MIN_IMAGES, MIN_WORDS, SIZE_WORDS, USE_WORDS } from "./diagnosis.js";
 
 export const MAX_COMPARE = 4;
-const DAY_MS = 86_400_000;
 
 /** `ids` from the query string: comma-separated product ids or Shopify GIDs, 1–4 distinct ones, or null. */
 export function parseCompareIds(raw) {

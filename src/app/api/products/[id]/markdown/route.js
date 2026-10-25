@@ -1,40 +1,23 @@
-import { authenticate, AuthError } from "@/lib/auth";
-import { featureGate, productGate } from "@/lib/feature-gate";
-import { approveMarkdown, MarkdownError, markdownOverview } from "@/lib/markdown-engine";
+import { overLimitUpgrade, requireFeature, requireWithinLimit } from "@/lib/feature-gate";
+import { approveMarkdown, markdownOverview } from "@/lib/markdown-engine";
 import { FEATURE_PLAN, hasFeature } from "@/lib/plans";
-
-function handle(error) {
-  if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
-  if (error instanceof MarkdownError) return Response.json({ error: error.message }, { status: error.status });
-  throw error;
-}
+import { appRoute, readJson } from "@/lib/route";
 
 /**
  * The product's markdown: the running (or last) plan, and — when it qualifies (rescue plan ended with
  * no change, or dead stock) and nothing is running — a preview of the ladder from live prices.
  */
-export async function GET(request, ctx) {
-  try {
-    const { shop } = await authenticate(request);
-    const { id } = await ctx.params;
-    const overLimit = await productGate(shop, id);
-    const upgrade = !hasFeature(shop.plan, "markdown") ? FEATURE_PLAN.markdown : overLimit ? (await overLimit.json()).upgrade : null;
-    return Response.json({ ...(await markdownOverview(shop.id, id, { preview: !upgrade })), upgrade });
-  } catch (error) {
-    return handle(error);
-  }
-}
+export const GET = appRoute(async ({ shop, params }) => {
+  const { id } = params;
+  const upgrade = hasFeature(shop.plan, "markdown") ? await overLimitUpgrade(shop, id) : FEATURE_PLAN.markdown;
+  return Response.json({ ...(await markdownOverview(shop.id, id, { preview: !upgrade })), upgrade });
+});
 
 // Body: { expected: LadderProposal } — the previewed schedule the merchant approved.
-export async function POST(request, ctx) {
-  try {
-    const { shop } = await authenticate(request);
-    const { id } = await ctx.params;
-    const blocked = featureGate(shop, "markdown") ?? (await productGate(shop, id));
-    if (blocked) return blocked;
-    const body = (await request.json().catch(() => null));
-    return Response.json(await approveMarkdown(shop.id, id, body?.expected));
-  } catch (error) {
-    return handle(error);
-  }
-}
+export const POST = appRoute(async ({ request, shop, params }) => {
+  const { id } = params;
+  requireFeature(shop, "markdown");
+  await requireWithinLimit(shop, id);
+  const body = await readJson(request);
+  return Response.json(await approveMarkdown(shop.id, id, body?.expected));
+});

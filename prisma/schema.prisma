@@ -167,6 +167,7 @@ model Diagnosis {
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   fixes   Fix[]
 
+  @@index([productId, createdAt])
   @@map("diagnoses")
 }
 
@@ -231,6 +232,7 @@ model MarkdownPlan {
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   rescuePlan RescuePlan? @relation(fields: [rescuePlanId], references: [id], onDelete: SetNull)
 
+  @@index([productId, startedAt])
   @@map("markdown_plans")
 }
 
@@ -256,6 +258,7 @@ model PriceChange {
   variant Variant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
 
   @@index([productId, changedAt])
+  @@index([planId, status])
   @@map("price_changes")
 }
 

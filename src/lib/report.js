@@ -6,12 +6,10 @@
 // the window ends (its verdict comes right after). Markdown periods: from approval until the day
 // before the plan ended, counted day by day in each month. A day is counted once per product.
 
-const DAY_MS = 86_400_000;
+import { daysBetween, round2, shiftDate } from "./dates.js";
+
 /** Markdown baseline: average daily revenue over the 30 days before the plan started. */
 export const MARKDOWN_BASELINE_DAYS = 30;
-const round2 = (n) => Math.round(n * 100) / 100;
-const shift = (date, days) => new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
-const daysBetween = (from, to) => Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS);
 
 /** First and last day of a "YYYY-MM" month, or null for anything else. */
 export function monthRange(period) {
@@ -22,7 +20,7 @@ export function monthRange(period) {
 
 /** The month before `today` ("YYYY-MM-DD" → "YYYY-MM"). */
 export function previousMonth(today) {
-  return shift(`${today.slice(0, 7)}-01`, -1).slice(0, 7);
+  return shiftDate(`${today.slice(0, 7)}-01`, -1).slice(0, 7);
 }
 
 /** Months from `first` to `last` ("YYYY-MM", inclusive), newest first. */
@@ -45,9 +43,9 @@ export function dailyBaseline(rows, from, to) {
  * of the known history; null when none of it is known.
  */
 export function markdownPeriod({ startedOn, endedOn, historyFrom }) {
-  const baseFrom = [shift(startedOn, -MARKDOWN_BASELINE_DAYS), historyFrom].sort()[1];
-  const baseTo = shift(startedOn, -1);
-  return { from: startedOn, to: endedOn ? shift(endedOn, -1) : null, baseline: baseFrom <= baseTo ? [baseFrom, baseTo] : null };
+  const baseFrom = [shiftDate(startedOn, -MARKDOWN_BASELINE_DAYS), historyFrom].sort()[1];
+  const baseTo = shiftDate(startedOn, -1);
+  return { from: startedOn, to: endedOn ? shiftDate(endedOn, -1) : null, baseline: baseFrom <= baseTo ? [baseFrom, baseTo] : null };
 }
 
 /** Average unit cost of the variants that have one (a cost of 0 counts as not set); null if none. */
@@ -65,12 +63,12 @@ export function averageCost(costs) {
  */
 export function monthlyReport({ period, today, periods, daily, unitCost, fixes }) {
   const month = monthRange(period);
-  const last = [month.to, shift(today, -1)].sort()[0];
+  const last = [month.to, shiftDate(today, -1)].sort()[0];
   const seen = new Map();
   const daysOf = (productId) => (seen.has(productId) ? seen.get(productId) : seen.set(productId, new Set()).get(productId));
   const rescues = periods.filter((p) => p.kind === "rescue");
   // Reserve every rescue window's days first, so a markdown day inside one is never counted twice.
-  for (const p of rescues) for (let d = p.from; d <= p.to; d = shift(d, 1)) daysOf(p.productId).add(`rescue:${d}`);
+  for (const p of rescues) for (let d = p.from; d <= p.to; d = shiftDate(d, 1)) daysOf(p.productId).add(`rescue:${d}`);
 
   const rows = [];
   const add = (p, from, to, dayList) => {
@@ -107,7 +105,7 @@ export function monthlyReport({ period, today, periods, daily, unitCost, fixes }
   for (const p of [...rescues].sort((a, b) => a.from.localeCompare(b.from))) {
     if (p.to < month.from || p.to > last) continue;
     const dayList = [];
-    for (let d = p.from; d <= p.to; d = shift(d, 1)) if (!daysOf(p.productId).has(d)) dayList.push(d);
+    for (let d = p.from; d <= p.to; d = shiftDate(d, 1)) if (!daysOf(p.productId).has(d)) dayList.push(d);
     dayList.forEach((d) => daysOf(p.productId).add(d));
     if (dayList.length) add(p, p.from, p.to, dayList);
   }
@@ -117,7 +115,7 @@ export function monthlyReport({ period, today, periods, daily, unitCost, fixes }
     if (from > to) continue;
     const dayList = [];
     const own = daysOf(p.productId);
-    for (let d = from; d <= to; d = shift(d, 1)) if (!own.has(d) && !own.has(`rescue:${d}`)) dayList.push(d);
+    for (let d = from; d <= to; d = shiftDate(d, 1)) if (!own.has(d) && !own.has(`rescue:${d}`)) dayList.push(d);
     dayList.forEach((d) => own.add(d));
     if (dayList.length) add(p, from, to, dayList);
   }

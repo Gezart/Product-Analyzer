@@ -1,5 +1,6 @@
 import { getOfflineSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { errorMessage } from "@/lib/http-error";
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { enqueue } from "@/lib/jobs/queue";
 import { localDateKey } from "@/lib/jobs/schedule";
@@ -15,7 +16,6 @@ const CHUNK_DAYS = 7;
 /** Row counts at which an answer may have been cut off (common limits), when more rows were possible. */
 const CAPS = [1000, 10_000, 100_000];
 const BATCH = 20_000;
-const message = (e) => (e instanceof Error ? e.message : String(e)).slice(0, 500);
 
 /** The query can't be run (refused, no access, unusable or cut-off answer): retrying won't help. */
 class ViewsUnavailable extends Error {}
@@ -78,7 +78,7 @@ async function readViews(session, range, preferred, products, signal) {
       try {
         r = await runShopifyql(session, query);
       } catch (e) {
-        if (isAccessDenied(message(e))) throw new ViewsUnavailable(`${id}: ${message(e)}`);
+        if (isAccessDenied(errorMessage(e))) throw new ViewsUnavailable(`${id}: ${errorMessage(e)}`);
         throw e;
       }
       const parsed = r.ok ? viewRows(r.rows) : [];
