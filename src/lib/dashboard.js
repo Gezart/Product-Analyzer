@@ -30,10 +30,22 @@ export function summarize(rows, topN = 10) {
     moneyStuck: round2(stuck.reduce((sum, r) => sum + r.stockValue, 0)),
     moneyStuckIsEstimate: stuck.some((r) => r.costIsEstimate),
     productCount: scored.length,
+    /** Every status except healthy and new asks the merchant to do something. */
+    needsAttention: scored.filter((r) => r.status !== "healthy" && r.status !== "new").length,
+    moneyAtStakeTotal: round2(scored.reduce((sum, r) => sum + r.moneyAtStake, 0)),
     overLimit: rows.filter((r) => r.status === "over_limit").length,
     byStatus,
     top,
   };
+}
+
+/** Where "money stuck in stock" sits: dead stock vs slow movers (products, stock value, dead stock's share of it). */
+export function stuckSplit(byStatus) {
+  const get = (status) => byStatus.find((s) => s.status === status) ?? { count: 0, stockValue: 0 };
+  const dead = get("dead_stock");
+  const slow = get("slow_mover");
+  const value = dead.stockValue + slow.stockValue;
+  return { products: dead.count + slow.count, value: round2(value), deadShare: value > 0 ? dead.stockValue / value : 0 };
 }
 
 

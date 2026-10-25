@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { listen } from "@/app/polaris-events";
+import { CARD, EYEBROW } from "@/app/status-style";
 import { UpgradeBanner } from "@/app/upgrade-banner";
 import { monthRange } from "@/lib/report";
 import { moneyFormatter } from "@/lib/status-info";
@@ -85,26 +86,24 @@ export function ReportView() {
                 {monthName(report.period)} so far: complete days up to {report.to}. Rescue plans count once their window ends.
               </s-banner>
             )}
-            <s-section>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Headline
-                  label="Revenue recovered"
-                  value={money.format(report.revenueRecovered)}
-                  formula="Per product: actual revenue − baseline daily revenue × days, never below 0. Periods: the measurement window of each rescue plan that improved (counted in the month it ends; baseline = its window before the fix) and each markdown's days this month (baseline = the 30 days before it started)."
-                />
-                <Headline
-                  label="Stock value cleared"
-                  value={`${money.format(report.stockValueCleared)}${report.stockValueIsEstimate ? " (partly estimated)" : ""}`}
-                  formula="Units sold in those same periods × unit cost (50% of the sale price where no cost is set in Shopify)."
-                />
-                <Headline label="Products rescued" value={String(report.productsRescued)} formula="Products whose rescue plan's measurement window ended this month with the verdict “improved”." />
-                <Headline
-                  label="Fixes applied"
-                  value={String(report.fixes.length)}
-                  formula="Fixes applied to Shopify this month; the effect is the verdict of the rescue plan they belong to."
-                />
-              </div>
-            </s-section>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Headline
+                label="Revenue recovered"
+                value={money.format(report.revenueRecovered)}
+                formula="Per product: actual revenue − baseline daily revenue × days, never below 0. Periods: the measurement window of each rescue plan that improved (counted in the month it ends; baseline = its window before the fix) and each markdown's days this month (baseline = the 30 days before it started)."
+              />
+              <Headline
+                label="Stock value cleared"
+                value={`${money.format(report.stockValueCleared)}${report.stockValueIsEstimate ? " (partly estimated)" : ""}`}
+                formula="Units sold in those same periods × unit cost (50% of the sale price where no cost is set in Shopify)."
+              />
+              <Headline label="Products rescued" value={String(report.productsRescued)} formula="Products whose rescue plan's measurement window ended this month with the verdict “improved”." />
+              <Headline
+                label="Fixes applied"
+                value={String(report.fixes.length)}
+                formula="Fixes applied to Shopify this month; the effect is the verdict of the rescue plan they belong to."
+              />
+            </div>
 
             <s-section heading="Where the revenue came from">
               {report.rows.length === 0 ? (
@@ -191,10 +190,10 @@ export function ReportView() {
 
 function Headline({ label, value, formula }) {
   return (
-    <div>
-      <div className="text-sm text-zinc-500">{label}</div>
-      <div className="text-2xl font-semibold">{value}</div>
-      <div className="mt-1 text-xs text-zinc-500">{formula}</div>
+    <div className={`${CARD} flex flex-col p-5`}>
+      <div className={EYEBROW}>{label}</div>
+      <div className="mt-2 text-4xl font-bold tracking-tight text-zinc-900 tabular-nums">{value}</div>
+      <div className="mt-3 border-t border-zinc-100 pt-3 text-xs leading-relaxed text-zinc-500">{formula}</div>
     </div>
   );
 }

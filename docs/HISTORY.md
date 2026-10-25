@@ -10,7 +10,17 @@
 - Smaller: products under 30 days old aren't slow movers yet; price log names the variant and the reason; markdown shows when the current step went live; report names fix types and undone fixes; Compare says it needs Growth before picking; import errors in plain words
 - Second customer test round: new status "New" for products under 30 days old that would otherwise be slow (no money at stake, "too early to judge"); untracked products (gift cards) have no days of stock anywhere; products not analyzed (excluded, over the limit) still show their stock value; on phones the Top 10 and the list keep money and days of stock visible; the next step says when a markdown is running; "sells well" isn't said after worse or unchanged fixes
 - Auth: a token Shopify refuses is an auth error (401), and a refused refresh falls back to a token exchange; the plan webhook answers 500 on a refused token (Shopify retries) instead of setting a paying shop to Free; the fix center keeps its drafts after an outage; unanalyzed products show "—" for stock value when it's unknown
+- Merged with the UI redesign: its status tiles open the product list and include "New" (which doesn't count as needing attention), days of stock read "over a year" when huge, plan cards show only limits the app enforces and keep the Free confirmation; restored the imports the earlier merge dropped (`/api/dashboard` and the plans page failed on staging)
 - Not changed (design choices, noted): description is edited as HTML; one "Apply" per part of the page
+
+## 2026-10-25 · ui-redesign
+- Catalog health redesigned: large "money stuck in stock" card with a one-line takeaway, products analyzed / need attention / money at stake, a stacked bar and a tile per status (empty statuses muted), a "Next best move" card (#1 product, its action, up next #2–#4) and a Top 10 table with rank, money-at-stake bars and an action per row; "Days of stock" only shows when a product has it
+- Free-plan stores with products that need attention see one line on what Starter adds (dashboard API now returns `plan`)
+- `summarize()` adds `needsAttention` and `moneyAtStakeTotal`; new pure `stuckSplit()` for the dead/slow sentence (shares never round to 0% or 100%); 2 new unit tests (141 pass)
+- Inbox: icon per notification type, unread highlight, empty state; Monthly report: headline numbers as cards with the formula under each; Plans: cards with limits, "Everything in X, plus", current plan and the next plan up as recommended
+- Custom text uses Polaris' font stack; the unused Geist Google fonts are removed (the build no longer fetches Google Fonts); shared card and status colors in `src/app/status-style.js`
+- Polaris web components + Tailwind only, no new dependencies; container queries, no sideways scrolling from 320px up (Top 10 hides columns and shows status and days under the title)
+- Open: look at it inside the Shopify admin on the dev store (Polaris components can't load in this environment)
 
 ## 2026-10-25 · code-review
 - Senior review of the whole codebase; fixes are behaviour-preserving

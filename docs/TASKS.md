@@ -52,6 +52,7 @@ Status: `todo` · `doing` · `done` · `blocked`.
 | `inbox` | In-app notifications | Actions appear in inbox | done (dev-store test pending) |
 | `monthly-report` | Revenue recovered (documented formula), stock cleared, fixes | Formula shown next to each number | done (dev-store test pending) |
 | `plan-limits` | Enforce products and diagnoses per plan | Limits block correctly; upgrade prompt shown | products + features done; diagnoses limit waits on owner |
+| `ui-redesign` | Redesign Catalog health, Inbox, Monthly report and Plans (Polaris + Tailwind) | Owner approves the look on the dev store | done (dev-store look pending) |
 
 ## v2 (not in v1)
 
