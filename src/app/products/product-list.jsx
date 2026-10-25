@@ -7,7 +7,7 @@ import { apiError } from "@/app/api-error";
 import { listen } from "@/app/polaris-events";
 import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
-const STATUSES = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "stockout_risk", "healthy", "excluded", "over_limit"];
+const STATUSES = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "stockout_risk", "healthy", "new", "excluded", "over_limit"];
 const SORTS = {
   money: { label: "Money at stake", compare: (a, b) => b.moneyAtStake - a.moneyAtStake || b.stockValue - a.stockValue },
   days: { label: "Fewest days of stock", compare: (a, b) => (a.daysOfCover ?? Infinity) - (b.daysOfCover ?? Infinity) },
@@ -76,13 +76,13 @@ export function ProductList() {
                 <s-paragraph>No products here.</s-paragraph>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[560px] text-left text-sm">
+                  <table className="w-full text-left text-sm">
                     <thead className="text-zinc-500">
                       <tr>
                         <th className="py-2 pr-4 font-medium">Product</th>
                         <th className="py-2 pr-4 font-medium">Status</th>
                         <th className="py-2 pr-4 text-right font-medium">Money at stake</th>
-                        <th className="py-2 pr-4 text-right font-medium">Stock value</th>
+                        <th className="hidden py-2 pr-4 text-right font-medium sm:table-cell">Stock value</th>
                         <th className="py-2 text-right font-medium">Days of stock</th>
                       </tr>
                     </thead>
@@ -98,7 +98,7 @@ export function ProductList() {
                             <s-badge tone={STATUS_INFO[p.status]?.tone}>{STATUS_INFO[p.status]?.label ?? p.status}</s-badge>
                           </td>
                           <td className="py-2 pr-4 text-right">{p.moneyAtStake > 0 ? money.format(p.moneyAtStake) : "—"}</td>
-                          <td className="py-2 pr-4 text-right">{money.format(p.stockValue)}</td>
+                          <td className="hidden py-2 pr-4 text-right sm:table-cell">{money.format(p.stockValue)}</td>
                           <td className="py-2 text-right">{formatDays(p.daysOfCover)}</td>
                         </tr>
                       ))}

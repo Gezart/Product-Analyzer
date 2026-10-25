@@ -121,7 +121,11 @@ export function FixCenter({ productId, onChanged }) {
     <s-section heading="Fix center">
       <s-stack gap="base">
         {data.upgrade && <UpgradeBanner>{data.upgrade.reason}</UpgradeBanner>}
-        {data.liveError && <s-banner tone="warning">{data.liveError} Editing needs the live product; your fix history and undo are below.</s-banner>}
+        {data.liveError && (
+          <s-banner tone="warning">
+            {data.liveError} Editing needs the live product{data.fixes.length > 0 ? "; your fix history and undo are below" : ""}.
+          </s-banner>
+        )}
         {message && (
           <s-banner tone={message.tone}>
             {message.text}{" "}

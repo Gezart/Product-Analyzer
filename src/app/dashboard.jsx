@@ -69,7 +69,7 @@ export function Dashboard() {
         </s-stack>
       </s-section>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         {data.byStatus.map((s) => (
           <Link key={s.status} href={`/products?status=${s.status}`} className="rounded-lg hover:ring-2 hover:ring-zinc-300">
             <s-box padding="base" background="subdued" borderRadius="base">
@@ -88,12 +88,12 @@ export function Dashboard() {
           <s-paragraph>Nothing needs attention right now.</s-paragraph>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px] text-left text-sm">
+            <table className="w-full text-left text-sm">
               <thead className="text-zinc-500">
                 <tr>
                   <th className="py-2 pr-4 font-medium">Product</th>
                   <th className="py-2 pr-4 font-medium">Status</th>
-                  <th className="py-2 pr-4 font-medium">Next action</th>
+                  <th className="hidden py-2 pr-4 font-medium sm:table-cell">Next action</th>
                   <th className="py-2 pr-4 text-right font-medium">Money at stake</th>
                   <th className="py-2 text-right font-medium">Days of stock</th>
                 </tr>
@@ -109,7 +109,7 @@ export function Dashboard() {
                     <td className="py-2 pr-4">
                       <s-badge tone={STATUS_INFO[r.status]?.tone}>{STATUS_INFO[r.status]?.label ?? r.status}</s-badge>
                     </td>
-                    <td className="py-2 pr-4">{STATUS_INFO[r.status]?.action}</td>
+                    <td className="hidden py-2 pr-4 sm:table-cell">{STATUS_INFO[r.status]?.action}</td>
                     <td className="py-2 pr-4 text-right">{money.format(r.moneyAtStake)}</td>
                     <td className="py-2 text-right">{formatDays(r.daysOfCover)}</td>
                   </tr>

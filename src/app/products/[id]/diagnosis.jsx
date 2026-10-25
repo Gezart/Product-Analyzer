@@ -46,7 +46,7 @@ export function Diagnosis({ productId }) {
       {error && <s-banner tone="critical">Could not run the diagnosis.</s-banner>}
       {upgrade && <UpgradeBanner>{upgrade}</UpgradeBanner>}
       {!error && !upgrade && !reasons && <s-spinner accessibilityLabel="Diagnosing" />}
-      {reasons?.length === 0 && <s-paragraph>No problems found on this product's page, price or stock.</s-paragraph>}
+      {reasons?.length === 0 && <s-paragraph>No problems found on this product's page or price.</s-paragraph>}
       {reasons && reasons.length > 0 && (
         <ul className="m-0 list-none space-y-3 p-0">
           {reasons.map((r) => (

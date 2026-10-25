@@ -8,6 +8,7 @@
 - Product page: status, next step and key numbers first; the next step follows a running rescue plan; untracked products (gift cards) show "Not tracked"; days of stock as "over a year" when huge; variant names without "Default Title"
 - Phone: two status tiles per row, tables scroll sideways instead of being cut off, the sales chart starts at the latest days and a tap shows the day
 - Smaller: products under 30 days old aren't slow movers yet; price log names the variant and the reason; markdown shows when the current step went live; report names fix types and undone fixes; Compare says it needs Growth before picking; import errors in plain words
+- Second customer test round: new status "New" for products under 30 days old that would otherwise be slow (no money at stake, "too early to judge"); untracked products (gift cards) have no days of stock anywhere; products not analyzed (excluded, over the limit) still show their stock value; on phones the Top 10 and the list keep money and days of stock visible; the next step says when a markdown is running; "sells well" isn't said after worse or unchanged fixes
 - Not changed (design choices, noted): description is edited as HTML; one "Apply" per part of the page
 
 ## 2026-10-25 · code-review

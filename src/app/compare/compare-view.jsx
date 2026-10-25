@@ -181,7 +181,7 @@ export function CompareView() {
               </table>
             </div>
             <s-text tone="neutral">
-              Best value in each row is highlighted. Views and conversion appear once view sync is connected. Margin uses the unit cost
+              Best value in each row is highlighted.{products.some((p) => p.views > 0) ? "" : " Views and conversion appear once view sync is connected."} Margin uses the unit cost
               in Shopify; page quality counts the diagnosis&apos;s per-product page checks.
             </s-text>
           </s-section>

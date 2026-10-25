@@ -93,13 +93,15 @@ export async function diagnoseProduct(shopId, productId) {
     include: { variants: { select: { options: true, inventoryQty: true, sellsWhenOut: true }, orderBy: { shopifyGid: "asc" } } },
   });
   if (!product) return null;
-  const [{ context, sessions }, duplicates, score] = await Promise.all([
+  const [{ context, sessions }, duplicates, score, rescue] = await Promise.all([
     buildContext(shopId, shop?.timezone ?? null, shop?.currency ?? null),
     sameDescription(shopId, productId),
     db().productScore.findFirst({ where: { productId }, orderBy: { computedAt: "desc" }, select: { status: true } }),
+    db().rescuePlan.findFirst({ where: { productId }, orderBy: { startedAt: "desc" }, select: { verdict: true } }),
   ]);
-  // A product that sells well isn't "not selling": its price isn't questioned and the page says so.
-  const sellingWell = ["healthy", "stockout_risk"].includes(score?.status);
+  // A product that sells well isn't "not selling": its price isn't questioned and the page says so —
+  // unless its last fixes made sales worse or changed nothing.
+  const sellingWell = ["healthy", "stockout_risk"].includes(score?.status) && !["worse", "no_change"].includes(rescue?.verdict);
   // Rows synced before the text was stored have words but no text: the next catalog refresh fills it.
   const pageDataKnown = product.description != null || product.descriptionWords === 0;
   const s = sessions.get(product.id);

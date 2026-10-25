@@ -205,6 +205,7 @@ test("weights match the plan", () => {
     hidden_gem: 0.4,
     stockout_risk: 0,
     healthy: 0,
+    new: 0,
     excluded: 0,
   });
 });
@@ -243,6 +244,7 @@ test("a product listed less than 30 days ago isn't a slow mover yet", () => {
   const base = { id: "n", stock: 50, stockValue: 500, costIsEstimate: false, units30: 0, unitsPrev30: 0, units60: 0, views30: 0, purchases30: 0, daysSinceLastSale: null };
   const [young] = scoreProducts([{ ...base, ageDays: 20 }], undefined, 60);
   const [older] = scoreProducts([{ ...base, ageDays: 45 }], undefined, 60);
-  assert.notEqual(young.status, "slow_mover");
+  assert.equal(young.status, "new");
+  assert.equal(young.moneyAtStake, 0);
   assert.equal(older.status, "slow_mover");
 });

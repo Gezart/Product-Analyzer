@@ -14,6 +14,7 @@ export const GET = appRoute(async ({ shop, params }) => {
       variants: { select: { id: true, sku: true, options: true, price: true, cost: true, inventoryQty: true, sellsWhenOut: true }, orderBy: { shopifyGid: "asc" } },
       scores: { orderBy: { computedAt: "desc" }, take: 1 },
       rescuePlans: { orderBy: { startedAt: "desc" }, take: 1 },
+      markdownPlans: { where: { status: { in: ["active", "paused"] } }, take: 1, select: { status: true } },
     },
   });
   if (!product) return Response.json({ error: "Not found" }, { status: 404 });
@@ -78,6 +79,7 @@ export const GET = appRoute(async ({ shop, params }) => {
     // Live stock, its value and days of stock (the score is from the last nightly run).
     stock: stock.stock,
     // Sold without stock (inventory not tracked, e.g. a gift card): stock numbers don't apply.
+    markdownRunning: product.markdownPlans.length > 0,
     untracked: product.variants.length > 0 && product.variants.every((v) => v.sellsWhenOut) && stock.stock <= 0,
     stockValue: stock.stockValue,
     stockValueIsEstimate: stock.costIsEstimate,

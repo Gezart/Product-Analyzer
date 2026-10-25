@@ -2,7 +2,7 @@
 
 import { round2 } from "./dates.js";
 
-export const STATUS_ORDER = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "stockout_risk", "healthy"];
+export const STATUS_ORDER = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "stockout_risk", "healthy", "new"];
 
 /** Statuses whose stock counts as "money stuck in stock". */
 const STUCK = new Set(["dead_stock", "slow_mover"]);

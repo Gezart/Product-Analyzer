@@ -25,6 +25,7 @@ export const STATUS_WEIGHTS = {
   hidden_gem: 0.4,
   stockout_risk: 0,
   healthy: 0,
+  new: 0,
   excluded: 0,
 };
 
@@ -67,7 +68,8 @@ export function computeMetrics(p) {
   const daily = p.units30 / 30;
   return {
     sellThrough: sold60 > 0 ? clamp01(p.units60 / sold60) : null,
-    daysOfCover: daily > 0 ? stock / daily : null,
+    // Sold without stock (inventory not tracked, e.g. gift cards): days of stock don't apply.
+    daysOfCover: daily > 0 && !(p.sellsWhenOut && p.stock <= 0) ? stock / daily : null,
     stockValue: p.stockValue,
     costIsEstimate: p.costIsEstimate,
     trend: p.unitsPrev30 > 0 ? p.units30 / p.unitsPrev30 : null,
@@ -103,7 +105,8 @@ export function computeBenchmarks(products, t) {
 const NEW_PRODUCT_DAYS = 30;
 
 /**
- * First matching status wins: dead stock, stock-out risk, page problem, slow mover, hidden gem, healthy.
+ * First matching status wins: dead stock, stock-out risk, page problem, slow mover (or new, under 30
+ * days old), hidden gem, healthy.
  * `historyDays` is how many days of orders are synced; dead stock needs proof of `deadDays` without a sale,
  * capped at the product's age so new products are never dead.
  */
@@ -115,9 +118,8 @@ export function classify(p, m, b, t, historyDays) {
   }
 
   const growing = m.trend == null ? p.units30 > 0 : m.trend >= 1;
-  // Products that sell without stock (inventory not tracked, e.g. gift cards) can't run out.
-  const canRunOut = !(p.sellsWhenOut && p.stock <= 0);
-  if (canRunOut && m.daysOfCover != null && m.daysOfCover < t.stockoutCoverDays && growing) return "stockout_risk";
+  // (Products sold without stock have no days of stock, so they never run out.)
+  if (m.daysOfCover != null && m.daysOfCover < t.stockoutCoverDays && growing) return "stockout_risk";
 
   const judged = p.views30 >= t.minViews && m.conversion != null && b.medianConversion != null;
   if (judged && p.views30 >= b.viewsTopCut && m.conversion < b.medianConversion * t.pageProblemConversionRatio) {
@@ -126,9 +128,9 @@ export function classify(p, m, b, t, historyDays) {
 
   // Low sell-through with stock and not dead (yet): includes products without a sale in the last
   // 60 days but sold within deadDays, and no-sale products whose history or age is too short to call dead.
-  // A product listed less than 30 days ago hasn't had the time to be a slow mover.
+  // A product listed less than 30 days ago hasn't had the time to be a slow mover: it's "new".
   const tooNew = p.ageDays != null && p.ageDays < NEW_PRODUCT_DAYS;
-  if (!tooNew && p.stock > 0 && m.sellThrough != null && m.sellThrough < t.slowSellThrough) return "slow_mover";
+  if (p.stock > 0 && m.sellThrough != null && m.sellThrough < t.slowSellThrough) return tooNew ? "new" : "slow_mover";
 
   if (judged && p.views30 <= b.viewsBottomCut && m.conversion > b.medianConversion) return "hidden_gem";
 

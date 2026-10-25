@@ -34,10 +34,11 @@ export function ProductView() {
   const money = moneyFormatter(data.currency);
   const money2 = moneyFormatter(data.currency, 2);
   const info = data.score ? STATUS_INFO[data.score.status] : null;
-  // A running or finished rescue plan decides what comes next, before the status's general advice.
+  // A running markdown or a rescue plan decides what comes next, before the status's general advice.
   const rescue = data.rescuePlan;
-  const next =
-    rescue && !rescue.verdict
+  const next = data.markdownRunning
+    ? "A markdown is running (see below)."
+    : rescue && !rescue.verdict
       ? "Wait for the rescue plan's result (below)."
       : rescue?.verdict === "worse" && rescue.fixIds.length > 0
         ? "Undo the fixes (see the rescue plan below)."
