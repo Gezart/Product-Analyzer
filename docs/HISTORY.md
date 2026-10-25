@@ -1,11 +1,12 @@
 # History
 
 ## 2026-10-25 · views-sync
-- New `views-sync` job: daily view, cart and purchase sessions per product from ShopifyQL into `product_daily_metrics` — 90 days right after the first import (the analysis doesn't wait for it), then the last 7 days every night at 01:00; a re-score follows so conversion statuses (page problem, hidden gem) use them
-- Replaces the view columns over the range it read (days without views become 0) and never touches sales or stock; one transaction
-- Tries the query that worked last time first; missing access (scope or protected customer data) or a refused query is recorded on the "views" sync step and not retried — the app keeps working on sales alone; network errors retry; a reinstall reads the 90 days again
-- Checked on a local Postgres 16 with ShopifyQL stubbed (first run, nightly, access denied, network error)
-- Open: confirm on the dev store with the ShopifyQL check page (the exact query syntax and access)
+- New `views-sync` job: daily view, cart and purchase sessions per product from ShopifyQL into `product_daily_metrics` — 90 days once the first import is done (the analysis doesn't wait for it), then the last 7 days after each nightly catalog refresh; a re-score follows (also when views are unavailable), so conversion statuses (page problem, hidden gem) use them
+- Exact dates in every query, read one week at a time; an answer that is refused, has rows but no product views, or looks cut off (a round 1,000+ rows) stores nothing
+- Replaces the view columns over the range read (days without views become 0) and never touches sales or stock; one transaction (2,000 products × 90 days: ~24 s locally)
+- Tries the query that worked last time first; missing access (scope or protected customer data) or an unusable answer is recorded on the "views" sync step and not retried — the app keeps working on sales alone; network errors retry without touching that step; nothing runs before the first import is done; a reinstall reads the 90 days again
+- 7 unit tests for ranges, queries and parsing; checked on a local Postgres 16 with ShopifyQL stubbed (first run, nightly, refused/junk/cut-off answers, network error, access denied)
+- Open: confirm on the dev store with the ShopifyQL check page (query syntax, access, whether answers are capped)
 
 ## 2026-10-25 · shopifyql-spike
 - Scope: `shopifyqlQuery` (GraphQL Admin API 2025-10+) needs `read_reports` — added to `shopify.app.toml` and `.env.example`, written in PLAN (Shopify also lists Level 2 protected customer data for it); after the scope change the app gets a new token once the merchant approves (no reinstall)

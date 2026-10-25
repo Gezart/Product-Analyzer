@@ -3,86 +3,114 @@ import { db } from "@/lib/db";
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { enqueue } from "@/lib/jobs/queue";
 import { localDateKey } from "@/lib/jobs/schedule";
-import { viewQueries, viewRows } from "@/lib/shopifyql";
+import { chunkRange, isAccessDenied, viewQueries, viewRange, viewRows } from "@/lib/shopifyql";
 import { runShopifyql } from "@/lib/shopifyql-shopify";
 import { setSyncState } from "@/lib/sync/store";
 
 /** The first run reads 90 days of views; nightly runs re-read the last 7 (views can arrive late). */
 export const VIEW_DAYS_FIRST = 90;
 export const VIEW_DAYS_NIGHTLY = 7;
+/** Days per query, so each answer stays small (at most products × 7 rows). */
+const CHUNK_DAYS = 7;
+/** An answer with a round number of rows this large may have been cut off: not trusted. */
+const CAP_SUSPECT = 1000;
 const BATCH = 20_000;
-const DAY_MS = 86_400_000;
 const message = (e) => (e instanceof Error ? e.message : String(e)).slice(0, 500);
-const isDenied = (text) => /access denied|ACCESS_DENIED|read_reports|protected customer data/i.test(text);
+
+/** The query can't be run (refused, no access, unusable or cut-off answer): retrying won't help. */
+class ViewsUnavailable extends Error {}
 
 /**
  * Daily view, cart and purchase sessions per product from ShopifyQL into product_daily_metrics (sales
- * and stock columns are left untouched). Tries the query that worked last time first. Missing access
- * (scope or protected customer data) is recorded on the "views" sync step and not retried; the app
- * keeps working on sales alone.
+ * and stock columns are left untouched), then a re-score. Runs after the first import (90 days) and
+ * after each nightly catalog refresh (last 7 days). Missing access or an unusable answer is recorded
+ * on the "views" sync step and not retried — the app keeps working on sales alone; network and server
+ * errors are retried.
  */
-export async function syncViews(shopId) {
+export async function syncViews(job) {
+  const shopId = job.shopId;
   const shop = await db().shop.findUnique({ where: { id: shopId } });
   if (!shop || shop.uninstalledAt) throw new PermanentJobError("Shop not installed");
+  // Views belong to imported products; the import queues this job once it is done.
+  const orders = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } });
+  if (orders?.status !== "done") return 0;
+
   const state = await db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "views" } } });
-  const days = state?.status === "done" ? VIEW_DAYS_NIGHTLY : VIEW_DAYS_FIRST;
-  const session = await getOfflineSession(shop.domain);
-
-  const candidates = viewQueries(days).sort((a, b) => Number(b.id === state?.lastCursor) - Number(a.id === state?.lastCursor));
-  const failures = [];
-  let used = null;
-  let rows = [];
-  let retryable = null;
-  for (const c of candidates) {
-    try {
-      const r = await runShopifyql(session, c.query);
-      if (!r.ok) {
-        failures.push(`${c.id}: ${r.parseErrors.join("; ")}`);
-        continue;
-      }
-      used = c.id;
-      rows = viewRows(r.rows);
-      break;
-    } catch (e) {
-      failures.push(`${c.id}: ${message(e)}`);
-      if (isDenied(message(e))) break;
-      retryable = e;
-    }
+  const range = viewRange(localDateKey(new Date(), shop.timezone), state?.status === "done" ? VIEW_DAYS_NIGHTLY : VIEW_DAYS_FIRST);
+  try {
+    const session = await getOfflineSession(shop.domain);
+    const { used, rows } = await readViews(session, range, state?.lastCursor);
+    await storeViews(shopId, range, rows);
+    await setSyncState(shopId, "views", { status: "done", error: null, lastCursor: used, lastSyncedAt: new Date() });
+    await enqueue({ type: "score-shop", shopId });
+    return rows.length;
+  } catch (error) {
+    const unavailable = error instanceof ViewsUnavailable;
+    if (unavailable) await setSyncState(shopId, "views", { status: "error", error: error.message });
+    // Statuses are recomputed anyway (from the views already stored) unless a retry is coming.
+    if (unavailable || job.attempts >= job.maxAttempts) await enqueue({ type: "score-shop", shopId });
+    throw unavailable ? new PermanentJobError(`Views unavailable: ${error.message}`) : error;
   }
-  if (!used) {
-    const error = failures.join(" | ").slice(0, 1000);
-    await setSyncState(shopId, "views", { status: "error", error });
-    // A network or server error is worth retrying; a refused query or missing access isn't.
-    if (retryable && !isDenied(error)) throw retryable;
-    throw new PermanentJobError(`Views unavailable: ${error}`);
-  }
-
-  await storeViews(shopId, shop.timezone, days, rows);
-  await setSyncState(shopId, "views", { status: "done", error: null, lastCursor: used, lastSyncedAt: new Date() });
-  // Views change conversion-based statuses (page problem, hidden gem).
-  if (rows.length) await enqueue({ type: "score-shop", shopId });
-  return rows.length;
 }
 
 /**
- * Replaces the view columns for the shop's products over the read range (days not returned become 0),
+ * Reads the range week by week. The first week picks the query (the one that worked last time is
+ * tried first); the rest use it. Every week must come back usable, or nothing is stored.
+ */
+async function readViews(session, range, preferred) {
+  const chunks = chunkRange(range, CHUNK_DAYS);
+  const order = viewQueries(chunks[0])
+    .map((c) => c.id)
+    .sort((a, b) => Number(b === preferred) - Number(a === preferred));
+  const failures = [];
+  let used = null;
+  const rows = [];
+  for (const chunk of chunks) {
+    const candidates = used ? [used] : order;
+    let done = false;
+    for (const id of candidates) {
+      const { query } = viewQueries(chunk).find((c) => c.id === id);
+      let r;
+      try {
+        r = await runShopifyql(session, query);
+      } catch (e) {
+        if (isAccessDenied(message(e))) throw new ViewsUnavailable(`${id}: ${message(e)}`);
+        throw e;
+      }
+      const parsed = r.ok ? viewRows(r.rows) : [];
+      if (!r.ok) failures.push(`${id}: ${r.parseErrors.join("; ")}`);
+      else if (parsed.length === 0 && (r.rawCount ?? r.rows.length) > 0) failures.push(`${id}: answer had rows but no product views in them`);
+      else if (r.rows.length >= CAP_SUSPECT && r.rows.length % CAP_SUSPECT === 0) {
+        throw new ViewsUnavailable(`${id}: ${r.rows.length} rows for ${chunk.from}–${chunk.to} looks cut off`);
+      } else {
+        used = id;
+        rows.push(...parsed);
+        done = true;
+        break;
+      }
+    }
+    if (!done) throw new ViewsUnavailable(failures.join(" | ").slice(0, 1000) || "No query worked");
+  }
+  return { used, rows };
+}
+
+/**
+ * Replaces the view columns of the shop's products over the range read (days not returned become 0),
  * creating metric rows where none exist yet. One transaction, so a failure leaves the old numbers.
  */
-async function storeViews(shopId, timeZone, days, rows) {
-  const today = localDateKey(new Date(), timeZone);
-  const from = new Date(Date.parse(`${today}T00:00:00Z`) - days * DAY_MS);
+async function storeViews(shopId, range, rows) {
   const products = await db().product.findMany({
     where: { shopId, shopifyGid: { in: [...new Set(rows.map((r) => r.productGid))] } },
     select: { id: true, shopifyGid: true },
   });
   const idOf = new Map(products.map((p) => [p.shopifyGid, p.id]));
-  const known = rows.filter((r) => idOf.has(r.productGid) && r.date >= from.toISOString().slice(0, 10) && r.date < today);
+  const known = rows.filter((r) => idOf.has(r.productGid) && r.date >= range.from && r.date <= range.to);
   await db().$transaction(
     async (tx) => {
       await tx.$executeRaw`
         UPDATE "product_daily_metrics" m SET "view_sessions" = 0, "cart_sessions" = 0, "purchase_sessions" = 0
         FROM "products" p
-        WHERE m."product_id" = p."id" AND p."shop_id" = ${shopId} AND m."date" >= ${from}::date AND m."date" < ${today}::date
+        WHERE m."product_id" = p."id" AND p."shop_id" = ${shopId} AND m."date" BETWEEN ${range.from}::date AND ${range.to}::date
           AND (m."view_sessions" <> 0 OR m."cart_sessions" <> 0 OR m."purchase_sessions" <> 0)`;
       for (let i = 0; i < known.length; i += BATCH) {
         const part = known.slice(i, i + BATCH);
