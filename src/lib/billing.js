@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { enqueue } from "@/lib/jobs/queue";
 import { billingIsTest } from "@/lib/env";
 import { PAID_PLANS, getPlan, planFromSubscriptions, remainingTrialDays } from "@/lib/plans";
 import { shopify } from "@/lib/shopify";
@@ -17,11 +18,25 @@ async function activeSubscriptions(session) {
   return result.appSubscriptions.filter((s) => s.status === "ACTIVE");
 }
 
+/**
+ * Stores the plan. A new plan analyzes a different number of products, so the shop is re-scored right
+ * away — once its first order import has finished (before that, the first analysis follows the import).
+ */
+async function setPlan(domain, plan) {
+  const changed = await db().shop.findMany({
+    // A failed import still scores what was stored, so "error" counts as finished too.
+    where: { domain, NOT: { plan }, syncStates: { some: { resource: "orders", status: { in: ["done", "error"] } } } },
+    select: { id: true },
+  });
+  await db().shop.updateMany({ where: { domain }, data: { plan } });
+  for (const shop of changed) await enqueue({ type: "score-shop", shopId: shop.id });
+}
+
 /** Reads the active subscription from Shopify and stores the plan (and first trial start) on the shop. */
 export async function syncPlan(session) {
   const subs = await activeSubscriptions(session);
   const plan = planFromSubscriptions(subs.map((s) => s.name));
-  await db().shop.updateMany({ where: { domain: session.shop }, data: { plan } });
+  await setPlan(session.shop, plan);
   if (subs[0]) {
     await db().shop.updateMany({
       where: { domain: session.shop, trialStartedAt: null },
@@ -48,7 +63,7 @@ export async function changePlan(session, planId, returnUrl) {
     for (const sub of subs) {
       await shopify().billing.cancel({ session, subscriptionId: sub.id, prorate: true, isTest: billingIsTest });
     }
-    await db().shop.updateMany({ where: { domain: session.shop }, data: { plan: "free" } });
+    await setPlan(session.shop, "free");
     return { confirmationUrl: null };
   }
 

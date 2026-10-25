@@ -1,4 +1,5 @@
 import { authenticate, AuthError } from "@/lib/auth";
+import { featureGate, productGate } from "@/lib/feature-gate";
 import { applyFix, FixError } from "@/lib/fix-center";
 import { validateFix } from "@/lib/fixes";
 
@@ -7,6 +8,8 @@ export async function POST(request, ctx) {
   try {
     const { shop } = await authenticate(request);
     const { id } = await ctx.params;
+    const blocked = featureGate(shop, "fixCenter") ?? (await productGate(shop, id));
+    if (blocked) return blocked;
     const body = (await request.json().catch(() => null));
     const valid = validateFix(body?.type ?? "", body?.after);
     if (!valid.ok) return Response.json({ error: valid.error }, { status: 400 });

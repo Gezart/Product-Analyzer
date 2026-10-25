@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
+import { hasFeature } from "@/lib/plans";
 import { averageCost, dailyBaseline, markdownPeriod, monthlyReport, monthRange, previousMonth } from "@/lib/report";
 import { isLocalDate, ORDER_DAYS } from "@/lib/sync/constants";
 
@@ -106,8 +107,8 @@ export async function buildReport(shopId, period, now = new Date()) {
  * that lands later can still move days between months on the page).
  */
 export async function closeMonth(shopId, now = new Date()) {
-  const shop = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true, installedAt: true } });
-  if (!shop) return;
+  const shop = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true, installedAt: true, plan: true } });
+  if (!shop || !hasFeature(shop.plan, "reports")) return;
   const today = localDateKey(now, shop.timezone);
   if (today.slice(8) < "02") return;
   const period = previousMonth(today);

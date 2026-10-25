@@ -9,6 +9,7 @@ export const STATUS_INFO = {
   stockout_risk: { label: "Stock-out risk", action: "Reorder", tone: "attention" },
   healthy: { label: "Healthy", action: "Nothing to do", tone: "success" },
   excluded: { label: "Not analyzed", action: "Draft, archived or excluded in Settings", tone: "neutral" },
+  over_limit: { label: "Over plan limit", action: "Upgrade your plan to analyze it", tone: "neutral" },
 };
 
 /** Store-currency formatter; a missing or unknown currency code falls back to plain numbers. */

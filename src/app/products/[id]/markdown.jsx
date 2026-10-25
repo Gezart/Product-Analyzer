@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@/app/polaris-events";
+import { UpgradeBanner } from "@/app/upgrade-banner";
 
 const DAY = 86_400_000;
 const addDays = (date, n) => new Date(Date.parse(date) + n * DAY).toISOString().slice(0, 10);
@@ -34,13 +35,19 @@ export function Markdown({ productId, money, onChanged }) {
 
   if (!data) return null;
   const running = data.plan && ["active", "paused"].includes(data.plan.status) ? data.plan : null;
-  if (!running && !data.preview && data.priceChanges.length === 0) return null;
+  const locked = !running && data.upgrade && data.eligible;
+  if (!running && !data.preview && !locked && data.priceChanges.length === 0) return null;
   const p = (n) => money.format(n);
 
   return (
     <s-section heading="Markdown">
       <s-stack gap="base">
         {msg && <s-banner tone={msg.tone}>{msg.text}</s-banner>}
+        {locked && (
+          <UpgradeBanner>
+            {data.eligible} A stepped markdown is the next step, but your plan doesn&apos;t include it for this product.
+          </UpgradeBanner>
+        )}
 
         {running && (
           <s-stack gap="small">

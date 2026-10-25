@@ -1,11 +1,14 @@
 import { authenticate, AuthError } from "@/lib/auth";
 import { diagnoseProduct } from "@/lib/diagnose-product";
+import { productGate } from "@/lib/feature-gate";
 
 // Why this product isn't selling: rule-based reasons, each with its evidence.
 export async function GET(request, ctx) {
   try {
     const { shop } = await authenticate(request);
     const { id } = await ctx.params;
+    const blocked = await productGate(shop, id);
+    if (blocked) return blocked;
     const diagnosis = await diagnoseProduct(shop.id, id);
     return diagnosis ? Response.json(diagnosis) : new Response("Not found", { status: 404 });
   } catch (error) {

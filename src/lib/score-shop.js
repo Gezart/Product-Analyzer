@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { scoreProducts, stockFromVariants } from "@/lib/scoring";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { attentionSummary } from "@/lib/notifications";
+import { productLimit, withinLimit } from "@/lib/plans";
 import { notify } from "@/lib/notify";
 import { knownOrderDays } from "@/lib/sync/constants";
 
@@ -9,12 +10,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Recomputes metrics, status and money at stake for every product of a shop and writes one
- * `product_scores` row per product (inactive, deleted or excluded products get status "excluded").
- * Returns the number of products scored (excluded not counted).
+ * `product_scores` row per product (inactive, deleted or excluded products get status "excluded";
+ * products beyond the plan's limit get "over_limit"). Returns the number of products scored.
  */
 export async function scoreShop(shopId, now = new Date()) {
   // "Today" is the store's local date, the same calendar the daily metrics are stored in.
-  const shopRow = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true } });
+  const shopRow = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true, plan: true } });
   const todayKey = localDateKey(now, shopRow?.timezone);
   const today = new Date(`${todayKey}T00:00:00Z`);
   const d30 = new Date(today.getTime() - 30 * DAY_MS);
@@ -42,8 +43,34 @@ export async function scoreShop(shopId, now = new Date()) {
   const excludedProducts = new Set(settings?.excludedProductIds ?? []);
   const isScored = (p) =>
     p.status === "ACTIVE" && !excludedProducts.has(p.shopifyGid) && !p.collections.some((c) => excludedCollections.has(c));
-  const scored = products.filter(isScored);
+  // Each product's status before this run: keeps the plan's selection stable and tells the merchant
+  // what newly needs attention.
+  const previous = new Map(
+    (
+      await db().$queryRaw`
+        SELECT p."id" AS "productId", s."status"
+        FROM "products" p
+        CROSS JOIN LATERAL (
+          SELECT x."status" FROM "product_scores" x WHERE x."product_id" = p."id" ORDER BY x."computed_at" DESC LIMIT 1
+        ) s
+        WHERE p."shop_id" = ${shopId}`
+    ).map((r) => [r.productId, r.status]),
+  );
+
+  const eligible = products.filter(isScored);
   const excluded = products.filter((p) => !isScored(p));
+  // Over the plan's product limit: the products with the most money in stock are analyzed.
+  const keep = withinLimit(
+    eligible.map((p) => ({
+      id: p.id,
+      stockValue: stockFromVariants(p.variants.map((v) => ({ stock: v.inventoryQty, price: Number(v.price), cost: v.cost == null ? null : Number(v.cost) })))
+        .stockValue,
+    })),
+    productLimit(shopRow?.plan),
+    new Set([...previous].filter(([, status]) => status !== "over_limit" && status !== "excluded").map(([id]) => id)),
+  );
+  const scored = eligible.filter((p) => keep.has(p.id));
+  const overLimit = eligible.filter((p) => !keep.has(p.id));
   const ids = scored.map((p) => p.id);
 
   const sumWindow = (from, to) =>
@@ -106,19 +133,6 @@ export async function scoreShop(shopId, now = new Date()) {
   });
 
   const results = scoreProducts(inputs, settings?.thresholds, historyDays);
-  // Each product's status before this run, to tell the merchant what newly needs attention.
-  const previous = new Map(
-    (
-      await db().$queryRaw`
-        SELECT p."id" AS "productId", s."status"
-        FROM "products" p
-        CROSS JOIN LATERAL (
-          SELECT x."status" FROM "product_scores" x WHERE x."product_id" = p."id" ORDER BY x."computed_at" DESC LIMIT 1
-        ) s
-        WHERE p."shop_id" = ${shopId}`
-    ).map((r) => [r.productId, r.status]),
-  );
-
   await db().productScore.createMany({
     data: [
       ...results.map((r) => ({
@@ -134,6 +148,7 @@ export async function scoreShop(shopId, now = new Date()) {
         trend: r.trend?.toFixed(4) ?? null,
       })),
       ...excluded.map((p) => ({ productId: p.id, computedAt: now, status: "excluded", moneyAtStake: "0.00" })),
+      ...overLimit.map((p) => ({ productId: p.id, computedAt: now, status: "over_limit", moneyAtStake: "0.00" })),
     ],
   });
   const summary = attentionSummary(previous, results);

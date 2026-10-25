@@ -19,10 +19,12 @@ test("money stuck = stock value of dead stock and slow movers; estimate flag car
     row({ productId: "c", status: "page_problem", stockValue: 800, moneyAtStake: 480 }),
     row({ productId: "d", status: "healthy", stockValue: 9000 }),
     row({ productId: "e", status: "excluded", stockValue: 7000 }),
+    row({ productId: "f", status: "over_limit", stockValue: 300 }),
   ]);
   assert.equal(s.moneyStuck, 1500);
   assert.equal(s.moneyStuckIsEstimate, true);
   assert.equal(s.productCount, 4);
+  assert.equal(s.overLimit, 1);
   assert.deepEqual(s.byStatus.find((x) => x.status === "page_problem"), { status: "page_problem", count: 1, stockValue: 800, moneyAtStake: 480 });
 });
 

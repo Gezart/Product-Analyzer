@@ -32,3 +32,31 @@ export function planFromSubscriptions(names) {
   }
   return "free";
 }
+
+/** The plan each feature starts at; every plan includes the features of the plans below it. */
+export const FEATURE_PLAN = { fixCenter: "starter", rescuePlans: "starter", markdown: "starter", compare: "growth", reports: "growth" };
+
+const rank = (planId) => Math.max(0, PLANS.findIndex((p) => p.id === planId));
+
+/** Whether a shop on `planId` may use `feature` (unknown plans count as Free). */
+export function hasFeature(planId, feature) {
+  return rank(planId) >= rank(FEATURE_PLAN[feature]);
+}
+
+/** Products analyzed on a plan (unknown plans count as Free). */
+export function productLimit(planId) {
+  return (getPlan(planId) ?? PLANS[0]).products;
+}
+
+/**
+ * Which products a plan analyzes when the catalog is over its limit. Products analyzed last time keep
+ * their place (so the choice doesn't flip with small stock changes); free places go to the products
+ * with the most money in stock (ties by id). Returns the set of ids kept.
+ */
+export function withinLimit(products, limit, analyzed = new Set()) {
+  if (products.length <= limit) return new Set(products.map((p) => p.id));
+  const sorted = [...products].sort(
+    (a, b) => Number(analyzed.has(b.id)) - Number(analyzed.has(a.id)) || b.stockValue - a.stockValue || a.id.localeCompare(b.id),
+  );
+  return new Set(sorted.slice(0, limit).map((p) => p.id));
+}

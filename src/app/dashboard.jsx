@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { UpgradeBanner } from "@/app/upgrade-banner";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
 export function Dashboard() {
@@ -48,6 +49,12 @@ export function Dashboard() {
 
   return (
     <s-stack gap="base">
+      {data.overLimit > 0 && (
+        <UpgradeBanner>
+          {data.overLimit} more active product{data.overLimit === 1 ? " isn't" : "s aren't"} analyzed on your plan (the products with the most money
+          in stock are analyzed first).
+        </UpgradeBanner>
+      )}
       <s-section>
         <s-stack gap="small">
           <s-text tone="neutral">Money stuck in stock</s-text>

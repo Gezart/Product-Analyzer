@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { listen } from "@/app/polaris-events";
+import { UpgradeBanner } from "@/app/upgrade-banner";
 import { monthRange } from "@/lib/report";
 import { moneyFormatter } from "@/lib/status-info";
 
@@ -17,14 +18,21 @@ export function ReportView() {
   const [months, setMonths] = useState(null);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
+  const [upgrade, setUpgrade] = useState(null);
 
   useEffect(() => {
     fetch("/api/reports")
-      .then(async (res) => (res.ok ? setMonths(await res.json()) : Promise.reject(new Error(String(res.status)))))
+      .then(async (res) => {
+        const body = await res.json().catch(() => ({}));
+        if (res.status === 403 && body.upgrade) return setUpgrade(body.error);
+        if (!res.ok) throw new Error(String(res.status));
+        setMonths(body);
+      })
       .catch((e) => setError(e.message));
   }, []);
   const asked = params.get("period");
-  const period = asked && monthRange(asked) ? asked : months?.months[0];
+  // Fetched once the months are known (not at all when the plan doesn't include reports).
+  const period = months ? (asked && monthRange(asked) ? asked : months.months[0]) : null;
 
   useEffect(() => {
     if (!period) return;
@@ -64,9 +72,10 @@ export function ReportView() {
             ))}
           </s-stack>
         )}
+        {upgrade && <UpgradeBanner>{upgrade}</UpgradeBanner>}
         {error && <s-banner tone="critical">Could not load the report ({error}).</s-banner>}
         {months && months.months.length === 0 && <s-banner tone="info">Your first report appears tomorrow, after the first complete day.</s-banner>}
-        {!report && !error && months?.months.length !== 0 && <s-spinner accessibilityLabel="Loading report" />}
+        {!report && !error && !upgrade && months?.months.length !== 0 && <s-spinner accessibilityLabel="Loading report" />}
 
         {report && (
           <>

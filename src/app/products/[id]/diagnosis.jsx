@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { UpgradeBanner } from "@/app/upgrade-banner";
 
 const TITLES = {
   price_above_peers: "Price is high for its group",
@@ -22,17 +23,24 @@ const TONE = { high: "critical", medium: "warning", low: "info" };
 export function Diagnosis({ productId }) {
   const [reasons, setReasons] = useState(null);
   const [error, setError] = useState(false);
+  const [upgrade, setUpgrade] = useState(null);
 
   useEffect(() => {
     fetch(`/api/products/${productId}/diagnosis`)
-      .then(async (res) => (res.ok ? setReasons((await res.json()).reasons) : Promise.reject()))
+      .then(async (res) => {
+        const body = await res.json().catch(() => ({}));
+        if (res.status === 403 && body.upgrade) return setUpgrade(body.error);
+        if (!res.ok) throw new Error(String(res.status));
+        setReasons(body.reasons);
+      })
       .catch(() => setError(true));
   }, [productId]);
 
   return (
     <s-section heading="Why it isn't selling">
       {error && <s-banner tone="critical">Could not run the diagnosis.</s-banner>}
-      {!error && !reasons && <s-spinner accessibilityLabel="Diagnosing" />}
+      {upgrade && <UpgradeBanner>{upgrade}</UpgradeBanner>}
+      {!error && !upgrade && !reasons && <s-spinner accessibilityLabel="Diagnosing" />}
       {reasons?.length === 0 && <s-paragraph>No problems found on this product's page, price or stock.</s-paragraph>}
       {reasons && reasons.length > 0 && (
         <ul className="m-0 list-none space-y-3 p-0">

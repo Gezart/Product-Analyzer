@@ -49,7 +49,7 @@ Status: `todo` · `doing` · `done` · `blocked`.
 | `compare` | 2–4 products side by side | Loads in < 2 s | done (dev-store test pending) |
 | `inbox` | In-app notifications | Actions appear in inbox | done (dev-store test pending) |
 | `monthly-report` | Revenue recovered (documented formula), stock cleared, fixes | Formula shown next to each number | done (dev-store test pending) |
-| `plan-limits` | Enforce products and diagnoses per plan | Limits block correctly; upgrade prompt shown | todo |
+| `plan-limits` | Enforce products and diagnoses per plan | Limits block correctly; upgrade prompt shown | products + features done; diagnoses limit waits on owner |
 
 ## v2 (not in v1)
 
