@@ -7,7 +7,7 @@ import { apiError } from "@/app/api-error";
 import { listen } from "@/app/polaris-events";
 import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
-const STATUSES = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "stockout_risk", "healthy", "new", "excluded", "over_limit"];
+const STATUSES = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "stockout_risk", "healthy", "new", "excluded", "over_limit", "unscored"];
 const SORTS = {
   money: { label: "Money at stake", compare: (a, b) => b.moneyAtStake - a.moneyAtStake || b.stockValue - a.stockValue },
   days: { label: "Fewest days of stock", compare: (a, b) => (a.daysOfCover ?? Infinity) - (b.daysOfCover ?? Infinity) },

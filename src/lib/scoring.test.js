@@ -248,3 +248,9 @@ test("a product listed less than 30 days ago isn't a slow mover yet", () => {
   assert.equal(young.moneyAtStake, 0);
   assert.equal(older.status, "slow_mover");
 });
+
+test("products sold without stock have no days of stock", () => {
+  const p = { stock: 0, units30: 12, units60: 20, unitsPrev30: 8, views30: 0, purchases30: 0, stockValue: 0, costIsEstimate: false };
+  assert.equal(computeMetrics({ ...p, sellsWhenOut: true }).daysOfCover, null);
+  assert.equal(computeMetrics({ ...p, sellsWhenOut: false }).daysOfCover, 0);
+});

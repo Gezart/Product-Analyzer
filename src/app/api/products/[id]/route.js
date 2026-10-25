@@ -78,8 +78,8 @@ export const GET = appRoute(async ({ shop, params }) => {
       : null,
     // Live stock, its value and days of stock (the score is from the last nightly run).
     stock: stock.stock,
-    // Sold without stock (inventory not tracked, e.g. a gift card): stock numbers don't apply.
     markdownRunning: product.markdownPlans.length > 0,
+    // Sold without stock (inventory not tracked, e.g. a gift card, or selling past zero): stock numbers don't apply.
     untracked: product.variants.length > 0 && product.variants.every((v) => v.sellsWhenOut) && stock.stock <= 0,
     stockValue: stock.stockValue,
     stockValueIsEstimate: stock.costIsEstimate,

@@ -1,4 +1,4 @@
-import { RequestedTokenType } from "@shopify/shopify-api";
+import { HttpResponseError, RequestedTokenType } from "@shopify/shopify-api";
 import { db } from "@/lib/db";
 import { enqueue } from "@/lib/jobs/queue";
 import { resetSyncSteps } from "@/lib/sync/store";
@@ -59,6 +59,12 @@ async function markInstalled(domain) {
 }
 
 const RESCOPE_EVERY_MS = 10 * 60_000;
+
+/** Shopify refusing a token refresh or exchange (revoked, expired or bad token) means: authenticate again. */
+function asAuthError(error) {
+  if (error instanceof HttpResponseError && [400, 401, 403].includes(error.response?.code)) throw new AuthError(`Shopify refused the token: ${error.message}`);
+  throw error;
+}
 const lastRescope = new Map();
 
 /** Returns a valid offline session, refreshing or exchanging the token when needed. */
@@ -78,10 +84,9 @@ export async function getOfflineSession(shop, sessionToken) {
     (!existing.refreshTokenExpires || existing.refreshTokenExpires.getTime() > Date.now());
 
   if (refreshUsable) {
-    const { session } = await shopify().auth.refreshToken({
-      shop,
-      refreshToken: existing.refreshToken,
-    });
+    const { session } = await shopify()
+      .auth.refreshToken({ shop, refreshToken: existing.refreshToken })
+      .catch(asAuthError);
     await storeSession(session);
     return session;
   }
@@ -100,7 +105,7 @@ export async function getOfflineSession(shop, sessionToken) {
   } catch (error) {
     // Only trying to pick up a new scope: the stored token still works, so keep using it.
     if (rescope && existing?.accessToken && !existing.isExpired(REFRESH_MARGIN_MS)) return existing;
-    throw error;
+    asAuthError(error);
   }
   await storeSession(session);
   return session;

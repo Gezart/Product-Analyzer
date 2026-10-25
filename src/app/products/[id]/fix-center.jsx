@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiError } from "@/app/api-error";
 import { listen } from "@/app/polaris-events";
 import { UpgradeBanner } from "@/app/upgrade-banner";
@@ -20,6 +20,8 @@ export function FixCenter({ productId, onChanged }) {
   const [seoDescription, setSeoDescription] = useState("");
   const [mediaIds, setMediaIds] = useState([]);
   const [collectionIds, setCollectionIds] = useState([]);
+  // Drafts are filled from the live product the first time it loads (it may not on the first try).
+  const hadLive = useRef(false);
 
   /** Refreshes live data and history; drafts are reset only for the listed types (unsaved edits stay). */
   const load = useCallback(
@@ -29,6 +31,8 @@ export function FixCenter({ productId, onChanged }) {
       const d = await res.json();
       setData(d);
       if (!d.live) return;
+      if (!hadLive.current) reset = Object.keys(LABELS);
+      hadLive.current = true;
       if (reset.includes("title")) setTitle(d.live.title);
       if (reset.includes("description")) setDescription(d.live.descriptionHtml);
       if (reset.includes("seo")) {

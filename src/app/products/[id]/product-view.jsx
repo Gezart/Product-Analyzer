@@ -66,7 +66,7 @@ export function ProductView() {
             </s-stack>
             {next && <s-text>Next: {next}</s-text>}
             <div className="grid gap-4 sm:grid-cols-4">
-              <Stat label="In stock" value={data.untracked ? "Not tracked" : data.stock.toLocaleString()} />
+              <Stat label="In stock" value={data.untracked ? "Sells without stock" : data.stock.toLocaleString()} />
               <Stat
                 label="Stock value"
                 value={money.format(data.stockValue)}
