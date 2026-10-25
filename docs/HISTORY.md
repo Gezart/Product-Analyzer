@@ -1,5 +1,12 @@
 # History
 
+## 2026-10-25 · views-sync
+- New `views-sync` job: daily view, cart and purchase sessions per product from ShopifyQL into `product_daily_metrics` — 90 days right after the first import (the analysis doesn't wait for it), then the last 7 days every night at 01:00; a re-score follows so conversion statuses (page problem, hidden gem) use them
+- Replaces the view columns over the range it read (days without views become 0) and never touches sales or stock; one transaction
+- Tries the query that worked last time first; missing access (scope or protected customer data) or a refused query is recorded on the "views" sync step and not retried — the app keeps working on sales alone; network errors retry; a reinstall reads the 90 days again
+- Checked on a local Postgres 16 with ShopifyQL stubbed (first run, nightly, access denied, network error)
+- Open: confirm on the dev store with the ShopifyQL check page (the exact query syntax and access)
+
 ## 2026-10-25 · shopifyql-spike
 - Scope: `shopifyqlQuery` (GraphQL Admin API 2025-10+) needs `read_reports` — added to `shopify.app.toml` and `.env.example`, written in PLAN (Shopify also lists Level 2 protected customer data for it); after the scope change the app gets a new token once the merchant approves (no reinstall)
 - ShopifyQL check page (development only, link at the bottom of Settings → `/dev/shopifyql`): shows the granted scopes, the API's ShopifyQL types, and what each candidate query for 90 days of daily views per product returns (rows, products, dates, sample) — the owner runs it on the dev store and sends the result

@@ -30,7 +30,7 @@ Status: `todo` · `doing` · `done` · `blocked`.
 | --- | --- | --- | --- |
 | `jobs` | Background job runner (cron endpoint + jobs table, retries, per-shop lock) | A job can be queued, retried and scheduled nightly | done |
 | `initial-sync` | Bulk operations: products, variants, inventory; 60 days of orders (no customer data); `sync_state` + progress bar | 2,000-product store synced in < 10 min | done (dev-store test pending) |
-| `views-sync` | ShopifyQL views/cart/purchase sessions per product per day → `product_daily_metrics` | 90 days of view data stored | todo |
+| `views-sync` | ShopifyQL views/cart/purchase sessions per product per day → `product_daily_metrics` | 90 days of view data stored | done (dev-store test pending) |
 | `live-sync` | Webhooks `orders/create`, `products/update`, `inventory_levels/update` | Rows update within minutes | done (dev-store test pending) |
 | `scoring` | Metrics (sell-through, days of cover, stock value, trend), statuses, money at stake; unit tests | Tests pass for every status rule and weight | done |
 | `daily-metrics` | Nightly job in store timezone: snapshot + re-score | Runs nightly; statuses refreshed | done (dev-store test pending) |

@@ -263,7 +263,7 @@ export async function setSyncState(
 
 /** Fresh "pending" steps for a new install (old ones may remain after a reinstall within 48 h). */
 export async function resetSyncSteps(shopId) {
-  await db().syncState.deleteMany({ where: { shopId, resource: { in: ["products", "orders", "webhooks", "catchup", "refresh"] } } });
+  await db().syncState.deleteMany({ where: { shopId, resource: { in: ["products", "orders", "webhooks", "catchup", "refresh", "views"] } } });
   await db().syncState.createMany({
     data: ["products", "orders"].map((resource) => ({ shopId, resource, status: "pending" })),
     skipDuplicates: true,

@@ -233,6 +233,8 @@ export async function runSyncPoll(job, signal) {
       await replaceOrderLines(shopId, from, orderLinesFromBulk(rows, shop.timezone), snapshotAt);
       await setSyncState(shopId, "orders", { status: "done", error: null, lastCursor: from, lastSyncedAt: new Date() });
       await enqueue({ type: "score-shop", shopId });
+      // 90 days of product views; it re-scores when they're in. The analysis doesn't wait for it.
+      await enqueue({ type: "views-sync", shopId });
     } else if (payload.stage === "refresh") {
       await upsertProducts(shopId, assembleProducts(rows), { snapshotAt });
       // Runs just after midnight local time: the stock read now approximates yesterday's closing stock.
