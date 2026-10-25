@@ -4,6 +4,7 @@ import { manualCollections, readLiveProduct } from "@/lib/fix-shopify";
 import { FIX_HINTS } from "@/lib/fixes";
 import { FEATURE_PLAN, hasFeature } from "@/lib/plans";
 import { appRoute } from "@/lib/route";
+import { shopifyFailure } from "@/lib/shopify-errors";
 
 // Everything the fix center edits, read live from Shopify, plus hints from the latest diagnosis and the fix history.
 export const GET = appRoute(async ({ shop, session, params }) => {
@@ -18,9 +19,17 @@ export const GET = appRoute(async ({ shop, session, params }) => {
   const product = await db().product.findFirst({ where: { id, shopId: shop.id } });
   if (!product) return Response.json({ error: "Not found" }, { status: 404 });
 
-  const [live, collections, fixes, diagnosis] = await Promise.all([
-    readLiveProduct(session, product.shopifyGid),
-    manualCollections(session),
+  // Without Shopify the history (and undo) still shows; editing needs the live product.
+  const liveRead = Promise.all([readLiveProduct(session, product.shopifyGid), manualCollections(session)]).then(
+    ([live, collections]) => ({ live, collections, liveError: null }),
+    (error) => {
+      const message = shopifyFailure(error);
+      if (!message) throw error;
+      return { live: null, collections: [], liveError: message };
+    },
+  );
+  const [{ live, collections, liveError }, fixes, diagnosis] = await Promise.all([
+    liveRead,
     db().fix.findMany({
       where: { productId: id },
       orderBy: { createdAt: "desc" },
@@ -29,8 +38,8 @@ export const GET = appRoute(async ({ shop, session, params }) => {
     }),
     db().diagnosis.findFirst({ where: { productId: id }, orderBy: { createdAt: "desc" } }),
   ]);
-  if (!live) return Response.json({ error: "Product no longer exists in Shopify" }, { status: 404 });
+  if (!live && !liveError) return Response.json({ error: "Product no longer exists in Shopify" }, { status: 404 });
   const reasons = diagnosis?.reasons ?? [];
   const hints = reasons.flatMap((r) => (FIX_HINTS[r.code] ? [{ code: r.code, ...FIX_HINTS[r.code] }] : []));
-  return Response.json({ live, manualCollections: collections, fixes, hints, diagnosisId: diagnosis?.id ?? null, upgrade });
+  return Response.json({ live, liveError, manualCollections: collections, fixes, hints, diagnosisId: diagnosis?.id ?? null, upgrade });
 });

@@ -32,6 +32,7 @@ Status: `todo` · `doing` · `done` · `blocked`.
 | `initial-sync` | Bulk operations: products, variants, inventory; 60 days of orders (no customer data); `sync_state` + progress bar | 2,000-product store synced in < 10 min | done (dev-store test pending) |
 | `views-sync` | ShopifyQL views/cart/purchase sessions per product per day → `product_daily_metrics` | 90 days of view data stored | done (dev-store test pending) |
 | `code-review` | Senior review of code and organization; fix bad practices | Build, tests and QA pass; report to owner | done |
+| `customer-fixes` | Fix what the customer test found | Customer test passes again | done |
 | `live-sync` | Webhooks `orders/create`, `products/update`, `inventory_levels/update` | Rows update within minutes | done (dev-store test pending) |
 | `scoring` | Metrics (sell-through, days of cover, stock value, trend), statuses, money at stake; unit tests | Tests pass for every status rule and weight | done |
 | `daily-metrics` | Nightly job in store timezone: snapshot + re-score | Runs nightly; statuses refreshed | done (dev-store test pending) |

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const W = 720;
 const H = 160;
@@ -9,6 +9,11 @@ const PAD = { top: 8, right: 8, bottom: 20, left: 32 };
 /** Units sold per day: one series, thin rounded bars on a shared baseline, per-bar hover tooltip. */
 export function SalesChart({ days, formatMoney }) {
   const [hover, setHover] = useState(null);
+  const scroller = useRef(null);
+  // On a narrow screen the chart scrolls: start at the latest days.
+  useEffect(() => {
+    if (scroller.current) scroller.current.scrollLeft = scroller.current.scrollWidth;
+  }, []);
   const peak = Math.max(0, ...days.map((d) => d.units));
   const max = Math.max(1, peak);
   const plotW = W - PAD.left - PAD.right;
@@ -23,7 +28,7 @@ export function SalesChart({ days, formatMoney }) {
   const unknown = days.filter((d) => !d.known).length;
 
   return (
-    <figure className="m-0 overflow-x-auto">
+    <figure ref={scroller} className="m-0 overflow-x-auto">
       {/* The chart keeps a readable width on phones and scrolls; the tooltip is placed within it. */}
       <div className="relative min-w-[560px]">
         <svg
@@ -31,7 +36,8 @@ export function SalesChart({ days, formatMoney }) {
           className="h-auto w-full"
           role="img"
           aria-label={`Units sold per day, last ${days.length} days: ${total} in total, at most ${peak} on one day${unknown ? `; no order history for the first ${unknown} days` : ""}`}
-          onMouseLeave={() => setHover(null)}
+          // Touch fires a "leave" right after a tap: only a mouse leaving clears the tooltip.
+          onPointerLeave={(e) => e.pointerType === "mouse" && setHover(null)}
         >
           {unknown > 0 && (
             <g>
@@ -56,7 +62,7 @@ export function SalesChart({ days, formatMoney }) {
             const top = y(d.units);
             const base = PAD.top + plotH;
             return (
-              <g key={d.date} onMouseEnter={() => setHover(i)} onClick={() => setHover(i)}>
+              <g key={d.date} onPointerEnter={(e) => e.pointerType === "mouse" && setHover(i)} onClick={() => setHover(i)}>
                 {/* Hit target: the full column, larger than the bar. */}
                 <rect x={PAD.left + i * slot} y={PAD.top} width={slot} height={plotH} fill="transparent" />
                 {d.units > 0 && (

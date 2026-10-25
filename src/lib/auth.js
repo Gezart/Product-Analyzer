@@ -1,4 +1,4 @@
-import { RequestedTokenType } from "@shopify/shopify-api";
+import { HttpResponseError, RequestedTokenType } from "@shopify/shopify-api";
 import { db } from "@/lib/db";
 import { enqueue } from "@/lib/jobs/queue";
 import { resetSyncSteps } from "@/lib/sync/store";
@@ -9,6 +9,12 @@ import { loadOfflineSession, storeSession } from "@/lib/session-storage";
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 
 export class AuthError extends Error {}
+
+/**
+ * Shopify refused a token refresh or exchange (revoked, expired or bad token). The request is
+ * answered 401 like any auth failure, but it doesn't mean the app was uninstalled.
+ */
+export class TokenRefusedError extends AuthError {}
 
 /**
  * Authenticates a request from the embedded app.
@@ -59,6 +65,14 @@ async function markInstalled(domain) {
 }
 
 const RESCOPE_EVERY_MS = 10 * 60_000;
+
+const refused = (error) => error instanceof HttpResponseError && [400, 401, 403].includes(error.response?.code);
+
+/** Shopify refusing a token refresh or exchange means: authenticate again. */
+function asAuthError(error) {
+  if (refused(error)) throw new TokenRefusedError(`Shopify refused the token: ${error.message}`);
+  throw error;
+}
 const lastRescope = new Map();
 
 /** Returns a valid offline session, refreshing or exchanging the token when needed. */
@@ -78,12 +92,15 @@ export async function getOfflineSession(shop, sessionToken) {
     (!existing.refreshTokenExpires || existing.refreshTokenExpires.getTime() > Date.now());
 
   if (refreshUsable) {
-    const { session } = await shopify().auth.refreshToken({
-      shop,
-      refreshToken: existing.refreshToken,
-    });
-    await storeSession(session);
-    return session;
+    try {
+      const { session } = await shopify().auth.refreshToken({ shop, refreshToken: existing.refreshToken });
+      await storeSession(session);
+      return session;
+    } catch (error) {
+      // A refused refresh (e.g. another request refreshed first) falls back to a token exchange when
+      // the request carries a session token; otherwise it's an auth failure.
+      if (!refused(error) || !sessionToken) asAuthError(error);
+    }
   }
 
   if (!sessionToken) throw new AuthError(`No usable offline token for ${shop}`);
@@ -100,7 +117,7 @@ export async function getOfflineSession(shop, sessionToken) {
   } catch (error) {
     // Only trying to pick up a new scope: the stored token still works, so keep using it.
     if (rescope && existing?.accessToken && !existing.isExpired(REFRESH_MARGIN_MS)) return existing;
-    throw error;
+    asAuthError(error);
   }
   await storeSession(session);
   return session;

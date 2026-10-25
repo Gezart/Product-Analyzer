@@ -6,6 +6,7 @@ import { localDateKey } from "@/lib/jobs/schedule";
 import { dueStep, guardWrites, LADDER, liveStock, proposeLadder, restoreWrites, safeToWrite, settleWrites, stepWrites, stockCleared, withOutcomes } from "@/lib/markdown";
 import { readLiveVariants, writeVariantPrices } from "@/lib/markdown-shopify";
 import { notify } from "@/lib/notify";
+import { shopifyFailure } from "@/lib/shopify-errors";
 
 export class MarkdownError extends HttpError {}
 
@@ -245,11 +246,18 @@ export async function markdownOverview(shopId, productId, { preview: withPreview
   ]);
   const running = plan && ["active", "paused"].includes(plan.status);
   let preview = null;
+  let previewError = null;
   if (!running && eligible && withPreview) {
-    const live = await readLiveVariants(session, product.shopifyGid);
-    if (live) preview = { proposal: proposeLadder(live, settings), settings, stock: liveStock(live) };
+    try {
+      const live = await readLiveVariants(session, product.shopifyGid);
+      if (live) preview = { proposal: proposeLadder(live, settings), settings, stock: liveStock(live) };
+    } catch (error) {
+      // The plan and price log still show; only the proposal needs live prices.
+      previewError = shopifyFailure(error);
+      if (!previewError) throw error;
+    }
   }
-  return { plan, eligible: eligible?.reason ?? null, preview, ladder: LADDER, priceChanges, today: localDateKey(new Date(), product.shop.timezone) };
+  return { plan, eligible: eligible?.reason ?? null, preview, previewError, ladder: LADDER, priceChanges, today: localDateKey(new Date(), product.shop.timezone) };
 }
 
 const isProposal = (v) =>

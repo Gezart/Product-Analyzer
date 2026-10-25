@@ -6,7 +6,7 @@ import { CARD, EYEBROW, PRIMARY_LINK, statusStyle } from "@/app/status-style";
 import { UpgradeBanner } from "@/app/upgrade-banner";
 import { stuckSplit } from "@/lib/dashboard";
 import { hasFeature, PLANS } from "@/lib/plans";
-import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
+import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
 const percent = new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 0 });
 const count = new Intl.NumberFormat();
@@ -190,26 +190,28 @@ function StatusMix({ byStatus, money }) {
           ))}
         </div>
       )}
-      <ul className="m-0 mt-4 grid list-none grid-cols-2 gap-2 p-0 @lg:grid-cols-3 @3xl:grid-cols-6">
+      <ul className="m-0 mt-4 grid list-none grid-cols-2 gap-2 p-0 @lg:grid-cols-4 @4xl:grid-cols-7">
         {byStatus.map((s) => {
           const info = STATUS_INFO[s.status];
           const empty = s.count === 0;
           return (
-            <li
-              key={s.status}
-              className={`rounded-xl border px-3 py-2.5 ${empty ? "border-dashed border-zinc-200" : "border-zinc-200 bg-white/70"}`}
-            >
-              <div className="flex items-center gap-2 text-xs font-medium text-zinc-600">
-                <span
-                  aria-hidden="true"
-                  className={`h-2 w-2 shrink-0 rounded-full ${empty ? "ring-2 ring-zinc-300 ring-inset" : statusStyle(s.status).bar}`}
-                />
-                <span className="truncate">{info?.label ?? s.status}</span>
-              </div>
-              <div className={`mt-1 text-2xl font-semibold tabular-nums ${empty ? "text-zinc-300" : "text-zinc-900"}`}>{count.format(s.count)}</div>
-              <div className="text-xs leading-snug text-zinc-500">
-                {money.format(s.stockValue)} in stock
-              </div>
+            <li key={s.status}>
+              <Link
+                href={`/products?status=${s.status}`}
+                className={`block h-full rounded-xl border px-3 py-2.5 transition-colors hover:border-zinc-400 ${empty ? "border-dashed border-zinc-200" : "border-zinc-200 bg-white/70"}`}
+              >
+                <div className="flex items-center gap-2 text-xs font-medium text-zinc-600">
+                  <span
+                    aria-hidden="true"
+                    className={`h-2 w-2 shrink-0 rounded-full ${empty ? "ring-2 ring-zinc-300 ring-inset" : statusStyle(s.status).bar}`}
+                  />
+                  <span className="truncate">{info?.label ?? s.status}</span>
+                </div>
+                <div className={`mt-1 text-2xl font-semibold tabular-nums ${empty ? "text-zinc-300" : "text-zinc-900"}`}>{count.format(s.count)}</div>
+                <div className="text-xs leading-snug text-zinc-500">
+                  {money.format(s.stockValue)} in stock
+                </div>
+              </Link>
             </li>
           );
         })}
@@ -271,7 +273,7 @@ function NextMove({ item, upNext, attention, money }) {
         </div>
       ) : item.daysOfCover != null ? (
         <div>
-          <p className="m-0 text-3xl font-bold tracking-tight text-zinc-900 tabular-nums">{count.format(Math.round(item.daysOfCover))} days</p>
+          <p className="m-0 text-3xl font-bold tracking-tight text-zinc-900 tabular-nums">{item.daysOfCover > 365 ? "Over a year" : `${formatDays(item.daysOfCover)} days`}</p>
           <p className="m-0 text-sm text-zinc-500">of stock left</p>
         </div>
       ) : null}
@@ -362,7 +364,7 @@ function TopTable({ top, money }) {
                       <span className="mt-0.5 block text-xs text-zinc-500 @3xl:hidden">
                         <span aria-hidden="true" className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${statusStyle(r.status).bar}`} />
                         {info?.label ?? r.status}
-                        {r.daysOfCover != null && <span className="@lg:hidden"> · {count.format(Math.round(r.daysOfCover))} days of stock</span>}
+                        {r.daysOfCover != null && <span className="@lg:hidden"> · {r.daysOfCover > 365 ? "over a year" : `${formatDays(r.daysOfCover)} days`} of stock</span>}
                       </span>
                     </td>
                     <td className="hidden py-3 pr-4 whitespace-nowrap @3xl:table-cell">
@@ -378,7 +380,7 @@ function TopTable({ top, money }) {
                     </td>
                     {showDays && (
                       <td className="hidden py-3 pr-4 text-right text-zinc-700 tabular-nums @lg:table-cell">
-                        {r.daysOfCover == null ? "—" : count.format(Math.round(r.daysOfCover))}
+                        {formatDays(r.daysOfCover)}
                       </td>
                     )}
                     <td className="hidden py-3 pr-5 @4xl:table-cell">
@@ -400,7 +402,10 @@ function TopTable({ top, money }) {
         </div>
       )}
       <p className="m-0 border-t border-zinc-100 px-5 py-3 text-xs text-zinc-500">
-        Money at stake = stock value × status weight (dead stock 100%, slow 70%, page problem 60%, hidden gem 40%).
+        Money at stake = stock value × status weight (dead stock 100%, slow 70%, page problem 60%, hidden gem 40%).{" "}
+        <Link href="/products" className="font-semibold text-zinc-700 underline">
+          See all products
+        </Link>
       </p>
     </section>
   );

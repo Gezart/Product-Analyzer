@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
+import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 import { Diagnosis } from "./diagnosis";
 import { FixCenter } from "./fix-center";
 import { Markdown } from "./markdown";
@@ -11,6 +11,8 @@ import { RescuePlan } from "./rescue-plan";
 import { SalesChart } from "./sales-chart";
 
 const pct = (n) => (n == null ? "—" : `${(n * 100).toFixed(1)}%`);
+// Shopify names the only variant of a simple product "Default Title".
+const variantName = (options) => Object.values(options ?? {}).filter((o) => o !== "Default Title").join(" / ") || "Default";
 
 export function ProductView() {
   const { id } = useParams();
@@ -32,6 +34,17 @@ export function ProductView() {
   const money = moneyFormatter(data.currency);
   const money2 = moneyFormatter(data.currency, 2);
   const info = data.score ? STATUS_INFO[data.score.status] : null;
+  // A running markdown or a rescue plan decides what comes next, before the status's general advice.
+  const rescue = data.rescuePlan;
+  const next = data.markdownRunning
+    ? "A markdown is running (see below)."
+    : rescue && !rescue.verdict
+      ? "Wait for the rescue plan's result (below)."
+      : rescue?.verdict === "worse" && rescue.fixIds.length > 0
+        ? "Undo the fixes (see the rescue plan below)."
+        : rescue?.verdict === "no_change"
+          ? "Start the markdown (see below)."
+          : info?.action;
 
   return (
     <s-page heading={data.product.title}>
@@ -45,27 +58,15 @@ export function ProductView() {
           </Link>
         </div>
 
-        {data.rescuePlan && <RescuePlan plan={data.rescuePlan} onChanged={() => setVersion((v) => v + 1)} />}
-        <Markdown productId={data.product.id} money={money2} onChanged={() => setVersion((v) => v + 1)} />
-        <Diagnosis productId={data.product.id} key={`diagnosis-${version}`} />
-        <FixCenter
-          productId={data.product.id}
-          onChanged={() => {
-            // Local data is refreshed by a background sync job; reload shortly after.
-            clearTimeout(refresh.current);
-            refresh.current = setTimeout(() => setVersion((v) => v + 1), 3000);
-          }}
-        />
-
         <s-section id="overview">
           <s-stack gap="small">
             <s-stack direction="inline" gap="small" alignItems="center">
               {info && <s-badge tone={info.tone}>{info.label}</s-badge>}
               {data.product.status !== "ACTIVE" && <s-badge>{data.product.status.toLowerCase()}</s-badge>}
             </s-stack>
-            {info && <s-text>Next: {info.action}</s-text>}
+            {next && <s-text>Next: {next}</s-text>}
             <div className="grid gap-4 sm:grid-cols-4">
-              <Stat label="In stock" value={data.stock.toLocaleString()} />
+              <Stat label="In stock" value={data.untracked ? "Sells without stock" : data.stock.toLocaleString()} />
               <Stat
                 label="Stock value"
                 value={money.format(data.stockValue)}
@@ -73,7 +74,7 @@ export function ProductView() {
               />
               <Stat
                 label="Days of stock"
-                value={data.daysOfCover != null ? Math.round(data.daysOfCover).toLocaleString() : data.stock > 0 ? "No sales in 30 days" : "—"}
+                value={data.untracked ? "—" : data.daysOfCover != null ? formatDays(data.daysOfCover) : data.stock > 0 ? "No sales in 30 days" : "—"}
               />
               <Stat label="Last sale" value={data.lastSale ?? "none in history"} />
               <Stat
@@ -88,6 +89,18 @@ export function ProductView() {
             </div>
           </s-stack>
         </s-section>
+
+        {data.rescuePlan && <RescuePlan plan={data.rescuePlan} onChanged={() => setVersion((v) => v + 1)} />}
+        <Markdown productId={data.product.id} money={money2} onChanged={() => setVersion((v) => v + 1)} />
+        <Diagnosis productId={data.product.id} key={`diagnosis-${version}`} />
+        <FixCenter
+          productId={data.product.id}
+          onChanged={() => {
+            // Local data is refreshed by a background sync job; reload shortly after.
+            clearTimeout(refresh.current);
+            refresh.current = setTimeout(() => setVersion((v) => v + 1), 3000);
+          }}
+        />
 
         <s-section heading="Sales and views" id="metrics">
           <div className="overflow-x-auto">
@@ -119,7 +132,7 @@ export function ProductView() {
             </table>
           </div>
           <s-text tone="neutral">
-            Views come from Shopify analytics once view sync is connected. Order history starts at install with the last 60 days.
+            {data.windows[2].views === 0 && "Views come from Shopify analytics once view sync is connected. "}Order history starts at install with the last 60 days.
           </s-text>
         </s-section>
 
@@ -156,7 +169,7 @@ export function ProductView() {
               <tbody>
                 {data.variants.map((v) => (
                   <tr key={v.id} className="border-t border-zinc-200">
-                    <td className="py-2 pr-4">{Object.values(v.options).join(" / ") || "Default"}</td>
+                    <td className="py-2 pr-4">{variantName(v.options)}</td>
                     <td className="py-2 pr-4">{v.sku ?? "—"}</td>
                     <td className="py-2 pr-4 text-right">{money2.format(v.price)}</td>
                     <td className={`py-2 text-right ${v.stock <= 0 ? "text-red-700" : ""}`}>{v.stock}</td>

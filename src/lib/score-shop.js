@@ -7,6 +7,17 @@ import { productLimit, withinLimit } from "@/lib/plans";
 import { scoreProducts, stockFromVariants } from "@/lib/scoring";
 import { knownOrderDays } from "@/lib/sync/constants";
 
+/** Stock and its value from the product's variants. */
+function stockOf(p) {
+  return stockFromVariants(p.variants.map((v) => ({ stock: v.inventoryQty, price: Number(v.price), cost: v.cost == null ? null : Number(v.cost) })));
+}
+
+/** Stock value columns of a score row. */
+function stockColumns(p) {
+  const s = stockOf(p);
+  return { stockValue: s.stockValue.toFixed(2), costIsEstimate: s.costIsEstimate };
+}
+
 /**
  * Recomputes metrics, status and money at stake for every product of a shop and writes one
  * `product_scores` row per product (inactive, deleted or excluded products get status "excluded";
@@ -62,8 +73,7 @@ export async function scoreShop(shopId, now = new Date()) {
   const keep = withinLimit(
     eligible.map((p) => ({
       id: p.id,
-      stockValue: stockFromVariants(p.variants.map((v) => ({ stock: v.inventoryQty, price: Number(v.price), cost: v.cost == null ? null : Number(v.cost) })))
-        .stockValue,
+      stockValue: stockOf(p).stockValue,
     })),
     productLimit(shopRow?.plan),
     new Set([...previous].filter(([, status]) => status !== "over_limit" && status !== "excluded").map(([id]) => id)),
@@ -147,8 +157,9 @@ export async function scoreShop(shopId, now = new Date()) {
         daysOfCover: r.daysOfCover != null ? Math.min(r.daysOfCover, 99999).toFixed(2) : null,
         trend: r.trend?.toFixed(4) ?? null,
       })),
-      ...excluded.map((p) => ({ productId: p.id, computedAt: now, status: "excluded", moneyAtStake: "0.00" })),
-      ...overLimit.map((p) => ({ productId: p.id, computedAt: now, status: "over_limit", moneyAtStake: "0.00" })),
+      // Not analyzed, but their stock value still shows in the product list.
+      ...excluded.map((p) => ({ productId: p.id, computedAt: now, status: "excluded", moneyAtStake: "0.00", ...stockColumns(p) })),
+      ...overLimit.map((p) => ({ productId: p.id, computedAt: now, status: "over_limit", moneyAtStake: "0.00", ...stockColumns(p) })),
     ],
   });
   const summary = attentionSummary(previous, results);

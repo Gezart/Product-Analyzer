@@ -1,21 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { apiError } from "@/app/api-error";
 import { listen } from "@/app/polaris-events";
 import { UpgradeBanner } from "@/app/upgrade-banner";
+import { shiftDate } from "@/lib/dates";
+import { getPlan } from "@/lib/plans";
 
-const DAY = 86_400_000;
-const addDays = (date, n) => new Date(Date.parse(date) + n * DAY).toISOString().slice(0, 10);
+const addDays = (date, n) => shiftDate(date.slice(0, 10), n);
+const REASONS = { markdown: "Markdown step", restore: "Original price restored", guard_revert: "Raised to the price floor" };
 
 /** Markdown ladder: preview → approve; then the running plan, its next step, cancel; and the price log. */
 export function Markdown({ productId, money, onChanged }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/products/${productId}/markdown`);
-    if (res.ok) setData(await res.json());
+    if (res.ok) {
+      setData(await res.json());
+      setLoadError(null);
+    } else setLoadError((await apiError(res)).message);
   }, [productId]);
   useEffect(() => {
     load();
@@ -33,10 +40,19 @@ export function Markdown({ productId, money, onChanged }) {
     if (res.ok) onChanged();
   }
 
+  if (loadError && !data) {
+    return (
+      <s-section heading="Markdown">
+        <s-banner tone="warning">Couldn&apos;t load the markdown: {loadError}</s-banner>
+      </s-section>
+    );
+  }
   if (!data) return null;
   const running = data.plan && ["active", "paused"].includes(data.plan.status) ? data.plan : null;
   const locked = !running && data.upgrade && data.eligible;
-  if (!running && !data.preview && !locked && data.priceChanges.length === 0) return null;
+  const unavailable = !running && !locked && data.eligible && data.previewError;
+  if (!running && !data.preview && !locked && !unavailable && data.priceChanges.length === 0) return null;
+  const variantTitle = new Map((data.plan?.steps?.variants ?? []).map((v) => [v.id, v.title]));
   const p = (n) => money.format(n);
 
   return (
@@ -45,8 +61,14 @@ export function Markdown({ productId, money, onChanged }) {
         {msg && <s-banner tone={msg.tone}>{msg.text}</s-banner>}
         {locked && (
           <UpgradeBanner>
-            {data.eligible} A stepped markdown is the next step, but your plan doesn&apos;t include it for this product.
+            {data.eligible} A stepped markdown is the next step; for this product it needs the {getPlan(data.upgrade)?.name ?? "next"} plan.
           </UpgradeBanner>
+        )}
+
+        {unavailable && (
+          <s-banner tone="warning">
+            {data.eligible} A markdown can be proposed, but the live prices couldn&apos;t be read: {data.previewError}
+          </s-banner>
         )}
 
         {running && (
@@ -56,7 +78,7 @@ export function Markdown({ productId, money, onChanged }) {
             <s-text>
               {running.currentStep < 0
                 ? "Step 1 isn't live yet; the app retries within the hour. "
-                : `Step ${running.currentStep + 1} of ${data.ladder.steps.length} since ${running.startedAt.slice(0, 10)}. `}
+                : `Step ${running.currentStep + 1} of ${data.ladder.steps.length}, live since ${addDays(running.startedAt, running.currentStep * data.ladder.stepDays)}. `}
               {running.currentStep >= 0 &&
                 running.currentStep + 1 < data.ladder.steps.length &&
                 `Next step on ${addDays(running.startedAt, (running.currentStep + 1) * data.ladder.stepDays)}. `}
@@ -131,10 +153,11 @@ export function Markdown({ productId, money, onChanged }) {
               {data.priceChanges.map((c) => (
                 <li key={c.id} className="flex flex-wrap gap-2">
                   <span className="text-zinc-500">{new Date(c.changedAt).toLocaleString()}</span>
+                  {variantTitle.get(c.variantGid) && <span className="font-medium">{variantTitle.get(c.variantGid)}</span>}
                   <span>
                     {p(Number(c.oldPrice))} → {p(Number(c.newPrice))}
                   </span>
-                  <span className="text-zinc-500">{c.reason.replace("_", " ")}</span>
+                  <span className="text-zinc-500">{REASONS[c.reason] ?? c.reason}</span>
                   {c.status !== "applied" && <s-badge tone={c.status === "failed" ? "critical" : undefined}>{c.status}</s-badge>}
                 </li>
               ))}
@@ -156,7 +179,7 @@ function LadderTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
+      <table className="w-full min-w-[520px] text-left text-sm">
         <thead className="text-zinc-500">
           <tr>
             <th className="py-2 pr-4 font-medium">Variant</th>

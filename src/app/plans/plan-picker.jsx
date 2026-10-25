@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiError } from "@/app/api-error";
 import { CARD_SURFACE } from "@/app/status-style";
 
 export function PlanPicker() {
@@ -9,6 +10,8 @@ export function PlanPicker() {
   const [trialDays, setTrialDays] = useState(0);
   const [pending, setPending] = useState(null);
   const [error, setError] = useState(null);
+  const [syncError, setSyncError] = useState(null);
+  const [confirmFree, setConfirmFree] = useState(false);
 
   async function load() {
     const res = await fetch("/api/billing");
@@ -17,6 +20,7 @@ export function PlanPicker() {
     setPlans(data.plans);
     setCurrent(data.current);
     setTrialDays(data.trialDays);
+    setSyncError(data.syncError ?? null);
   }
 
   useEffect(() => {
@@ -24,6 +28,9 @@ export function PlanPicker() {
   }, []);
 
   async function choose(planId) {
+    // Going to Free cancels the paid subscription right away: ask once more.
+    if (planId === "free" && !confirmFree) return setConfirmFree(true);
+    setConfirmFree(false);
     setPending(planId);
     setError(null);
     try {
@@ -44,14 +51,20 @@ export function PlanPicker() {
     }
   }
 
-  if (error) return <s-banner tone="critical">Could not load plans: {error}</s-banner>;
+  if (!current && error) return <s-banner tone="critical">Could not load plans: {error}</s-banner>;
   if (!current) return <s-spinner accessibilityLabel="Loading plans" />;
 
-  return <PlanCards plans={plans} current={current} trialDays={trialDays} pending={pending} onChoose={choose} />;
+  return (
+    <s-stack gap="base">
+      {error && <s-banner tone="critical">{error}</s-banner>}
+      {syncError && <s-banner tone="warning">{syncError} Showing the plan last saved; changing plans needs Shopify.</s-banner>}
+      <PlanCards plans={plans} current={current} trialDays={trialDays} pending={pending} confirmFree={confirmFree} onChoose={choose} />
+    </s-stack>
+  );
 }
 
 /** Plan cards; the plan right above the current one is marked as the recommended next step. */
-export function PlanCards({ plans, current, trialDays, pending, onChoose }) {
+export function PlanCards({ plans, current, trialDays, pending, confirmFree = false, onChoose }) {
   const currentIndex = plans.findIndex((p) => p.id === current);
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -83,10 +96,7 @@ export function PlanCards({ plans, current, trialDays, pending, onChoose }) {
               </p>
               <p className="m-0 mt-1 min-h-5 text-sm text-zinc-500">{plan.price > 0 && trialDays > 0 ? `${trialDays}-day free trial` : ""}</p>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Limit value={plan.products ? plan.products.toLocaleString() : "Unlimited"} label="products" />
-              <Limit value={plan.diagnoses.toLocaleString()} label="diagnoses / month" />
-            </div>
+            <Limit value={plan.products ? plan.products.toLocaleString() : "Unlimited"} label="products analyzed" />
             <ul className="m-0 flex-1 list-none space-y-2 p-0 text-sm text-zinc-700">
               {i > 0 && <li className="text-xs text-zinc-500">Everything in {plans[i - 1].name}, plus:</li>}
               {plan.features.map((f) => (
@@ -104,12 +114,16 @@ export function PlanCards({ plans, current, trialDays, pending, onChoose }) {
               <div>
                 <s-button
                   variant={plan.price > 0 ? "primary" : "secondary"}
+                  tone={plan.price === 0 && confirmFree ? "critical" : undefined}
                   loading={pending === plan.id || undefined}
                   disabled={pending !== null || undefined}
                   onClick={() => onChoose(plan.id)}
                 >
-                  {plan.price === 0 ? "Downgrade to Free" : `Choose ${plan.name}`}
+                  {plan.price === 0 ? (confirmFree ? "Yes, cancel my paid plan" : "Downgrade to Free") : `Choose ${plan.name}`}
                 </s-button>
+                {plan.price === 0 && confirmFree && (
+                  <p className="m-0 mt-2 text-sm text-zinc-500">Your paid plan ends now and the Free limits apply (25 products).</p>
+                )}
               </div>
             )}
           </section>

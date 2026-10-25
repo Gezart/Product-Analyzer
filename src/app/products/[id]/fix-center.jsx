@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { apiError } from "@/app/api-error";
 import { listen } from "@/app/polaris-events";
 import { UpgradeBanner } from "@/app/upgrade-banner";
 
@@ -19,14 +20,19 @@ export function FixCenter({ productId, onChanged }) {
   const [seoDescription, setSeoDescription] = useState("");
   const [mediaIds, setMediaIds] = useState([]);
   const [collectionIds, setCollectionIds] = useState([]);
+  // Drafts are filled from the live product the first time it loads (it may not on the first try).
+  const hadLive = useRef(false);
 
   /** Refreshes live data and history; drafts are reset only for the listed types (unsaved edits stay). */
   const load = useCallback(
     async (reset) => {
       const res = await fetch(`/api/products/${productId}/fix-center`);
-      if (!res.ok) return setError(res.status === 404 ? "Product not found in Shopify" : `Could not load (${res.status})`);
+      if (!res.ok) return setError(res.status === 404 ? "Product not found in Shopify" : (await apiError(res)).message);
       const d = await res.json();
       setData(d);
+      if (!d.live) return;
+      if (!hadLive.current) reset = Object.keys(LABELS);
+      hadLive.current = true;
       if (reset.includes("title")) setTitle(d.live.title);
       if (reset.includes("description")) setDescription(d.live.descriptionHtml);
       if (reset.includes("seo")) {
@@ -111,14 +117,19 @@ export function FixCenter({ productId, onChanged }) {
       Apply to Shopify
     </s-button>
   );
-  const smart = data.live.collections.filter((c) => !c.manual);
-  const mediaById = new Map(data.live.media.map((m) => [m.id, m]));
+  const smart = data.live?.collections.filter((c) => !c.manual) ?? [];
+  const mediaById = new Map((data.live?.media ?? []).map((m) => [m.id, m]));
   const hintFor = (type) => data.hints.filter((h) => h.type === type).map((h) => <s-text key={h.code} tone="neutral">💡 {h.hint}</s-text>);
 
   return (
     <s-section heading="Fix center">
       <s-stack gap="base">
         {data.upgrade && <UpgradeBanner>{data.upgrade.reason}</UpgradeBanner>}
+        {data.liveError && (
+          <s-banner tone="warning">
+            {data.liveError} Editing needs the live product{data.fixes.length > 0 ? "; your fix history and undo are below" : ""}.
+          </s-banner>
+        )}
         {message && (
           <s-banner tone={message.tone}>
             {message.text}{" "}
@@ -130,95 +141,99 @@ export function FixCenter({ productId, onChanged }) {
           </s-banner>
         )}
 
-        <s-stack gap="small">
-          <s-text-field label="Title" value={title} ref={listen("input", (el) => setTitle(el.value))} />
-          {hintFor("title")}
-          <div>{button("title", { title }, title.trim() !== data.live.title && title.trim().length > 0 && title.trim().length <= 255)}</div>
-        </s-stack>
+        {data.live && (
+          <>
+            <s-stack gap="small">
+              <s-text-field label="Title" value={title} ref={listen("input", (el) => setTitle(el.value))} />
+              {hintFor("title")}
+              <div>{button("title", { title }, title.trim() !== data.live.title && title.trim().length > 0 && title.trim().length <= 255)}</div>
+            </s-stack>
 
-        <s-stack gap="small">
-          <s-text-area label="Description (HTML)" rows={8} value={description} ref={listen("input", (el) => setDescription(el.value))} />
-          {hintFor("description")}
-          <div>{button("description", { descriptionHtml: description }, description !== data.live.descriptionHtml)}</div>
-        </s-stack>
+            <s-stack gap="small">
+              <s-text-area label="Description (HTML)" rows={8} value={description} ref={listen("input", (el) => setDescription(el.value))} />
+              {hintFor("description")}
+              <div>{button("description", { descriptionHtml: description }, description !== data.live.descriptionHtml)}</div>
+            </s-stack>
 
-        <s-stack gap="small">
-          <s-text-field label="SEO title" details={`${seoTitle.length}/70`} value={seoTitle} ref={listen("input", (el) => setSeoTitle(el.value))} />
-          <s-text-area
-            label="Meta description"
-            details={`${seoDescription.length}/320`}
-            rows={3}
-            value={seoDescription}
-            ref={listen("input", (el) => setSeoDescription(el.value))}
-          />
-          {hintFor("seo")}
-          <div>
-            {button(
-              "seo",
-              { seoTitle, seoDescription },
-              (seoTitle.trim() !== (data.live.seo.title ?? "") || seoDescription.trim() !== (data.live.seo.description ?? "")) &&
-                seoTitle.trim().length <= 70 &&
-                seoDescription.trim().length <= 320,
-            )}
-          </div>
-        </s-stack>
+            <s-stack gap="small">
+              <s-text-field label="SEO title" details={`${seoTitle.length}/70`} value={seoTitle} ref={listen("input", (el) => setSeoTitle(el.value))} />
+              <s-text-area
+                label="Meta description"
+                details={`${seoDescription.length}/320`}
+                rows={3}
+                value={seoDescription}
+                ref={listen("input", (el) => setSeoDescription(el.value))}
+              />
+              {hintFor("seo")}
+              <div>
+                {button(
+                  "seo",
+                  { seoTitle, seoDescription },
+                  (seoTitle.trim() !== (data.live.seo.title ?? "") || seoDescription.trim() !== (data.live.seo.description ?? "")) &&
+                    seoTitle.trim().length <= 70 &&
+                    seoDescription.trim().length <= 320,
+                )}
+              </div>
+            </s-stack>
 
-        <s-stack gap="small">
-          <s-text>Image order (first image shows in collections and search)</s-text>
-          {hintFor("images")}
-          {mediaIds.length === 0 && <s-text tone="neutral">No images. Add them in Shopify.</s-text>}
-          <ol className="m-0 flex list-none flex-wrap gap-3 p-0">
-            {mediaIds.map((id, i) => {
-              const m = mediaById.get(id);
-              return (
-                <li key={id} className="flex w-28 flex-col items-center gap-1 rounded border border-zinc-200 p-2">
-                  {m?.previewUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.previewUrl} alt={m.alt ?? ""} className="h-20 w-20 object-cover" />
-                  ) : (
-                    <div className="flex h-20 w-20 items-center justify-center bg-zinc-100 text-xs">{m?.type ?? "Media"}</div>
-                  )}
-                  <div className="flex gap-1 text-xs">
-                    <button type="button" disabled={i === 0} onClick={() => move(i, -1)} className="rounded border px-1 disabled:opacity-30" aria-label="Move earlier">
-                      ←
-                    </button>
-                    <span>{i + 1}</span>
-                    <button type="button" disabled={i === mediaIds.length - 1} onClick={() => move(i, 1)} className="rounded border px-1 disabled:opacity-30" aria-label="Move later">
-                      →
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-          <div>{button("images", { mediaIds }, mediaIds.join() !== data.live.media.map((m) => m.id).join())}</div>
-        </s-stack>
+            <s-stack gap="small">
+              <s-text>Image order (first image shows in collections and search)</s-text>
+              {hintFor("images")}
+              {mediaIds.length === 0 && <s-text tone="neutral">No images. Add them in Shopify.</s-text>}
+              <ol className="m-0 flex list-none flex-wrap gap-3 p-0">
+                {mediaIds.map((id, i) => {
+                  const m = mediaById.get(id);
+                  return (
+                    <li key={id} className="flex w-28 flex-col items-center gap-1 rounded border border-zinc-200 p-2">
+                      {m?.previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={m.previewUrl} alt={m.alt ?? ""} className="h-20 w-20 object-cover" />
+                      ) : (
+                        <div className="flex h-20 w-20 items-center justify-center bg-zinc-100 text-xs">{m?.type ?? "Media"}</div>
+                      )}
+                      <div className="flex gap-1 text-xs">
+                        <button type="button" disabled={i === 0} onClick={() => move(i, -1)} className="rounded border px-1 disabled:opacity-30" aria-label="Move earlier">
+                          ←
+                        </button>
+                        <span>{i + 1}</span>
+                        <button type="button" disabled={i === mediaIds.length - 1} onClick={() => move(i, 1)} className="rounded border px-1 disabled:opacity-30" aria-label="Move later">
+                          →
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+              <div>{button("images", { mediaIds }, mediaIds.join() !== data.live.media.map((m) => m.id).join())}</div>
+            </s-stack>
 
-        <s-stack gap="small">
-          <s-text>Collections</s-text>
-          {hintFor("collection")}
-          {smart.length > 0 && <s-text tone="neutral">Also in automated collections (by their rules): {smart.map((c) => c.title).join(", ")}.</s-text>}
-          <s-text tone="neutral">Undoing a removal adds the product back at the end of a manually sorted collection.</s-text>
-          <div className="grid gap-1 sm:grid-cols-2">
-            {data.manualCollections.map((c) => (
-              <label key={c.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={collectionIds.includes(c.id)}
-                  onChange={(e) => setCollectionIds((ids) => (e.target.checked ? [...ids, c.id] : ids.filter((x) => x !== c.id)))}
-                />
-                {c.title}
-              </label>
-            ))}
-          </div>
-          <div>
-            {button(
-              "collection",
-              { collectionIds },
-              [...collectionIds].sort().join() !== data.live.collections.filter((c) => c.manual).map((c) => c.id).sort().join(),
-            )}
-          </div>
-        </s-stack>
+            <s-stack gap="small">
+              <s-text>Collections</s-text>
+              {hintFor("collection")}
+              {smart.length > 0 && <s-text tone="neutral">Also in automated collections (by their rules): {smart.map((c) => c.title).join(", ")}.</s-text>}
+              <s-text tone="neutral">Undoing a removal adds the product back at the end of a manually sorted collection.</s-text>
+              <div className="grid gap-1 sm:grid-cols-2">
+                {data.manualCollections.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={collectionIds.includes(c.id)}
+                      onChange={(e) => setCollectionIds((ids) => (e.target.checked ? [...ids, c.id] : ids.filter((x) => x !== c.id)))}
+                    />
+                    {c.title}
+                  </label>
+                ))}
+              </div>
+              <div>
+                {button(
+                  "collection",
+                  { collectionIds },
+                  [...collectionIds].sort().join() !== data.live.collections.filter((c) => c.manual).map((c) => c.id).sort().join(),
+                )}
+              </div>
+            </s-stack>
+          </>
+        )}
 
         {data.fixes.length > 0 && (
           <s-stack gap="small">

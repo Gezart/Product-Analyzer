@@ -205,6 +205,7 @@ test("weights match the plan", () => {
     hidden_gem: 0.4,
     stockout_risk: 0,
     healthy: 0,
+    new: 0,
     excluded: 0,
   });
 });
@@ -237,4 +238,19 @@ test("products sold without stock (untracked, e.g. gift cards) are never a stock
   // Selling past zero is allowed, but there is still stock running low: still a risk.
   const [continueSelling] = scoreProducts([{ ...base, stock: 3, stockValue: 30, sellsWhenOut: true }], undefined, 60);
   assert.equal(continueSelling.status, "stockout_risk");
+});
+
+test("a product listed less than 30 days ago isn't a slow mover yet", () => {
+  const base = { id: "n", stock: 50, stockValue: 500, costIsEstimate: false, units30: 0, unitsPrev30: 0, units60: 0, views30: 0, purchases30: 0, daysSinceLastSale: null };
+  const [young] = scoreProducts([{ ...base, ageDays: 20 }], undefined, 60);
+  const [older] = scoreProducts([{ ...base, ageDays: 45 }], undefined, 60);
+  assert.equal(young.status, "new");
+  assert.equal(young.moneyAtStake, 0);
+  assert.equal(older.status, "slow_mover");
+});
+
+test("products sold without stock have no days of stock", () => {
+  const p = { stock: 0, units30: 12, units60: 20, unitsPrev30: 8, views30: 0, purchases30: 0, stockValue: 0, costIsEstimate: false };
+  assert.equal(computeMetrics({ ...p, sellsWhenOut: true }).daysOfCover, null);
+  assert.equal(computeMetrics({ ...p, sellsWhenOut: false }).daysOfCover, 0);
 });

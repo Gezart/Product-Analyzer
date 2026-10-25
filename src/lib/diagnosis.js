@@ -22,6 +22,14 @@ export function median(values) {
 }
 
 const pct = (n) => `${Math.round(n * 100)}%`;
+const count = (n) => n.toLocaleString("en-US");
+/** A price in the store's currency when it's known, else with two decimals. */
+function money(n, currency) {
+  try {
+    if (currency) return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(n);
+  } catch {}
+  return n.toFixed(2);
+}
 const SEVERITY_RANK = { high: 0, medium: 1, low: 2 };
 
 /** Peer median excluding the product itself, so one expensive product can't hide behind its own price. */
@@ -38,14 +46,27 @@ function peerMedian(prices, own, ownIsListed) {
 export function diagnose(p, ctx) {
   const reasons = [];
 
-  // 1. Price more than 25% above the median of similar products: the narrowest group (product type
-  //    or collection) with enough peers. Catch-all groups (over half the store, e.g. one type for
-  //    everything or an "All" collection) aren't similar products and are skipped.
+  // 1. Price more than 25% above the median of similar products: the narrowest group with enough
+  //    peers. A product with a type is only compared with products of the same type (its type, or its
+  //    type within one of its collections), so a coat is never compared with socks; a product without
+  //    a type falls back to its collections. Catch-all groups (over half the store, e.g. one type for
+  //    everything or an "All" collection) aren't similar products and are skipped. A product that
+  //    sells well isn't flagged for its price.
   const isSpecific = (prices) => prices.length <= Math.max(MIN_PEERS + 1, ctx.activeProducts * BROAD_COLLECTION);
-  const candidates = [
-    ...(p.productType ? [{ label: `product type "${p.productType}"`, key: p.productType, prices: ctx.pricesByType.get(p.productType) }] : []),
-    ...p.collections.map((c) => ({ label: "its collection", key: c, prices: ctx.pricesByCollection.get(c) })),
-  ]
+  const candidates = (
+    p.sellingWell
+      ? []
+      : p.productType
+        ? [
+            { label: `product type "${p.productType}"`, key: p.productType, prices: ctx.pricesByType.get(p.productType) },
+            ...p.collections.map((c) => ({
+              label: `"${p.productType}" products in the same collection`,
+              key: `${c}|${p.productType}`,
+              prices: ctx.pricesByCollectionType?.get(`${c}|${p.productType}`),
+            })),
+          ]
+        : p.collections.map((c) => ({ label: "its collection", key: c, prices: ctx.pricesByCollection.get(c) }))
+  )
     .filter((g) => Boolean(g.prices && isSpecific(g.prices)))
     .sort((a, b) => a.prices.length - b.prices.length);
   const group = candidates
@@ -56,7 +77,7 @@ export function diagnose(p, ctx) {
     reasons.push({
       code: "price_above_peers",
       severity: above > 0.5 ? "high" : "medium",
-      evidence: `Price is ${pct(above)} above the median ${group.peers.median.toFixed(2)} of ${group.peers.count} other products in ${group.label}.`,
+      evidence: `Price is ${pct(above)} above the median ${money(group.peers.median, ctx.currency)} of ${group.peers.count} other products in ${group.label}.`,
       data: { price: p.price, peerMedian: group.peers.median, peers: group.peers.count, group: group.key, abovePct: above },
       link: "#overview",
     });
@@ -67,7 +88,7 @@ export function diagnose(p, ctx) {
     reasons.push({
       code: "few_images",
       severity: p.imageCount === 0 ? "high" : "medium",
-      evidence: `Only ${p.imageCount} image${p.imageCount === 1 ? "" : "s"} (at least ${MIN_IMAGES} recommended).`,
+      evidence: p.imageCount === 0 ? `No images (at least ${MIN_IMAGES} recommended).` : `Only ${p.imageCount} image${p.imageCount === 1 ? "" : "s"} (at least ${MIN_IMAGES} recommended).`,
       data: { images: p.imageCount, minimum: MIN_IMAGES },
       link: "#page",
     });
@@ -148,7 +169,7 @@ export function diagnose(p, ctx) {
       reasons.push({
         code: "low_traffic_collections",
         severity: "medium",
-        evidence: `Only in collections with little traffic (at most ${Math.max(...own)} views in 30 days; the bottom quarter of the store is ${lowCut} or less).`,
+        evidence: `Only in collections with little traffic (at most ${count(Math.max(...own))} views in 30 days; the bottom quarter of the store is ${count(lowCut)} or less).`,
         data: { collectionViews: own, lowCut },
         link: "#overview",
       });
