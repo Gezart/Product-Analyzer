@@ -11,7 +11,7 @@ export const GET = appRoute(async ({ shop, params }) => {
   const product = await db().product.findFirst({
     where: { id, shopId: shop.id },
     include: {
-      variants: { select: { id: true, sku: true, options: true, price: true, cost: true, inventoryQty: true }, orderBy: { shopifyGid: "asc" } },
+      variants: { select: { id: true, sku: true, options: true, price: true, cost: true, inventoryQty: true, sellsWhenOut: true }, orderBy: { shopifyGid: "asc" } },
       scores: { orderBy: { computedAt: "desc" }, take: 1 },
       rescuePlans: { orderBy: { startedAt: "desc" }, take: 1 },
     },
@@ -77,6 +77,8 @@ export const GET = appRoute(async ({ shop, params }) => {
       : null,
     // Live stock, its value and days of stock (the score is from the last nightly run).
     stock: stock.stock,
+    // Sold without stock (inventory not tracked, e.g. a gift card): stock numbers don't apply.
+    untracked: product.variants.length > 0 && product.variants.every((v) => v.sellsWhenOut) && stock.stock <= 0,
     stockValue: stock.stockValue,
     stockValueIsEstimate: stock.costIsEstimate,
     daysOfCover: daily30 > 0 ? stock.stock / daily30 : null,

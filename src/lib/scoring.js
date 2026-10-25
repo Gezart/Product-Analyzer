@@ -99,6 +99,9 @@ export function computeBenchmarks(products, t) {
   };
 }
 
+/** Products younger than this aren't judged as slow movers. */
+const NEW_PRODUCT_DAYS = 30;
+
 /**
  * First matching status wins: dead stock, stock-out risk, page problem, slow mover, hidden gem, healthy.
  * `historyDays` is how many days of orders are synced; dead stock needs proof of `deadDays` without a sale,
@@ -123,7 +126,9 @@ export function classify(p, m, b, t, historyDays) {
 
   // Low sell-through with stock and not dead (yet): includes products without a sale in the last
   // 60 days but sold within deadDays, and no-sale products whose history or age is too short to call dead.
-  if (p.stock > 0 && m.sellThrough != null && m.sellThrough < t.slowSellThrough) return "slow_mover";
+  // A product listed less than 30 days ago hasn't had the time to be a slow mover.
+  const tooNew = p.ageDays != null && p.ageDays < NEW_PRODUCT_DAYS;
+  if (!tooNew && p.stock > 0 && m.sellThrough != null && m.sellThrough < t.slowSellThrough) return "slow_mover";
 
   if (judged && p.views30 <= b.viewsBottomCut && m.conversion > b.medianConversion) return "hidden_gem";
 

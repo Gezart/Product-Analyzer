@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { listen } from "@/app/polaris-events";
 import { UpgradeBanner } from "@/app/upgrade-banner";
 import { bestIndex, MAX_COMPARE } from "@/lib/compare";
+import { FEATURE_PLAN, getPlan, hasFeature } from "@/lib/plans";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
 const pct = (n) => (n == null ? "—" : `${(n * 100).toFixed(1)}%`);
@@ -19,6 +20,16 @@ export function CompareView() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [upgrade, setUpgrade] = useState(null);
+
+  // Tell a shop without the feature before it picks anything.
+  useEffect(() => {
+    fetch("/api/shop")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((shop) => {
+        if (shop && !hasFeature(shop.plan, "compare")) setUpgrade(`Compare is included from the ${getPlan(FEATURE_PLAN.compare).name} plan.`);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!ids) return;
@@ -95,20 +106,22 @@ export function CompareView() {
             ← Catalog health
           </Link>
         </div>
-        <s-stack direction="inline" gap="small" alignItems="center">
-          <s-button variant="primary" ref={listen("click", pick)}>
-            {products.length ? "Change products" : "Pick products"}
-          </s-button>
-          {[30, 60, 90].map((d) => (
-            <s-button key={d} variant={String(d) === days ? "secondary" : "tertiary"} ref={listen("click", () => ids && show(ids.split(","), d))}>
-              Last {d} days
+        {!upgrade && (
+          <s-stack direction="inline" gap="small" alignItems="center">
+            <s-button variant="primary" ref={listen("click", pick)}>
+              {products.length ? "Change products" : "Pick products"}
             </s-button>
-          ))}
-        </s-stack>
+            {[30, 60, 90].map((d) => (
+              <s-button key={d} variant={String(d) === days ? "secondary" : "tertiary"} ref={listen("click", () => ids && show(ids.split(","), d))}>
+                Last {d} days
+              </s-button>
+            ))}
+          </s-stack>
+        )}
 
         {upgrade && <UpgradeBanner>{upgrade}</UpgradeBanner>}
         {error && <s-banner tone="critical">{error}</s-banner>}
-        {!ids && <s-banner tone="info">Pick 2 to {MAX_COMPARE} products to see them side by side.</s-banner>}
+        {!ids && !upgrade && <s-banner tone="info">Pick 2 to {MAX_COMPARE} products to see them side by side.</s-banner>}
         {ids && !data && !error && !upgrade && <s-spinner accessibilityLabel="Loading comparison" />}
         {data?.notFound > 0 && <s-banner tone="warning">{data.notFound} picked product(s) aren&apos;t synced yet and are left out.</s-banner>}
         {data && products.length === 1 && <s-banner tone="info">Pick at least one more product to compare.</s-banner>}

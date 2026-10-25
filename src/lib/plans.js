@@ -8,7 +8,7 @@ export const PLANS = [
   { id: "free", name: "Free", price: 0, products: 25, diagnoses: 3, features: ["Dashboard", "Statuses", "Diagnosis"] },
   { id: "starter", name: "Starter", price: 19, products: 250, diagnoses: 30, features: ["Fix center", "Rescue plans", "Markdown engine"] },
   { id: "growth", name: "Growth", price: 39, products: 2000, diagnoses: 150, features: ["Compare", "Monthly reports"] },
-  { id: "pro", name: "Pro", price: 79, products: Infinity, diagnoses: 500, features: ["Bulk fixes", "Priority support"] },
+  { id: "pro", name: "Pro", price: 79, products: Infinity, diagnoses: 500, features: ["Priority support"] },
 ];
 
 /** One trial per shop: days left from the first paid subscription, 0 once used up. */

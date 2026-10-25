@@ -9,6 +9,7 @@ import { monthRange } from "@/lib/report";
 import { moneyFormatter } from "@/lib/status-info";
 
 const monthName = (period) => new Date(`${period}-01T00:00:00Z`).toLocaleString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
+const FIX_LABEL = { title: "Title", description: "Description", seo: "SEO", images: "Image order", collection: "Collections" };
 const EFFECT = { improved: "Improved", no_change: "No change", worse: "Worse", not_enough_data: "Not enough data", cancelled: "Undone", measuring: "Measuring" };
 
 /** A month's results, with the formula next to every number. */
@@ -110,7 +111,7 @@ export function ReportView() {
                 <s-paragraph>No rescue plan improved and no markdown ran in this month.</s-paragraph>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+                  <table className="w-full min-w-[760px] text-left text-sm">
                     <thead className="text-zinc-500">
                       <tr>
                         <th className="py-2 pr-4 font-medium">Product</th>
@@ -173,9 +174,9 @@ export function ReportView() {
                       <Link href={`/products/${f.productId}`} className="hover:underline">
                         {f.title}
                       </Link>
-                      <span>{f.type}</span>
+                      <span>{FIX_LABEL[f.type] ?? f.type}</span>
                       {f.status === "undone" && <s-badge>undone</s-badge>}
-                      <span className="text-zinc-600">Effect: {EFFECT[f.effect] ?? "not measured"}</span>
+                      <span className="text-zinc-600">Effect: {f.status === "undone" ? "Undone" : (EFFECT[f.effect] ?? "not measured")}</span>
                     </li>
                   ))}
                 </ul>

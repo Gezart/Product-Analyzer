@@ -56,8 +56,8 @@ test("median", () => {
 test("price more than 25% above peers, with the numbers as evidence", () => {
   const [r] = diagnose(product({ price: 40 }), ctx());
   assert.equal(r.code, "price_above_peers");
-  // The collection (4 products) is narrower than the type (5), so it is the peer group.
-  assert.match(r.evidence, /33% above the median 30\.00 of 3 other products in its collection/);
+  // A typed product is compared with its type (or its type within a collection), never a mixed collection.
+  assert.match(r.evidence, /33% above the median 30\.00 of 4 other products in product type "Shirts"/);
   assert.equal(r.data.peerMedian, 30);
   assert.equal(r.link, "#overview");
   // 25% or less is fine; too few peers says nothing.
@@ -155,4 +155,19 @@ test("signature ignores rolling numbers but not the items named", () => {
   const a = diagnose(product({ price: 30, variants: [v("S", 0), v("M", 3), v("L", 3)] }), ctx());
   const b = diagnose(product({ price: 30, variants: [v("S", 3), v("M", 0), v("L", 3)] }), ctx());
   assert.notEqual(reasonSignature(a), reasonSignature(b));
+});
+
+test("price: same type only for typed products; collections for untyped; never for products selling well", () => {
+  // The collection mixes types (a coat among socks): a typed coat without 3 coat peers gets no price reason.
+  const mixed = ctx({ pricesByType: new Map([["Coats", [249]]]), pricesByCollection: new Map([["c1", [249, 10, 12, 14]]]) });
+  assert.ok(!codes(product({ price: 249, productType: "Coats" }), mixed).includes("price_above_peers"));
+  // Same type within a collection is a valid, narrower group.
+  const typed = ctx({ pricesByType: new Map([["Coats", [249, 100, 100, 100, 100, 100]]]), pricesByCollectionType: new Map([["c1|Coats", [249, 90, 90, 90]]]) });
+  assert.match(diagnose(product({ price: 249, productType: "Coats" }), typed).find((r) => r.code === "price_above_peers").evidence, /"Coats" products in the same collection/);
+  // No type: its collection is the group.
+  assert.ok(codes(product({ price: 40, productType: null }), ctx()).includes("price_above_peers"));
+  // Selling well: no price reason; money shown in the store currency when known.
+  assert.ok(!codes(product({ price: 40, sellingWell: true }), ctx()).includes("price_above_peers"));
+  assert.match(diagnose(product({ price: 40 }), ctx({ currency: "EUR" }))[0].evidence, /median €30\.00/);
+  assert.match(diagnose(product({ price: 30, imageCount: 0 }), ctx()).find((r) => r.code === "few_images").evidence, /^No images/);
 });

@@ -1,5 +1,15 @@
 # History
 
+## 2026-10-25 · customer-fixes
+- From the customer test: a product list (`/products`, in the menu) with status filters and sorting; the dashboard's status tiles and the inbox open it, so every product is reachable; stock-out risks keep 3 places in the Top 10
+- Price rule: a product with a type is compared only with products of the same type (never a mixed collection like a coat among socks); no price reason for products that sell well; prices in the store currency; duplicate-description reasons name the products; "What could still be better" for products that sell well
+- When Shopify can't be reached: readable 502 messages everywhere ("Couldn't reach Shopify…"), the fix center still shows its history and undo, the markdown and price log still show (with a note), the plans page shows the saved plan
+- Plans page: no promise of features that don't exist ("Bulk fixes", the unenforced diagnosis count), "Everything in X, plus", and downgrading to Free asks for confirmation
+- Product page: status, next step and key numbers first; the next step follows a running rescue plan; untracked products (gift cards) show "Not tracked"; days of stock as "over a year" when huge; variant names without "Default Title"
+- Phone: two status tiles per row, tables scroll sideways instead of being cut off, the sales chart starts at the latest days and a tap shows the day
+- Smaller: products under 30 days old aren't slow movers yet; price log names the variant and the reason; markdown shows when the current step went live; report names fix types and undone fixes; Compare says it needs Growth before picking; import errors in plain words
+- Not changed (design choices, noted): description is edited as HTML; one "Apply" per part of the page
+
 ## 2026-10-25 · code-review
 - Senior review of the whole codebase; fixes are behaviour-preserving
 - API routes: the same try/catch + auth boilerplate in 19 routes replaced by `appRoute()`; every error answer is now JSON `{ error }` (some were plain text); app errors (`FixError`, `MarkdownError`, `PlanError`) share `HttpError`; plan gates throw instead of returning responses that were parsed again

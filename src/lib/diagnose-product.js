@@ -5,7 +5,8 @@ import { localDateKey } from "@/lib/jobs/schedule";
 import { sanitizeThresholds } from "@/lib/scoring";
 
 /** Rules version stored with each diagnosis (AI-written summaries come in v2). */
-export const RULES_VERSION = "rules-v1";
+/** Bumped when a rule changes, so the next diagnosis is stored fresh. */
+export const RULES_VERSION = "rules-v2";
 
 async function sessions30(shopId, timeZone) {
   const today = new Date(`${localDateKey(new Date(), timeZone)}T00:00:00Z`);
@@ -19,7 +20,7 @@ async function sessions30(shopId, timeZone) {
   );
 }
 
-async function buildContext(shopId, timeZone) {
+async function buildContext(shopId, timeZone, currency) {
   const [products, settings, sessions] = await Promise.all([
     db().product.findMany({ where: { shopId, status: "ACTIVE" }, select: { id: true, price: true, productType: true, collections: true } }),
     db().settings.findUnique({ where: { shopId }, select: { thresholds: true } }),
@@ -34,13 +35,17 @@ async function buildContext(shopId, timeZone) {
 
   const pricesByType = new Map();
   const pricesByCollection = new Map();
+  const pricesByCollectionType = new Map();
   const collectionViews = new Map();
   const viewToCart = [];
   const cartToPurchase = [];
   for (const p of products) {
     const price = Number(p.price);
     if (p.productType) push(pricesByType, p.productType, price);
-    for (const c of p.collections) push(pricesByCollection, c, price);
+    for (const c of p.collections) {
+      push(pricesByCollection, c, price);
+      if (p.productType) push(pricesByCollectionType, `${c}|${p.productType}`, price);
+    }
     const s = sessions.get(p.id);
     if (s) for (const c of p.collections) collectionViews.set(c, (collectionViews.get(c) ?? 0) + s.views);
     if (s && s.views >= minViews) {
@@ -53,6 +58,8 @@ async function buildContext(shopId, timeZone) {
   const context = {
     pricesByType,
     pricesByCollection,
+    pricesByCollectionType,
+    currency,
     activeProducts: products.length,
     collectionViews: hasViews ? collectionViews : new Map(),
     medianViewToCart: median(viewToCart),
@@ -80,16 +87,19 @@ async function sameDescription(shopId, productId) {
  * (or the items they name) changed, so the history shows when a problem appeared or was fixed.
  */
 export async function diagnoseProduct(shopId, productId) {
-  const shop = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true } });
+  const shop = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true, currency: true } });
   const product = await db().product.findFirst({
     where: { id: productId, shopId },
     include: { variants: { select: { options: true, inventoryQty: true, sellsWhenOut: true }, orderBy: { shopifyGid: "asc" } } },
   });
   if (!product) return null;
-  const [{ context, sessions }, duplicates] = await Promise.all([
-    buildContext(shopId, shop?.timezone ?? null),
+  const [{ context, sessions }, duplicates, score] = await Promise.all([
+    buildContext(shopId, shop?.timezone ?? null, shop?.currency ?? null),
     sameDescription(shopId, productId),
+    db().productScore.findFirst({ where: { productId }, orderBy: { computedAt: "desc" }, select: { status: true } }),
   ]);
+  // A product that sells well isn't "not selling": its price isn't questioned and the page says so.
+  const sellingWell = ["healthy", "stockout_risk"].includes(score?.status);
   // Rows synced before the text was stored have words but no text: the next catalog refresh fills it.
   const pageDataKnown = product.description != null || product.descriptionWords === 0;
   const s = sessions.get(product.id);
@@ -107,6 +117,7 @@ export async function diagnoseProduct(shopId, productId) {
       seoDescription: product.seoDescription,
       pageDataKnown,
       duplicateOf: pageDataKnown ? duplicates : null,
+      sellingWell,
       variants: product.variants.map((v) => ({
         title: Object.values((v.options ?? {})).join(" / ") || "Default",
         stock: v.inventoryQty,
@@ -119,13 +130,19 @@ export async function diagnoseProduct(shopId, productId) {
     context,
   );
 
+  // Titles of the products a reason names (e.g. the same description), for the page.
+  const named = [...new Set(reasons.flatMap((r) => r.data.sameAs ?? []))];
+  const titles = named.length
+    ? Object.fromEntries((await db().product.findMany({ where: { shopId, id: { in: named } }, select: { id: true, title: true } })).map((p) => [p.id, p.title]))
+    : {};
+
   const latest = await db().diagnosis.findFirst({ where: { productId }, orderBy: { createdAt: "desc" } });
   // Same reasons naming the same items → same diagnosis (the numbers shown are always fresh).
   if (latest && latest.modelVersion === RULES_VERSION && reasonSignature(latest.reasons) === reasonSignature(reasons)) {
-    return { id: latest.id, reasons, createdAt: latest.createdAt };
+    return { id: latest.id, reasons, titles, sellingWell, createdAt: latest.createdAt };
   }
   const created = await db().diagnosis.create({
     data: { productId, reasons: reasons, modelVersion: RULES_VERSION },
   });
-  return { id: created.id, reasons, createdAt: created.createdAt };
+  return { id: created.id, reasons, titles, sellingWell, createdAt: created.createdAt };
 }

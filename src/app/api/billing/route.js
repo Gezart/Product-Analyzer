@@ -3,13 +3,20 @@ import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getPlan, PLANS, remainingTrialDays } from "@/lib/plans";
 import { appRoute } from "@/lib/route";
+import { shopifyFailure } from "@/lib/shopify-errors";
 
-// Current plan (synced from Shopify) and the plan list.
+// Current plan (synced from Shopify; the stored one when Shopify can't be reached) and the plan list.
 export const GET = appRoute(async ({ session }) => {
-  const current = await syncPlan(session);
+  let syncError = null;
+  const current = await syncPlan(session).catch((error) => {
+    syncError = shopifyFailure(error);
+    if (!syncError) throw error;
+    return null;
+  });
   const shop = await db().shop.findUnique({ where: { domain: session.shop } });
   return Response.json({
-    current,
+    current: current ?? shop?.plan ?? "free",
+    syncError,
     trialDays: remainingTrialDays(shop?.trialStartedAt ?? null),
     plans: PLANS.map((p) => ({ ...p, products: Number.isFinite(p.products) ? p.products : null })),
   });

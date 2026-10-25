@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { UpgradeBanner } from "@/app/upgrade-banner";
-import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
+import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
 export function Dashboard() {
   const [data, setData] = useState(null);
@@ -69,15 +69,17 @@ export function Dashboard() {
         </s-stack>
       </s-section>
 
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {data.byStatus.map((s) => (
-          <s-box key={s.status} padding="base" background="subdued" borderRadius="base">
-            <s-stack gap="small-200">
-              <s-badge tone={STATUS_INFO[s.status]?.tone}>{STATUS_INFO[s.status]?.label ?? s.status}</s-badge>
-              <div className="text-2xl font-semibold">{s.count}</div>
-              <s-text tone="neutral">{money.format(s.stockValue)} in stock</s-text>
-            </s-stack>
-          </s-box>
+          <Link key={s.status} href={`/products?status=${s.status}`} className="rounded-lg hover:ring-2 hover:ring-zinc-300">
+            <s-box padding="base" background="subdued" borderRadius="base">
+              <s-stack gap="small-200">
+                <s-badge tone={STATUS_INFO[s.status]?.tone}>{STATUS_INFO[s.status]?.label ?? s.status}</s-badge>
+                <div className="text-2xl font-semibold">{s.count}</div>
+                <s-text tone="neutral">{money.format(s.stockValue)} in stock</s-text>
+              </s-stack>
+            </s-box>
+          </Link>
         ))}
       </div>
 
@@ -86,7 +88,7 @@ export function Dashboard() {
           <s-paragraph>Nothing needs attention right now.</s-paragraph>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[600px] text-left text-sm">
               <thead className="text-zinc-500">
                 <tr>
                   <th className="py-2 pr-4 font-medium">Product</th>
@@ -109,14 +111,19 @@ export function Dashboard() {
                     </td>
                     <td className="py-2 pr-4">{STATUS_INFO[r.status]?.action}</td>
                     <td className="py-2 pr-4 text-right">{money.format(r.moneyAtStake)}</td>
-                    <td className="py-2 text-right">{r.daysOfCover == null ? "—" : Math.round(r.daysOfCover)}</td>
+                    <td className="py-2 text-right">{formatDays(r.daysOfCover)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <s-text tone="neutral">Money at stake = stock value × status weight (dead stock 100%, slow 70%, page problem 60%, hidden gem 40%).</s-text>
+        <s-text tone="neutral">
+          Money at stake = stock value × status weight (dead stock 100%, slow 70%, page problem 60%, hidden gem 40%).{" "}
+          <Link href="/products" className="underline">
+            See all products
+          </Link>
+        </s-text>
       </s-section>
       {data.scoredAt && <s-text tone="neutral">Last analyzed {new Date(data.scoredAt).toLocaleString()}.</s-text>}
     </s-stack>

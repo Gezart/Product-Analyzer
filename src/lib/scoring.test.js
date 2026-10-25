@@ -238,3 +238,11 @@ test("products sold without stock (untracked, e.g. gift cards) are never a stock
   const [continueSelling] = scoreProducts([{ ...base, stock: 3, stockValue: 30, sellsWhenOut: true }], undefined, 60);
   assert.equal(continueSelling.status, "stockout_risk");
 });
+
+test("a product listed less than 30 days ago isn't a slow mover yet", () => {
+  const base = { id: "n", stock: 50, stockValue: 500, costIsEstimate: false, units30: 0, unitsPrev30: 0, units60: 0, views30: 0, purchases30: 0, daysSinceLastSale: null };
+  const [young] = scoreProducts([{ ...base, ageDays: 20 }], undefined, 60);
+  const [older] = scoreProducts([{ ...base, ageDays: 45 }], undefined, 60);
+  assert.notEqual(young.status, "slow_mover");
+  assert.equal(older.status, "slow_mover");
+});

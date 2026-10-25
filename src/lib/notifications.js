@@ -56,7 +56,12 @@ export function describe(n) {
     }
     case "new_attention": {
       const need = Object.values(d.counts ?? {}).reduce((s, x) => s + x, 0);
-      return { title: `${plural(need, "product")} newly ${needs(need)} attention`, body: `${statusList(d.counts)}.`, href: "/" };
+      const statuses = ACTION_STATUSES.filter((s) => d.counts?.[s]);
+      return {
+        title: `${plural(need, "product")} newly ${needs(need)} attention`,
+        body: `${statusList(d.counts)}.`,
+        href: statuses.length === 1 ? `/products?status=${statuses[0]}` : "/products",
+      };
     }
     case "rescue_verdict": {
       const [head, body] = VERDICTS[d.verdict] ?? ["Rescue plan finished", "See the result on the product page."];

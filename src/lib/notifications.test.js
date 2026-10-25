@@ -29,7 +29,11 @@ test("describe: text and link per type; unknown types still render", () => {
     body: "12 products analyzed; 3 need attention (2 dead stock, 1 page problem).",
     href: "/",
   });
-  assert.deepEqual(describe({ type: "new_attention", data: { counts: { slow_mover: 1 } } }), { title: "1 product newly needs attention", body: "1 slow mover.", href: "/" });
+  assert.deepEqual(describe({ type: "new_attention", data: { counts: { slow_mover: 1 } } }), {
+    title: "1 product newly needs attention",
+    body: "1 slow mover.",
+    href: "/products?status=slow_mover",
+  });
   assert.equal(describe({ type: "new_attention", data: { counts: { slow_mover: 2, dead_stock: 3 } } }).body, "3 dead stock, 2 slow movers.");
   const v = describe({ type: "rescue_verdict", productId: "p1", productTitle: "Tee", data: { verdict: "worse" } });
   assert.equal(v.title, "Fixes made it worse: Tee");

@@ -39,6 +39,17 @@ test("top list: money at stake first, then stock-out risks by fewest days left; 
   assert.deepEqual(s.top.map((r) => r.productId), ["dead", "gem", "out2", "out5"]);
 });
 
+test("top list keeps 3 places for stock-out risks even with many products at stake", () => {
+  const rows = [
+    ...Array.from({ length: 12 }, (_, i) => row({ productId: `p${i}`, status: "slow_mover", moneyAtStake: 100 + i })),
+    row({ productId: "out7", status: "stockout_risk", daysOfCover: 7 }),
+  ];
+  const s = summarize(rows);
+  assert.equal(s.top.length, 10);
+  assert.deepEqual(s.top.slice(-1).map((r) => r.productId), ["out7"]);
+  assert.equal(s.top[0].productId, "p11");
+});
+
 test("top list is capped", () => {
   const rows = Array.from({ length: 15 }, (_, i) => row({ productId: `p${i}`, status: "dead_stock", moneyAtStake: i + 1 }));
   const s = summarize(rows);

@@ -22,6 +22,8 @@ const TONE = { high: "critical", medium: "warning", low: "info" };
 /** "Why it isn't selling": rule-based reasons, each with its numbers and a link to the data. */
 export function Diagnosis({ productId }) {
   const [reasons, setReasons] = useState(null);
+  const [titles, setTitles] = useState({});
+  const [sellingWell, setSellingWell] = useState(false);
   const [error, setError] = useState(false);
   const [upgrade, setUpgrade] = useState(null);
 
@@ -32,12 +34,15 @@ export function Diagnosis({ productId }) {
         if (res.status === 403 && body.upgrade) return setUpgrade(body.error);
         if (!res.ok) throw new Error(String(res.status));
         setReasons(body.reasons);
+        setTitles(body.titles ?? {});
+        setSellingWell(Boolean(body.sellingWell));
       })
       .catch(() => setError(true));
   }, [productId]);
 
   return (
-    <s-section heading="Why it isn't selling">
+    <s-section heading={sellingWell ? "What could still be better" : "Why it isn't selling"}>
+      {sellingWell && reasons?.length > 0 && <s-text tone="neutral">This product sells well; these are page improvements, not reasons it isn't selling.</s-text>}
       {error && <s-banner tone="critical">Could not run the diagnosis.</s-banner>}
       {upgrade && <UpgradeBanner>{upgrade}</UpgradeBanner>}
       {!error && !upgrade && !reasons && <s-spinner accessibilityLabel="Diagnosing" />}
@@ -56,7 +61,7 @@ export function Diagnosis({ productId }) {
                   See the data
                 </a>
               </span>
-              <ReasonData reason={r} />
+              <ReasonData reason={r} titles={titles} />
             </li>
           ))}
         </ul>
@@ -66,9 +71,9 @@ export function Diagnosis({ productId }) {
 }
 
 /** The items behind a reason that the linked section doesn't show by itself. */
-function ReasonData({ reason }) {
+function ReasonData({ reason, titles }) {
   if (reason.code === "duplicate_description") {
-    const ids = (reason.data.sameAs) ?? [];
+    const ids = reason.data.sameAs ?? [];
     return (
       <span className="text-sm text-zinc-500">
         Same text as:{" "}
@@ -76,7 +81,7 @@ function ReasonData({ reason }) {
           <span key={id}>
             {i > 0 && ", "}
             <Link href={`/products/${id}`} className="underline">
-              product {i + 1}
+              {titles[id] ?? `product ${i + 1}`}
             </Link>
           </span>
         ))}
@@ -84,8 +89,8 @@ function ReasonData({ reason }) {
     );
   }
   if (reason.code === "low_traffic_collections") {
-    const views = (reason.data.collectionViews) ?? [];
-    return <span className="text-sm text-zinc-500">Views per collection (30 days): {views.join(", ")}</span>;
+    const views = reason.data.collectionViews ?? [];
+    return <span className="text-sm text-zinc-500">Views per collection (30 days): {views.map((v) => v.toLocaleString()).join(", ")}</span>;
   }
   return null;
 }

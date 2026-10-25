@@ -7,6 +7,13 @@ const STEPS = [
   { resource: "orders", label: "Last 60 days of orders" },
 ];
 
+/** Shopify's import errors in plain words (the original code stays at the end for support). */
+function friendlyError(error) {
+  if (/ACCESS_DENIED/.test(error)) return `Shopify refused access. Open the app again and approve the permissions it asks for. (${error})`;
+  if (/fetch failed|no response/i.test(error)) return `Couldn't reach Shopify. Try again in a moment. (${error})`;
+  return error;
+}
+
 const statusOf = (sync, resource) => sync.states.find((x) => x.resource === resource)?.status ?? "pending";
 
 /** Shows the initial import step by step; polls until done or a step fails, then offers a retry. */
@@ -65,7 +72,7 @@ export function SyncProgress() {
             <s-text key={step.resource} tone={statuses[i] === "error" ? "critical" : undefined}>
               {statuses[i] === "done" ? "✓" : statuses[i] === "error" ? "✕" : "…"} {step.label}
               {step.resource === "products" && sync.products > 0 ? ` (${sync.products.toLocaleString()})` : ""}
-              {state?.error ? ` — ${state.error}` : ""}
+              {state?.error ? ` — ${friendlyError(state.error)}` : ""}
             </s-text>
           );
         })}
