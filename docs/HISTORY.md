@@ -9,6 +9,7 @@
 - Phone: two status tiles per row, tables scroll sideways instead of being cut off, the sales chart starts at the latest days and a tap shows the day
 - Smaller: products under 30 days old aren't slow movers yet; price log names the variant and the reason; markdown shows when the current step went live; report names fix types and undone fixes; Compare says it needs Growth before picking; import errors in plain words
 - Second customer test round: new status "New" for products under 30 days old that would otherwise be slow (no money at stake, "too early to judge"); untracked products (gift cards) have no days of stock anywhere; products not analyzed (excluded, over the limit) still show their stock value; on phones the Top 10 and the list keep money and days of stock visible; the next step says when a markdown is running; "sells well" isn't said after worse or unchanged fixes
+- Auth: a token Shopify refuses is an auth error (401), and a refused refresh falls back to a token exchange; the plan webhook answers 500 on a refused token (Shopify retries) instead of setting a paying shop to Free; the fix center keeps its drafts after an outage; unanalyzed products show "—" for stock value when it's unknown
 - Not changed (design choices, noted): description is edited as HTML; one "Apply" per part of the page
 
 ## 2026-10-25 · code-review
