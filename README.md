@@ -13,7 +13,7 @@ No other dependencies are added without the owner's approval.
 
 ## Setup
 
-1. `cp .env.example .env` and fill in `DATABASE_URL`, `DIRECT_URL` (Supabase → Connect) and `ENCRYPTION_KEY` (`openssl rand -base64 32`).
+1. `cp .env.example .env` and fill in `DATABASE_URL`, `DIRECT_URL` (Supabase → Connect) and `ENCRYPTION_KEY` (`openssl rand -base64 32`). Keep `JOBS_WORKER=true`: the store import and the analysis run as background jobs inside the server.
 2. `npm install` (also generates the Prisma client).
 3. Run it on a dev store with the Shopify CLI (run through `npx`, not a project dependency):
    1. `npx @shopify/cli@latest app config link` — log in, choose "Create a new app" (or your existing one). This fills `client_id` in `shopify.app.toml`.
