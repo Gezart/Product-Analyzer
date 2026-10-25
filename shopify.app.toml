@@ -1,6 +1,6 @@
 # Shopify app configuration — https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration
 # `shopify app config link` fills client_id for your app; `shopify app dev` updates the URLs to its tunnel.
-client_id = ""
+client_id = "ee40714e951a9ecee7b580a54addbd81"
 name = "Unstuck: Product Analyzer"
 application_url = "https://example.com"
 embedded = true
