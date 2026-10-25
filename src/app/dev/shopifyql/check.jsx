@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { apiError } from "@/app/api-error";
 
 /** What ShopifyQL returns for product views on this store (copy the result to the developer). */
 export function ShopifyqlCheck() {
@@ -9,7 +10,7 @@ export function ShopifyqlCheck() {
   const [error, setError] = useState(null);
   useEffect(() => {
     fetch("/api/dev/shopifyql")
-      .then(async (res) => (res.ok ? setResult(await res.json()) : Promise.reject(new Error(`${res.status} ${await res.text()}`))))
+      .then(async (res) => (res.ok ? setResult(await res.json()) : Promise.reject(await apiError(res))))
       .catch((e) => setError(e.message));
   }, []);
   const best = result?.results.find((r) => r.ok && r.viewRows > 0);

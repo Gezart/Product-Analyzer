@@ -10,6 +10,8 @@
 // Without view data (before views are synced) conversion can't be measured: units are compared
 // instead, against the baseline scaled by store-wide units, with the same ±20% bands.
 
+import { daysBetween, round2, shiftDate } from "./dates.js";
+
 export const WINDOW = { minDays: 14, maxDays: 30, targetViews: 150, minViews: 50, change: 0.2 };
 
 /**
@@ -18,12 +20,8 @@ export const WINDOW = { minDays: 14, maxDays: 30, targetViews: 150, minViews: 50
  */
 export const TRAFFIC = { minUnits: 30, minViews: 300, minRatio: 0.5, maxRatio: 2 };
 
-const DAY_MS = 86_400_000;
-const round2 = (n) => Math.round(n * 100) / 100;
 /** Changes are compared at 6 decimals, so exactly 20% counts as "20%+" despite floating point. */
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
-const shift = (date, days) => new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
-const daysBetween = (from, to) => Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS);
 
 function totals(rows, from, toExclusive) {
   const inRange = rows.filter((r) => r.date >= from && r.date < toExclusive);
@@ -60,19 +58,19 @@ export function evaluateWindow({
   let end = null;
   let views = 0;
   for (let d = 1; d <= available; d++) {
-    views += totals(product, shift(start, d - 1), shift(start, d)).views;
+    views += totals(product, shiftDate(start, d - 1), shiftDate(start, d)).views;
     if (d >= WINDOW.minDays && ((hasViews && views >= WINDOW.targetViews) || d >= maxDays)) {
       end = d;
       break;
     }
   }
-  if (end == null) return { status: "measuring", daysDone: available, viewsSoFar: totals(product, start, shift(start, available)).views };
+  if (end == null) return { status: "measuring", daysDone: available, viewsSoFar: totals(product, start, shiftDate(start, available)).views };
 
-  const endDate = shift(start, end);
+  const endDate = shiftDate(start, end);
   const after = totals(product, start, endDate);
   if (hasViews && after.views < WINDOW.minViews && !extended) return { status: "extend" };
 
-  const wantedFrom = shift(baselineEnd, -end);
+  const wantedFrom = shiftDate(baselineEnd, -end);
   const baseStart = wantedFrom < historyFrom ? historyFrom : wantedFrom;
   const baselineRaw = totals(product, baseStart, baselineEnd);
   // A shorter known baseline is scaled up to the window's length (rates are unaffected).
@@ -120,8 +118,8 @@ export function evaluateWindow({
     status: "done",
     verdict,
     basis,
-    window: { from: start, to: shift(endDate, -1) },
-    baselineWindow: { from: baseStart, to: shift(baselineEnd, -1) },
+    window: { from: start, to: shiftDate(endDate, -1) },
+    baselineWindow: { from: baseStart, to: shiftDate(baselineEnd, -1) },
     after,
     baseline: { ...baseline, units: round2(baseline.units), views: round2(baseline.views), purchases: round2(baseline.purchases) },
     baselineRaw,

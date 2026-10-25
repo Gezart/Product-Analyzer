@@ -1,4 +1,5 @@
 // Merchant rules — docs/PLAN.md module 10. Validation is pure (relative import only) so node:test can load it.
+import { round2 } from "./dates.js";
 import { DEFAULT_THRESHOLDS } from "./scoring.js";
 
 export const DEFAULT_SETTINGS = {
@@ -28,8 +29,6 @@ function gidList(value, pattern) {
   if (!value.every((id) => typeof id === "string" && pattern.test(id))) return null;
   return [...new Set(value)];
 }
-
-const round2 = (n) => Math.round(n * 100) / 100;
 
 function check(value, rule) {
   return (

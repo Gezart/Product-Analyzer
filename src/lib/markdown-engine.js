@@ -1,21 +1,14 @@
 import { getOfflineSession } from "@/lib/auth";
+import { DAY_MS } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { errorMessage, HttpError } from "@/lib/http-error";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { dueStep, guardWrites, LADDER, liveStock, proposeLadder, restoreWrites, safeToWrite, settleWrites, stepWrites, stockCleared, withOutcomes } from "@/lib/markdown";
 import { readLiveVariants, writeVariantPrices } from "@/lib/markdown-shopify";
 import { notify } from "@/lib/notify";
 
-export class MarkdownError extends Error {
-  status;
+export class MarkdownError extends HttpError {}
 
-  constructor(message, status) {
-    super(message);
-    this.status = status;
-  }
-}
-
-const DAY_MS = 86_400_000;
-const message = (e) => (e instanceof Error ? e.message : String(e)).slice(0, 500);
 /** After this many hourly runs in a row where Shopify refused a step, the plan pauses. */
 const MAX_FAILURES = 3;
 
@@ -95,7 +88,7 @@ async function writePrices(session, plan, live, writes, applied) {
     error = e;
     outcomes = settleWrites(writes, await readLiveVariants(session, plan.product.shopifyGid).catch(() => null));
   }
-  await markRows(rows.map((r) => r.id), outcomes, error ? message(error) : null);
+  await markRows(rows.map((r) => r.id), outcomes, error ? errorMessage(error) : null);
   return { applied: withOutcomes(applied, writes, outcomes), outcomes, error };
 }
 
@@ -170,7 +163,7 @@ async function applyStep(planId, step) {
       await saveData(
         plan.id,
         { ...data, applied, failures },
-        failures >= MAX_FAILURES ? { status: "paused", endReason: `Shopify kept refusing the price change: ${message(error)}` } : {},
+        failures >= MAX_FAILURES ? { status: "paused", endReason: `Shopify kept refusing the price change: ${errorMessage(error)}` } : {},
       );
       if (failures >= MAX_FAILURES) await notify({ shopId: plan.product.shopId, productId: plan.productId, type: "markdown_paused" });
     }
@@ -199,10 +192,10 @@ async function endPlan(planId, reason, restore) {
         await saveData(
           plan.id,
           { ...data, applied, restoreFailures, restoreFailedAt: new Date().toISOString() },
-          giveUp && plan.status === "active" ? { status: "paused", endReason: `Shopify kept refusing to restore the original prices: ${message(error)}` } : {},
+          giveUp && plan.status === "active" ? { status: "paused", endReason: `Shopify kept refusing to restore the original prices: ${errorMessage(error)}` } : {},
         );
         if (giveUp) await notify({ shopId: plan.product.shopId, productId: plan.productId, type: "markdown_restore_failed" });
-        throw new MarkdownError(`Some prices couldn't be restored: ${message(error)}`, 502);
+        throw new MarkdownError(`Some prices couldn't be restored: ${errorMessage(error)}`, 502);
       }
       data.applied = {};
     }
@@ -260,8 +253,8 @@ export async function markdownOverview(shopId, productId, { preview: withPreview
 }
 
 const isProposal = (v) =>
-  !!v && typeof v === "object" && Array.isArray((v).variants) &&
-  (v).variants.every((x) => x && typeof x.id === "string" && Array.isArray(x.stepPrices));
+  !!v && typeof v === "object" && Array.isArray(v.variants) &&
+  v.variants.every((x) => x && typeof x.id === "string" && Array.isArray(x.stepPrices));
 
 /** Merchant approves the previewed ladder: the plan starts and step 1 goes live now. */
 export async function approveMarkdown(shopId, productId, expected) {
@@ -296,7 +289,7 @@ export async function approveMarkdown(shopId, productId, expected) {
       },
     });
   } catch (error) {
-    if ((error).code === "P2002") throw new MarkdownError("A markdown plan is already running for this product.", 409);
+    if (error.code === "P2002") throw new MarkdownError("A markdown plan is already running for this product.", 409);
     throw error;
   }
   // Step 1 goes live now. If nothing reached Shopify (and nothing is pending), the plan fails and the
@@ -307,21 +300,21 @@ export async function approveMarkdown(shopId, productId, expected) {
     result = await applyStep(plan.id, 0);
   } catch (error) {
     const [current, pending] = await Promise.all([loadPlan(plan.id), db().priceChange.count({ where: { planId: plan.id, status: "pending" } })]);
-    const nothingApplied = pending === 0 && Object.keys((current?.steps)?.applied ?? {}).length === 0;
+    const nothingApplied = pending === 0 && Object.keys(current?.steps?.applied ?? {}).length === 0;
     if (nothingApplied) {
-      await db().markdownPlan.update({ where: { id: plan.id }, data: { status: "failed", endReason: message(error), endedAt: new Date() } });
+      await db().markdownPlan.update({ where: { id: plan.id }, data: { status: "failed", endReason: errorMessage(error), endedAt: new Date() } });
     }
-    throw error instanceof MarkdownError ? error : new MarkdownError(message(error), 502);
+    throw error instanceof MarkdownError ? error : new MarkdownError(errorMessage(error), 502);
   }
   let notice = null;
   if (result && !result.allDone) {
     if (!result.anyApplied && !result.unknown) {
-      await db().markdownPlan.update({ where: { id: plan.id }, data: { status: "failed", endReason: message(result.error), endedAt: new Date() } });
-      throw new MarkdownError(`Shopify refused the price change: ${message(result.error)}`, 502);
+      await db().markdownPlan.update({ where: { id: plan.id }, data: { status: "failed", endReason: errorMessage(result.error), endedAt: new Date() } });
+      throw new MarkdownError(`Shopify refused the price change: ${errorMessage(result.error)}`, 502);
     }
     notice = result.unknown
       ? "Shopify didn't confirm every price; the app checks again within the hour."
-      : `Some prices weren't changed (${message(result.error)}); the app retries within the hour.`;
+      : `Some prices weren't changed (${errorMessage(result.error)}); the app retries within the hour.`;
   }
   return { ...(await db().markdownPlan.findUniqueOrThrow({ where: { id: plan.id } })), notice };
 }

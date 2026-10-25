@@ -1,11 +1,5 @@
-import { authenticate, AuthError } from "@/lib/auth";
+import { appRoute } from "@/lib/route";
 
-export async function GET(request) {
-  try {
-    const { shop } = await authenticate(request);
-    return Response.json({ domain: shop.domain, plan: shop.plan, installedAt: shop.installedAt });
-  } catch (error) {
-    if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
-    throw error;
-  }
-}
+export const GET = appRoute(async ({ shop }) => {
+  return Response.json({ domain: shop.domain, plan: shop.plan, installedAt: shop.installedAt });
+});

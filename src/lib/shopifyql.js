@@ -5,22 +5,22 @@
 // The exact syntax the store's API version accepts is checked by the ShopifyQL check page
 // (/dev/shopifyql); views-sync uses the first candidate that works.
 
-const DAY_MS = 86_400_000;
+import { shiftDate } from "./dates.js";
+
 const METRICS = "view_sessions, view_cart_sessions, view_cart_checkout_purchase_sessions";
 const SUMS =
   "sum(view_sessions) AS view_sessions, sum(view_cart_sessions) AS view_cart_sessions, sum(view_cart_checkout_purchase_sessions) AS view_cart_checkout_purchase_sessions";
-const shift = (date, days) => new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
 
 /** The `days` complete days before `today` (local dates, both ends included). */
 export function viewRange(today, days) {
-  return { from: shift(today, -days), to: shift(today, -1) };
+  return { from: shiftDate(today, -days), to: shiftDate(today, -1) };
 }
 
 /** A range split into chunks of at most `size` days (oldest first), so no single answer gets too big. */
 export function chunkRange({ from, to }, size) {
   const out = [];
-  for (let start = from; start <= to; start = shift(start, size)) {
-    const end = shift(start, size - 1);
+  for (let start = from; start <= to; start = shiftDate(start, size)) {
+    const end = shiftDate(start, size - 1);
     out.push({ from: start, to: end < to ? end : to });
   }
   return out;

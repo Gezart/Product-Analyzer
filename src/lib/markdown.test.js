@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { discountedPrice, dueStep, floorPrice, proposeLadder, safeToWrite, stockCleared } from "./markdown.js";
+import { discountedPrice, dueStep, floorPrice, guardWrites, proposeLadder, restoreWrites, safeToWrite, settleWrites, stepWrites, stockCleared, withOutcomes } from "./markdown.js";
 
 const settings = { marginFloorPct: 10, maxDiscountPct: 40 };
 
@@ -95,7 +95,6 @@ test("safe to write: unknown floor or below floor is refused", () => {
 });
 
 // ---- write selection ----
-import { guardWrites, restoreWrites, stepWrites } from "./markdown.js";
 
 const plan = { id: "v", title: "S", originalPrice: 100, originalCompareAt: null, floor: 44, stepPrices: [90, 80, 70], compareAt: 100 };
 const lp = (price, cost = 40, inventory = 10) => ({ id: "v", price, compareAtPrice: null, cost, inventory });
@@ -156,7 +155,6 @@ test("guard: raises the app's own price to the live floor, never above the origi
   assert.deepEqual(guardWrites([plan], [lp(70, 40)], ours, { marginFloorPct: 10, paused: false }), { writes: [], alerts: [] });
 });
 
-import { settleWrites, withOutcomes } from "./markdown.js";
 
 test("step writes: the max discount approved with the plan stays the limit when settings are raised", () => {
   const r = stepWrites([plan], [lp(90)], { v: { price: 90, compareAt: 100 } }, 2, { ...s, maxDiscountPct: 60, approvedMaxDiscountPct: 25 });

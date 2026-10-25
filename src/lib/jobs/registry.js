@@ -42,7 +42,7 @@ export const handlers = {
       runMarkdownPlans(shopId).then(() => guardPrices(shopId)),
     ]);
     const failed = results.find((r) => r.status === "rejected");
-    if (failed) throw (failed).reason;
+    if (failed) throw failed.reason;
   },
   /** Daily price guard (also runs after every plan-runner pass). */
   "price-guard": async (job) => {

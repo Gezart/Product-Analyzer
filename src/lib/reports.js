@@ -1,13 +1,9 @@
+import { asDate, dateKey, shiftDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { hasFeature } from "@/lib/plans";
 import { averageCost, dailyBaseline, markdownPeriod, monthlyReport, monthRange, previousMonth } from "@/lib/report";
 import { isLocalDate, ORDER_DAYS } from "@/lib/sync/constants";
-
-const DAY_MS = 86_400_000;
-const asDate = (key) => new Date(`${key}T00:00:00Z`);
-const dateKey = (d) => d.toISOString().slice(0, 10);
-const shift = (key, days) => dateKey(new Date(asDate(key).getTime() + days * DAY_MS));
 
 /** Builds a shop's report for `period` ("YYYY-MM") from its plans, fixes and daily metrics. */
 export async function buildReport(shopId, period, now = new Date()) {
@@ -23,18 +19,18 @@ export async function buildReport(shopId, period, now = new Date()) {
         product: { shopId },
         currentStep: { gte: 0 },
         startedAt: { lte: asDate(month.to) },
-        OR: [{ endedAt: null }, { endedAt: { gte: asDate(shift(month.from, -1)) } }],
+        OR: [{ endedAt: null }, { endedAt: { gte: asDate(shiftDate(month.from, -1)) } }],
       },
       include: { product: { select: { title: true, shopifyCreatedAt: true } } },
     }),
     db().fix.findMany({
-      where: { product: { shopId }, appliedAt: { gte: asDate(shift(month.from, -1)), lt: asDate(shift(month.to, 2)) } },
+      where: { product: { shopId }, appliedAt: { gte: asDate(shiftDate(month.from, -1)), lt: asDate(shiftDate(month.to, 2)) } },
       include: { product: { select: { title: true } } },
       orderBy: { appliedAt: "asc" },
     }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "orders" } } }),
   ]);
-  const ordersFrom = orders?.status === "done" && isLocalDate(orders.lastCursor) ? orders.lastCursor : shift(today, -ORDER_DAYS);
+  const ordersFrom = orders?.status === "done" && isLocalDate(orders.lastCursor) ? orders.lastCursor : shiftDate(today, -ORDER_DAYS);
   // Days before the product existed or before order history starts aren't "no sales".
   const historyFrom = (product) => {
     const created = product.shopifyCreatedAt ? localDateKey(product.shopifyCreatedAt, tz) : null;

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { apiError } from "@/app/api-error";
 import { listen } from "@/app/polaris-events";
 
 // Shares are stored 0–1 and shown as percentages.
@@ -64,7 +65,7 @@ export function SettingsForm() {
 
   useEffect(() => {
     fetch("/api/settings")
-      .then(async (res) => (res.ok ? load(await res.json()) : Promise.reject(new Error(await res.text()))))
+      .then(async (res) => (res.ok ? load(await res.json()) : Promise.reject(await apiError(res))))
       .catch((e) => setMessage({ tone: "critical", text: [`Could not load settings: ${e.message}`] }));
     fetch("/api/collections")
       .then(async (res) => {
@@ -123,7 +124,7 @@ export function SettingsForm() {
       load(body);
       setMessage({ tone: "success", text: ["Saved. Your catalog is being re-scored."] });
     } catch (e) {
-      setMessage({ tone: "critical", text: [(e).message] });
+      setMessage({ tone: "critical", text: [e.message] });
     } finally {
       setSaving(false);
     }

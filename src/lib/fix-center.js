@@ -2,17 +2,11 @@ import { getOfflineSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { readLiveProduct, stateOf, writeState } from "@/lib/fix-shopify";
 import { sameState } from "@/lib/fixes";
+import { errorMessage, HttpError } from "@/lib/http-error";
 import { enqueue } from "@/lib/jobs/queue";
 import { removeFromRescuePlan, startRescuePlan } from "@/lib/rescue-plans";
 
-export class FixError extends Error {
-  status;
-
-  constructor(message, status) {
-    super(message);
-    this.status = status;
-  }
-}
+export class FixError extends HttpError {}
 
 /** A fix older than this still "approved" or "undoing" is a crashed attempt, not one in progress. */
 const IN_PROGRESS_MS = 2 * 60_000;
@@ -38,8 +32,6 @@ async function refreshProduct(shopId, productGid) {
 async function track(step) {
   await step.catch((error) => console.error("[fix-center] rescue plan update failed", error));
 }
-
-const message = (error) => (error instanceof Error ? error.message : String(error)).slice(0, 500);
 
 /**
  * Applies a merchant-approved fix: reads the current state from Shopify (the snapshot for undo),
@@ -93,16 +85,16 @@ export async function applyFix(
     const result = await db().fix.update({
       where: { id: fix.id },
       data: unchanged
-        ? { status: "failed", error: message(writeError) }
+        ? { status: "failed", error: errorMessage(writeError) }
         : {
             status: "applied",
             appliedAt: new Date(),
-            after: (saved ?? after),
-            error: `${saved ? "Partly applied" : "Outcome unknown"}: ${message(writeError)}`,
+            after: saved ?? after,
+            error: `${saved ? "Partly applied" : "Outcome unknown"}: ${errorMessage(writeError)}`,
           },
     });
     await refreshProduct(shopId, product.shopifyGid);
-    if (unchanged) throw new FixError(message(writeError), 502);
+    if (unchanged) throw new FixError(errorMessage(writeError), 502);
     await track(startRescuePlan(shopId, productId, fix.id));
     return result;
   }
@@ -155,8 +147,8 @@ export async function undoFix(shopId, fixId, { force = false } = {}) {
     return { ...result, pending };
   } catch (error) {
     // Back to applied so it can be retried; the product may be partly restored.
-    await db().fix.update({ where: { id: fix.id }, data: { status: "applied", error: `Undo failed: ${message(error)}` } });
+    await db().fix.update({ where: { id: fix.id }, data: { status: "applied", error: `Undo failed: ${errorMessage(error)}` } });
     await refreshProduct(shopId, fix.product.shopifyGid);
-    throw new FixError(`Undo failed: ${message(error)}`, 502);
+    throw new FixError(`Undo failed: ${errorMessage(error)}`, 502);
   }
 }

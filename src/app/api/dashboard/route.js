@@ -1,6 +1,6 @@
-import { authenticate, AuthError } from "@/lib/auth";
 import { summarize } from "@/lib/dashboard";
 import { db } from "@/lib/db";
+import { appRoute } from "@/lib/route";
 
 const num = (v) => (v == null ? null : Number(v));
 

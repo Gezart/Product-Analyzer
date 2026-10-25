@@ -1,4 +1,6 @@
-// Catalog health summary — docs/PLAN.md module 2. Pure (no imports) so node:test can load it.
+// Catalog health summary — docs/PLAN.md module 2. Pure (relative imports only) so node:test can load it.
+
+import { round2 } from "./dates.js";
 
 export const STATUS_ORDER = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "stockout_risk", "healthy"];
 
@@ -6,7 +8,7 @@ export const STATUS_ORDER = ["dead_stock", "slow_mover", "page_problem", "hidden
 const STUCK = new Set(["dead_stock", "slow_mover"]);
 
 export function summarize(rows, topN = 10) {
-  const scored = rows.filter((r) => (STATUS_ORDER).includes(r.status));
+  const scored = rows.filter((r) => STATUS_ORDER.includes(r.status));
   const stuck = scored.filter((r) => STUCK.has(r.status));
   const byStatus = STATUS_ORDER.map((status) => {
     const group = scored.filter((r) => r.status === status);
@@ -52,4 +54,3 @@ function priority(r) {
   return 1 / (1 + (r.daysOfCover ?? 0));
 }
 
-const round2 = (n) => Math.round(n * 100) / 100;
