@@ -241,7 +241,7 @@ The five hard gates for App Store approval are: GraphQL Admin API, Shopify Billi
 | `read_inventory` | Stock levels, days of cover | |
 | `read_orders` | Sales per product | Default window is the last 60 days ([Shopify scopes](https://shopify.dev/docs/api/usage/access-scopes)) |
 | `read_all_orders` | Full sales history for better baselines | Must be requested and approved in the Partner Dashboard; v2 ([Shopify scopes](https://shopify.dev/docs/api/usage/access-scopes)) |
-| ShopifyQL analytics access | Per-product `view_sessions`, cart and purchase rates, with history | Exact scope to confirm in the Phase 0 spike ([products dataset](https://shopify.dev/api/shopifyql/datasets/products-dataset)) |
+| `read_reports` | `shopifyqlQuery`: per-product `view_sessions`, `view_cart_sessions`, `view_cart_checkout_purchase_sessions` per day, with history | Spike: `shopifyqlQuery` (GraphQL Admin API 2025-10+) needs `read_reports`; Shopify also lists Level 2 protected customer data access for it (request in the Partner Dashboard if the check page reports "access denied"). Changing scopes asks the merchant to approve again. The query that works on the store is confirmed with the ShopifyQL check page (`/dev/shopifyql`) ([products dataset](https://shopify.dev/api/shopifyql/datasets/products-dataset), [ShopifyQL in the Admin API](https://shopify.dev/docs/apps/build/shopifyql/graphql-admin-api)) |
 | `write_discounts` | Automatic discounts and bundles | v2 only |
 
 ### Platform rules we design for

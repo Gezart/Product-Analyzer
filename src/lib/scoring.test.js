@@ -227,3 +227,14 @@ test("money at stake = stock value × status weight for every status, sorted des
   assert.deepEqual(r.slice(0, 4).map((x) => x.id), ["slow", "page", "gem", "dead"]);
   assert.ok(r.filter((x) => x.status === "healthy").every((x) => x.moneyAtStake === 0));
 });
+
+test("products sold without stock (untracked, e.g. gift cards) are never a stock-out risk", () => {
+  const base = { id: "g", stock: 0, stockValue: 0, costIsEstimate: false, units30: 10, unitsPrev30: 5, units60: 15, views30: 0, purchases30: 0, daysSinceLastSale: 1, ageDays: 400 };
+  const [tracked] = scoreProducts([{ ...base, sellsWhenOut: false }], undefined, 60);
+  const [untracked] = scoreProducts([{ ...base, sellsWhenOut: true }], undefined, 60);
+  assert.equal(tracked.status, "stockout_risk");
+  assert.notEqual(untracked.status, "stockout_risk");
+  // Selling past zero is allowed, but there is still stock running low: still a risk.
+  const [continueSelling] = scoreProducts([{ ...base, stock: 3, stockValue: 30, sellsWhenOut: true }], undefined, 60);
+  assert.equal(continueSelling.status, "stockout_risk");
+});
