@@ -29,9 +29,9 @@ export const handlers = {
   "orders-catchup": runOrdersCatchup,
   "daily-metrics": runDailyMetrics,
   /** Product views from ShopifyQL (90 days the first time, then the last 7), then a re-score. */
-  "views-sync": async (job) => {
+  "views-sync": async (job, signal) => {
     requireShop(job);
-    await syncViews(job);
+    await syncViews(job, signal);
   },
   /** Plan runner: closes measurement windows, applies markdown steps, restores prices, guards floors. */
   "rescue-runner": async (job) => {

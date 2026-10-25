@@ -12,8 +12,8 @@ export const VIEW_DAYS_FIRST = 90;
 export const VIEW_DAYS_NIGHTLY = 7;
 /** Days per query, so each answer stays small (at most products × 7 rows). */
 const CHUNK_DAYS = 7;
-/** An answer with a round number of rows this large may have been cut off: not trusted. */
-const CAP_SUSPECT = 1000;
+/** Row counts at which an answer may have been cut off (common limits), when more rows were possible. */
+const CAPS = [1000, 10_000, 100_000];
 const BATCH = 20_000;
 const message = (e) => (e instanceof Error ? e.message : String(e)).slice(0, 500);
 
@@ -27,7 +27,7 @@ class ViewsUnavailable extends Error {}
  * on the "views" sync step and not retried — the app keeps working on sales alone; network and server
  * errors are retried.
  */
-export async function syncViews(job) {
+export async function syncViews(job, signal) {
   const shopId = job.shopId;
   const shop = await db().shop.findUnique({ where: { id: shopId } });
   if (!shop || shop.uninstalledAt) throw new PermanentJobError("Shop not installed");
@@ -39,12 +39,14 @@ export async function syncViews(job) {
   const range = viewRange(localDateKey(new Date(), shop.timezone), state?.status === "done" ? VIEW_DAYS_NIGHTLY : VIEW_DAYS_FIRST);
   try {
     const session = await getOfflineSession(shop.domain);
-    const { used, rows } = await readViews(session, range, state?.lastCursor);
+    const products = await db().product.count({ where: { shopId, status: { not: "DELETED" } } });
+    const { used, rows } = await readViews(session, range, state?.lastCursor, products, signal);
     await storeViews(shopId, range, rows);
     await setSyncState(shopId, "views", { status: "done", error: null, lastCursor: used, lastSyncedAt: new Date() });
     await enqueue({ type: "score-shop", shopId });
     return rows.length;
   } catch (error) {
+    // (A stopped run counts like any other retryable error.)
     const unavailable = error instanceof ViewsUnavailable;
     if (unavailable) await setSyncState(shopId, "views", { status: "error", error: error.message });
     // Statuses are recomputed anyway (from the views already stored) unless a retry is coming.
@@ -54,10 +56,10 @@ export async function syncViews(job) {
 }
 
 /**
- * Reads the range week by week. The first week picks the query (the one that worked last time is
- * tried first); the rest use it. Every week must come back usable, or nothing is stored.
+ * Reads the range week by week. The query that worked last time is tried first; once a week returns
+ * views, its query is used for the rest. Every week must come back usable, or nothing is stored.
  */
-async function readViews(session, range, preferred) {
+async function readViews(session, range, preferred, products, signal) {
   const chunks = chunkRange(range, CHUNK_DAYS);
   const order = viewQueries(chunks[0])
     .map((c) => c.id)
@@ -66,7 +68,9 @@ async function readViews(session, range, preferred) {
   let used = null;
   const rows = [];
   for (const chunk of chunks) {
+    if (signal?.aborted) throw new Error("Stopped (timeout or shutdown)");
     const candidates = used ? [used] : order;
+    const possible = products * (chunkRange(chunk, 1).length);
     let done = false;
     for (const id of candidates) {
       const { query } = viewQueries(chunk).find((c) => c.id === id);
@@ -80,10 +84,11 @@ async function readViews(session, range, preferred) {
       const parsed = r.ok ? viewRows(r.rows) : [];
       if (!r.ok) failures.push(`${id}: ${r.parseErrors.join("; ")}`);
       else if (parsed.length === 0 && (r.rawCount ?? r.rows.length) > 0) failures.push(`${id}: answer had rows but no product views in them`);
-      else if (r.rows.length >= CAP_SUSPECT && r.rows.length % CAP_SUSPECT === 0) {
+      else if (CAPS.includes(r.rows.length) && r.rows.length < possible) {
         throw new ViewsUnavailable(`${id}: ${r.rows.length} rows for ${chunk.from}–${chunk.to} looks cut off`);
       } else {
-        used = id;
+        // An empty week (e.g. a new store's oldest week) doesn't prove the query reads views.
+        if (parsed.length) used = id;
         rows.push(...parsed);
         done = true;
         break;
