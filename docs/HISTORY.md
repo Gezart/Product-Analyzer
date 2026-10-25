@@ -1,5 +1,14 @@
 # History
 
+## 2026-10-25 · ui-redesign
+- Catalog health redesigned: large "money stuck in stock" card with a one-line takeaway, products analyzed / need attention / money at stake, a stacked bar and a tile per status (empty statuses muted), a "Next best move" card (#1 product, its action, up next #2–#4) and a Top 10 table with rank, money-at-stake bars and an action per row; "Days of stock" only shows when a product has it
+- Free-plan stores with products that need attention see one line on what Starter adds (dashboard API now returns `plan`)
+- `summarize()` adds `needsAttention` and `moneyAtStakeTotal`; new pure `stuckSplit()` for the dead/slow sentence (shares never round to 0% or 100%); 2 new unit tests (141 pass)
+- Inbox: icon per notification type, unread highlight, empty state; Monthly report: headline numbers as cards with the formula under each; Plans: cards with limits, "Everything in X, plus", current plan and the next plan up as recommended
+- Custom text uses Polaris' font stack; the unused Geist Google fonts are removed (the build no longer fetches Google Fonts); shared card and status colors in `src/app/status-style.js`
+- Polaris web components + Tailwind only, no new dependencies; container queries, no sideways scrolling from 320px up (Top 10 hides columns and shows status and days under the title)
+- Open: look at it inside the Shopify admin on the dev store (Polaris components can't load in this environment)
+
 ## 2026-10-25 · views-sync
 - New `views-sync` job: daily view, cart and purchase sessions per product from ShopifyQL into `product_daily_metrics` — 90 days once the first import is done (the analysis doesn't wait for it), then the last 7 days after each nightly catalog refresh; a re-score follows (also when views are unavailable), so conversion statuses (page problem, hidden gem) use them
 - Exact dates in every query, read one week at a time; an answer that is refused, has rows but no product views, or looks cut off (exactly 1,000, 10,000 or 100,000 rows when more were possible) stores nothing
