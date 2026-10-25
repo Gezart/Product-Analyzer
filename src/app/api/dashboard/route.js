@@ -31,7 +31,11 @@ export async function GET(request) {
       daysOfCover: num(r.daysOfCover),
     }));
     const scoredAt = rows.reduce((max, r) => (!max || r.computedAt > max ? r.computedAt : max), null);
-    return Response.json({ currency: shop.currency, scoredAt, ...summarize(scores) });
+    // A store without products has nothing to score: the import being done is what counts then.
+    const imported =
+      scoredAt != null ||
+      (await db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "orders" } } }))?.status === "done";
+    return Response.json({ currency: shop.currency, scoredAt, imported, ...summarize(scores) });
   } catch (error) {
     if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
     throw error;

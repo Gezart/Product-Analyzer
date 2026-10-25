@@ -1,5 +1,13 @@
 # History
 
+## 2026-10-25 · dev-store-test (customer test fixes)
+- Customer test (local, Shopify stubbed) for "the app shows no data": the job worker was off (`JOBS_WORKER=false` in `.env.example`), so the store import never ran; now `true` by default and in the README
+- Empty store: the dashboard now says there are no active products instead of waiting forever
+- Gift cards and other products sold without stock are no longer flagged "Stock-out risk"
+- Job failures are logged in the server terminal; a failed import says "The store import stopped"
+- No dark theme from the Next.js template (Shopify Admin is light); settings scrolls to the save result; phone: the sales chart keeps a readable size and a tap shows the day; small text fixes
+- Open: App Bridge expects to be the first script (Next.js adds its scripts first) — works in practice so far, to watch on the store; Plans page needs Shopify to load (not testable here)
+
 ## 2026-10-24 · dev-store-test (setup)
 - `shopify.app.toml` (embedded app, scopes, Shopify-managed install, privacy webhooks to `/api/webhooks`) and `shopify.web.toml` (`npm run dev`) so the app can run on a dev store with `shopify app dev`
 - The app also reads the values the Shopify CLI passes (`SCOPES`, `HOST`); the dev server accepts requests through the tunnel (`allowedDevOrigins`)

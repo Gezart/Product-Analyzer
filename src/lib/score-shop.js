@@ -33,7 +33,7 @@ export async function scoreShop(shopId, now = new Date()) {
         status: true,
         collections: true,
         shopifyCreatedAt: true,
-        variants: { select: { inventoryQty: true, price: true, cost: true } },
+        variants: { select: { inventoryQty: true, price: true, cost: true, sellsWhenOut: true } },
       },
     }),
   ]);
@@ -102,6 +102,7 @@ export async function scoreShop(shopId, now = new Date()) {
       purchases30: c?.purchaseSessions ?? 0,
       daysSinceLastSale: saleDate ? daysBefore(saleDate) : null,
       ageDays: created ? daysBefore(created) : null,
+      sellsWhenOut: p.variants.length > 0 && p.variants.every((v) => v.sellsWhenOut),
     };
   });
 

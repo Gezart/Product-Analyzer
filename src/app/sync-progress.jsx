@@ -54,7 +54,7 @@ export function SyncProgress() {
   const failed = statuses.includes("error");
 
   return (
-    <s-section heading="Analyzing your store">
+    <s-section heading={failed ? "The store import stopped" : "Analyzing your store"}>
       <s-stack gap="small">
         <div className="h-2 w-full overflow-hidden rounded bg-zinc-200">
           <div className="h-full bg-emerald-600 transition-all" style={{ width: `${(doneCount / STEPS.length) * 100}%` }} />

@@ -79,7 +79,7 @@ export function CompareView() {
       values: products.map((p) => p.stockAge.days),
       // Products that never sold aren't "fresher" stock: they don't compete for best.
       best: () => bestIndex(products.map((p) => (p.stockAge.sold ? p.stockAge.days : null)), true),
-      show: (v, p) => (v == null ? "—" : `${p.stockAge.atLeast ? "over " : ""}${v} days${p.stockAge.sold ? "" : " (no sale yet)"}`),
+      show: (v, p) => (v == null ? "—" : `${p.stockAge.atLeast ? "over " : ""}${v} day${v === 1 ? "" : "s"}${p.stockAge.sold ? "" : " (no sale yet)"}`),
     },
     { label: "Page quality", values: products.map((p) => p.pageQuality.score), show: (v) => `${v} / 100`, quality: true },
   ];

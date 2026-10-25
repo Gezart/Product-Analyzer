@@ -71,7 +71,10 @@ export function ProductView() {
                 value={money.format(data.stockValue)}
                 note={data.stockValueIsEstimate ? "estimated (price × 50%)" : undefined}
               />
-              <Stat label="Days of stock" value={data.daysOfCover == null ? "—" : Math.round(data.daysOfCover).toLocaleString()} />
+              <Stat
+                label="Days of stock"
+                value={data.daysOfCover != null ? Math.round(data.daysOfCover).toLocaleString() : data.stock > 0 ? "No sales in 30 days" : "—"}
+              />
               <Stat label="Last sale" value={data.lastSale ?? "none in history"} />
               <Stat label="Money at stake" value={data.score ? money.format(data.score.moneyAtStake) : "—"} />
               <Stat label="Sell-through (60 days)" value={pct(data.score?.sellThrough ?? null)} />

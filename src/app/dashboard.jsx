@@ -18,7 +18,7 @@ export function Dashboard() {
         const body = await res.json();
         setData(body);
         setError(null);
-        if (!body.scoredAt) timer = setTimeout(load, 5000);
+        if (!body.imported) timer = setTimeout(load, 5000);
       } catch (e) {
         setError((e).message);
       }
@@ -29,7 +29,7 @@ export function Dashboard() {
 
   if (error) return <s-banner tone="critical">Could not load the dashboard ({error}).</s-banner>;
   if (!data) return <s-spinner accessibilityLabel="Loading dashboard" />;
-  if (!data.scoredAt) {
+  if (!data.imported) {
     return (
       <s-section>
         <s-paragraph>Your dashboard appears here as soon as the first analysis of your store is finished.</s-paragraph>
@@ -39,7 +39,10 @@ export function Dashboard() {
   if (data.productCount === 0) {
     return (
       <s-section>
-        <s-paragraph>No active products to analyze. Draft, archived and excluded products are left out (see Settings).</s-paragraph>
+        <s-paragraph>
+          No active products to analyze yet. Add products in Shopify (draft, archived and excluded products are left out, see Settings); new
+          products are picked up automatically.
+        </s-paragraph>
       </s-section>
     );
   }

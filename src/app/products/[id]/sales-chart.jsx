@@ -23,10 +23,10 @@ export function SalesChart({ days, formatMoney }) {
   const unknown = days.filter((d) => !d.known).length;
 
   return (
-    <figure className="relative m-0">
+    <figure className="relative m-0 overflow-x-auto">
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        className="h-auto w-full"
+        className="h-auto w-full min-w-[560px]"
         role="img"
         aria-label={`Units sold per day, last ${days.length} days: ${total} in total, at most ${peak} on one day${unknown ? `; no order history for the first ${unknown} days` : ""}`}
         onMouseLeave={() => setHover(null)}
@@ -54,7 +54,7 @@ export function SalesChart({ days, formatMoney }) {
           const top = y(d.units);
           const base = PAD.top + plotH;
           return (
-            <g key={d.date} onMouseEnter={() => setHover(i)}>
+            <g key={d.date} onMouseEnter={() => setHover(i)} onClick={() => setHover(i)}>
               {/* Hit target: the full column, larger than the bar. */}
               <rect x={PAD.left + i * slot} y={PAD.top} width={slot} height={plotH} fill="transparent" />
               {d.units > 0 && (
