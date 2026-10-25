@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiError } from "@/app/api-error";
 import { CARD_SURFACE } from "@/app/status-style";
 
 export function PlanPicker() {

@@ -1,5 +1,9 @@
 # History
 
+## 2026-10-25 · dashboard-500
+- Catalog health showed "Could not load the dashboard (500)": the merge of `code-review` and `ui-redesign` left `/api/dashboard` calling `authenticate` and `AuthError` without importing them; the route now uses the shared `appRoute` wrapper like the other API routes (same response, including `plan`)
+- Same merge dropped the `apiError` import in `src/app/plans/plan-picker.jsx`, so a failed plans request showed "apiError is not defined" instead of the server's message; import restored
+
 ## 2026-10-25 · ui-redesign
 - Catalog health redesigned: large "money stuck in stock" card with a one-line takeaway, products analyzed / need attention / money at stake, a stacked bar and a tile per status (empty statuses muted), a "Next best move" card (#1 product, its action, up next #2–#4) and a Top 10 table with rank, money-at-stake bars and an action per row; "Days of stock" only shows when a product has it
 - Free-plan stores with products that need attention see one line on what Starter adds (dashboard API now returns `plan`)
