@@ -1,6 +1,7 @@
 import { authenticate, AuthError } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { viewQueries, viewRows } from "@/lib/shopifyql";
+import { localDateKey } from "@/lib/jobs/schedule";
+import { chunkRange, viewQueries, viewRange, viewRows } from "@/lib/shopifyql";
 import { runShopifyql, shopifyqlEnvironment } from "@/lib/shopifyql-shopify";
 
 const message = (e) => (e instanceof Error ? e.message : String(e)).slice(0, 1000);
@@ -21,7 +22,14 @@ export async function GET(request) {
       environment = { error: message(e) };
     }
     const results = [];
-    for (const { id, query } of viewQueries(90)) {
+    const range = viewRange(localDateKey(new Date(), shop.timezone), 90);
+    // The whole 90 days in one query, and the last week alone (to see whether answers are capped).
+    const lastWeek = chunkRange(range, 7).at(-1);
+    const candidates = [
+      ...viewQueries(range).map((c) => ({ ...c, id: `${c.id} (90 days)` })),
+      ...viewQueries(lastWeek).map((c) => ({ ...c, id: `${c.id} (last 7 days)` })),
+    ];
+    for (const { id, query } of candidates) {
       try {
         const r = await runShopifyql(session, query);
         const rows = r.ok ? viewRows(r.rows) : [];
@@ -35,7 +43,9 @@ export async function GET(request) {
           parseErrors: r.parseErrors,
           columns: r.columns.map((c) => `${c.name} (${c.dataType})`),
           rows: r.rows.length,
+          rawRows: r.rawCount ?? null,
           sample: r.rows.slice(0, 5),
+          raw: r.rows.length ? undefined : r.raw,
           viewRows: rows.length,
           products: gids.length,
           productsKnownToApp: known,

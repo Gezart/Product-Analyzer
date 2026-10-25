@@ -89,12 +89,19 @@ export async function getOfflineSession(shop, sessionToken) {
   if (!sessionToken) throw new AuthError(`No usable offline token for ${shop}`);
 
   if (rescope) lastRescope.set(shop, Date.now());
-  const { session } = await shopify().auth.tokenExchange({
-    shop,
-    sessionToken,
-    requestedTokenType: RequestedTokenType.OfflineAccessToken,
-    expiring: true,
-  });
+  let session;
+  try {
+    ({ session } = await shopify().auth.tokenExchange({
+      shop,
+      sessionToken,
+      requestedTokenType: RequestedTokenType.OfflineAccessToken,
+      expiring: true,
+    }));
+  } catch (error) {
+    // Only trying to pick up a new scope: the stored token still works, so keep using it.
+    if (rescope && existing?.accessToken && !existing.isExpired(REFRESH_MARGIN_MS)) return existing;
+    throw error;
+  }
   await storeSession(session);
   return session;
 }
