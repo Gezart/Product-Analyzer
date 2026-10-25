@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { summarize } from "./dashboard.js";
+import { stuckSplit, summarize } from "./dashboard.js";
 
 const row = (o) => ({
   title: o.productId,
@@ -44,4 +44,29 @@ test("top list is capped", () => {
   const s = summarize(rows);
   assert.equal(s.top.length, 10);
   assert.equal(s.top[0].productId, "p14");
+});
+
+test("needs attention counts every analyzed status except healthy; money at stake is the total", () => {
+  const s = summarize([
+    row({ productId: "a", status: "dead_stock", stockValue: 1000, moneyAtStake: 1000 }),
+    row({ productId: "b", status: "page_problem", moneyAtStake: 0 }),
+    row({ productId: "c", status: "stockout_risk", daysOfCover: 3 }),
+    row({ productId: "d", status: "hidden_gem", stockValue: 100, moneyAtStake: 40.25 }),
+    row({ productId: "e", status: "healthy", stockValue: 9000 }),
+    row({ productId: "f", status: "excluded" }),
+    row({ productId: "g", status: "over_limit" }),
+  ]);
+  assert.equal(s.needsAttention, 4);
+  assert.equal(s.moneyAtStakeTotal, 1040.25);
+});
+
+test("stuck split: dead stock share of the stuck value, and products with no stock value still counted", () => {
+  const split = (rows) => stuckSplit(summarize(rows).byStatus);
+  assert.deepEqual(
+    split([row({ productId: "a", status: "dead_stock", stockValue: 250 }), row({ productId: "b", status: "slow_mover", stockValue: 750 })]),
+    { products: 2, value: 1000, deadShare: 0.25 },
+  );
+  assert.deepEqual(split([row({ productId: "a", status: "slow_mover", stockValue: 500 })]), { products: 1, value: 500, deadShare: 0 });
+  assert.deepEqual(split([row({ productId: "a", status: "dead_stock", stockValue: 0 })]), { products: 1, value: 0, deadShare: 0 });
+  assert.deepEqual(split([row({ productId: "a", status: "healthy", stockValue: 900 })]), { products: 0, value: 0, deadShare: 0 });
 });

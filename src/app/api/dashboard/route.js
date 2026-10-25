@@ -37,7 +37,7 @@ export async function GET(request) {
       scoredAt != null ||
       ((await db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "orders" } } }))?.status === "done" &&
         (await db().product.count({ where: { shopId: shop.id, status: { not: "DELETED" } } })) === 0);
-    return Response.json({ currency: shop.currency, scoredAt, imported, ...summarize(scores) });
+    return Response.json({ currency: shop.currency, plan: shop.plan, scoredAt, imported, ...summarize(scores) });
   } catch (error) {
     if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
     throw error;
