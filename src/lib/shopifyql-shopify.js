@@ -18,9 +18,13 @@ export async function runShopifyql(session, query) {
     { query },
   );
   const r = data.shopifyqlQuery;
-  if (r?.parseErrors?.length) return { ok: false, parseErrors: r.parseErrors, columns: [], rows: [] };
-  const columns = r?.tableData?.columns ?? [];
-  return { ok: true, parseErrors: [], columns, rows: tableRows(columns, r?.tableData?.rows) };
+  // The raw answer (shortened) is kept for the check page, in case its shape isn't what we expect.
+  const raw = JSON.stringify(r?.tableData ?? null).slice(0, 2000);
+  if (r?.parseErrors?.length) return { ok: false, parseErrors: r.parseErrors, columns: [], rows: [], raw };
+  if (!r?.tableData) return { ok: false, parseErrors: ["No table in the answer"], columns: [], rows: [], raw };
+  const columns = r.tableData.columns ?? [];
+  const rawCount = Array.isArray(r.tableData.rows) ? r.tableData.rows.length : null;
+  return { ok: true, parseErrors: [], columns, rows: tableRows(columns, r.tableData.rows), rawCount, raw };
 }
 
 /** What the store's API says about ShopifyQL: the granted scopes and the response type's fields. */
