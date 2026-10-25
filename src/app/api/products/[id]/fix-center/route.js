@@ -30,7 +30,7 @@ export const GET = appRoute(async ({ shop, session, params }) => {
     db().diagnosis.findFirst({ where: { productId: id }, orderBy: { createdAt: "desc" } }),
   ]);
   if (!live) return Response.json({ error: "Product no longer exists in Shopify" }, { status: 404 });
-  const reasons = (diagnosis?.reasons) ?? [];
+  const reasons = diagnosis?.reasons ?? [];
   const hints = reasons.flatMap((r) => (FIX_HINTS[r.code] ? [{ code: r.code, ...FIX_HINTS[r.code] }] : []));
   return Response.json({ live, manualCollections: collections, fixes, hints, diagnosisId: diagnosis?.id ?? null, upgrade });
 });

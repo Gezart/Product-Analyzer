@@ -13,7 +13,7 @@ export function appRoute(handler) {
       const params = ctx?.params ? await ctx.params : {};
       return await handler({ request, shop, session, params });
     } catch (error) {
-      if (error instanceof AuthError) return new Response("Unauthorized", { status: 401 });
+      if (error instanceof AuthError) return Response.json({ error: "Unauthorized" }, { status: 401 });
       if (error instanceof HttpError) return Response.json({ ...error.data, error: error.message }, { status: error.status });
       throw error;
     }

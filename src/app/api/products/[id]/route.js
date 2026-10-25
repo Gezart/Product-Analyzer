@@ -95,7 +95,7 @@ export const GET = appRoute(async ({ shop, params }) => {
           endsAt: product.rescuePlans[0].endsAt?.toISOString().slice(0, 10) ?? null,
           verdict: product.rescuePlans[0].verdict,
           fixes: product.rescuePlans[0].fixIds.length,
-          extended: Boolean((product.rescuePlans[0].baseline)?.extended),
+          extended: Boolean(product.rescuePlans[0].baseline?.extended),
           result: product.rescuePlans[0].result,
         }
       : null,

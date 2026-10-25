@@ -80,7 +80,7 @@ export function assembleProducts(rows) {
   return [...products.values()];
 }
 
-const money = (v) => num((v)?.shopMoney?.amount) ?? 0;
+const money = (v) => num(v?.shopMoney?.amount) ?? 0;
 
 /**
  * Orders JSONL (orders + child line items) → order lines. Only date, cancellation, product, variant,

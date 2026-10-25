@@ -1,8 +1,9 @@
 import { shopify } from "@/lib/shopify";
 
 /**
- * GraphQL Admin API request with the shop's offline session. Rate-limited (429) and unavailable (503)
- * answers are retried twice; GraphQL errors throw.
+ * GraphQL Admin API request with the shop's offline session. Network errors and rate-limited (429) or
+ * unavailable (503) answers are retried twice — safe because every write sets absolute values; a
+ * THROTTLED GraphQL error (HTTP 200) is not retried. GraphQL errors throw.
  */
 export async function adminGraphql(session, query, variables) {
   const client = new (shopify().clients.Graphql)({ session });

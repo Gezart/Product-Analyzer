@@ -1,4 +1,4 @@
-// Plans from docs/PLAN.md → "Pricing and billing". No imports so node:test can load it directly.
+// Plans from docs/PLAN.md → "Pricing and billing". Relative imports only, so node:test can load it directly.
 
 import { DAY_MS } from "./dates.js";
 

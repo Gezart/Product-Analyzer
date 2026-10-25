@@ -1,4 +1,4 @@
-// Catalog health summary — docs/PLAN.md module 2. Pure (no imports) so node:test can load it.
+// Catalog health summary — docs/PLAN.md module 2. Pure (relative imports only) so node:test can load it.
 
 import { round2 } from "./dates.js";
 

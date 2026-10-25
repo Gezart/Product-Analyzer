@@ -89,7 +89,7 @@ export async function applyFix(
         : {
             status: "applied",
             appliedAt: new Date(),
-            after: (saved ?? after),
+            after: saved ?? after,
             error: `${saved ? "Partly applied" : "Outcome unknown"}: ${errorMessage(writeError)}`,
           },
     });

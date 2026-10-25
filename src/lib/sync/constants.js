@@ -1,4 +1,4 @@
-// Pure (no imports) so node:test can load it directly.
+// Pure (relative imports only) so node:test can load it directly.
 
 import { DAY_MS } from "../dates.js";
 

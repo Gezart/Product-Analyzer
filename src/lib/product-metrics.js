@@ -1,4 +1,4 @@
-// Per-product analysis — docs/PLAN.md module 3. Pure (no imports) so node:test can load it.
+// Per-product analysis — docs/PLAN.md module 3. Pure (relative imports only) so node:test can load it.
 
 import { shiftDate } from "./dates.js";
 

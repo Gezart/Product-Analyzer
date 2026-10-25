@@ -300,7 +300,7 @@ export async function approveMarkdown(shopId, productId, expected) {
     result = await applyStep(plan.id, 0);
   } catch (error) {
     const [current, pending] = await Promise.all([loadPlan(plan.id), db().priceChange.count({ where: { planId: plan.id, status: "pending" } })]);
-    const nothingApplied = pending === 0 && Object.keys((current?.steps)?.applied ?? {}).length === 0;
+    const nothingApplied = pending === 0 && Object.keys(current?.steps?.applied ?? {}).length === 0;
     if (nothingApplied) {
       await db().markdownPlan.update({ where: { id: plan.id }, data: { status: "failed", endReason: errorMessage(error), endedAt: new Date() } });
     }
