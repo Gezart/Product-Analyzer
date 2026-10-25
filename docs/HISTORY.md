@@ -1,5 +1,12 @@
 # History
 
+## 2026-10-25 · dev-store-test (customer test fixes)
+- Customer test (local, Shopify stubbed) for "the app shows no data": the job worker was off (`JOBS_WORKER=false` in `.env.example`), so the store import never ran; now `true` by default and in the README
+- Empty store: the dashboard now says there are no active products instead of waiting forever
+- Gift cards and other products sold without stock are no longer flagged "Stock-out risk"
+- Job failures are logged in the server terminal; a failed import says "The store import stopped"
+- No dark theme from the Next.js template (Shopify Admin is light); settings scrolls to the save result; phone: the sales chart keeps a readable size and a tap shows the day; small text fixes
+- Open: App Bridge expects to be the first script (Next.js adds its scripts first) — works in practice so far, to watch on the store; Plans page needs Shopify to load (not testable here)
 ## 2026-10-24 · plan-limits
 - Products analyzed per plan (Free 25, Starter 250, Growth 2,000, Pro unlimited): over the limit, products analyzed before keep their place and free places go to the products with the most money in stock (so the choice doesn't flip night to night); the rest get "Over plan limit" (no diagnosis, fixes or markdown; new products too once the places are taken) and the dashboard says how many and links to Plans; any plan change, including a downgrade to Free, re-scores right away (after the first import)
 - Features by plan: applying fixes (and so rescue plans) and approving markdowns from Starter; Compare and monthly reports from Growth. Blocked actions return 403 with the plan to upgrade to, and the pages show "included from the X plan · See plans"

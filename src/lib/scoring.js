@@ -112,7 +112,9 @@ export function classify(p, m, b, t, historyDays) {
   }
 
   const growing = m.trend == null ? p.units30 > 0 : m.trend >= 1;
-  if (m.daysOfCover != null && m.daysOfCover < t.stockoutCoverDays && growing) return "stockout_risk";
+  // Products that sell without stock (inventory not tracked, e.g. gift cards) can't run out.
+  const canRunOut = !(p.sellsWhenOut && p.stock <= 0);
+  if (canRunOut && m.daysOfCover != null && m.daysOfCover < t.stockoutCoverDays && growing) return "stockout_risk";
 
   const judged = p.views30 >= t.minViews && m.conversion != null && b.medianConversion != null;
   if (judged && p.views30 >= b.viewsTopCut && m.conversion < b.medianConversion * t.pageProblemConversionRatio) {

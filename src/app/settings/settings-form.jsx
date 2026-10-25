@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@/app/polaris-events";
 
 // Shares are stored 0–1 and shown as percentages.
@@ -50,6 +50,11 @@ export function SettingsForm() {
   const [collectionsTruncated, setCollectionsTruncated] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+  const banner = useRef(null);
+  // Save is at the bottom of a long form: bring the result into view.
+  useEffect(() => {
+    if (message) banner.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [message]);
 
   function load(s) {
     setSettings(s);
@@ -168,11 +173,13 @@ export function SettingsForm() {
   return (
     <s-stack gap="base">
       {message && (
-        <s-banner tone={message.tone}>
-          {message.text.map((t) => (
-            <div key={t}>{t}</div>
-          ))}
-        </s-banner>
+        <div ref={banner}>
+          <s-banner tone={message.tone}>
+            {message.text.map((t) => (
+              <div key={t}>{t}</div>
+            ))}
+          </s-banner>
+        </div>
       )}
 
       <s-section heading="Product statuses">
