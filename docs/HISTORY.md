@@ -1,5 +1,12 @@
 # History
 
+## 2026-10-25 · shopifyql-spike
+- Scope: `shopifyqlQuery` (GraphQL Admin API 2025-10+) needs `read_reports` — added to `shopify.app.toml` and `.env.example`, written in PLAN (Shopify also lists Level 2 protected customer data for it); after the scope change the app gets a new token once the merchant approves (no reinstall)
+- ShopifyQL check page (development only, link at the bottom of Settings → `/dev/shopifyql`): shows the granted scopes, the API's ShopifyQL types, and what each candidate query for 90 days of daily views per product returns (rows, products, dates, sample) — the owner runs it on the dev store and sends the result
+- Candidate queries use the products dataset (`view_sessions`, `view_cart_sessions`, `view_cart_checkout_purchase_sessions` by product and day); parsing handles both row formats
+- 3 unit tests; not run against Shopify from here (no store access, shopify.dev blocked in this environment)
+- Open: owner runs the check page on `gezart-test-store-plus` (after `shopify app deploy` for the new scope)
+
 ## 2026-10-25 · dev-store-test (customer test fixes)
 - Customer test (local, Shopify stubbed) for "the app shows no data": the job worker was off (`JOBS_WORKER=false` in `.env.example`), so the store import never ran; now `true` by default and in the README
 - Empty store: the dashboard now says there are no active products instead of waiting forever

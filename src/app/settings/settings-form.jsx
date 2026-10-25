@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@/app/polaris-events";
 
@@ -238,6 +239,11 @@ export function SettingsForm() {
           Save
         </s-button>
       </div>
+      {process.env.NODE_ENV !== "production" && (
+        <Link href="/dev/shopifyql" className="text-sm text-zinc-500 hover:underline">
+          Developer: ShopifyQL check (product views)
+        </Link>
+      )}
     </s-stack>
   );
 }

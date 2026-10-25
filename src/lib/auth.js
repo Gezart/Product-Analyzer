@@ -58,13 +58,22 @@ async function markInstalled(domain) {
   return shopRow;
 }
 
+const RESCOPE_EVERY_MS = 10 * 60_000;
+const lastRescope = new Map();
+
 /** Returns a valid offline session, refreshing or exchanging the token when needed. */
 export async function getOfflineSession(shop, sessionToken) {
   const existing = await loadOfflineSession(shop);
+  // The app asks for a new scope (e.g. read_reports): once the merchant approves it, a new token
+  // carries it. Re-exchanged at most every 10 minutes per shop while it's still missing.
+  const rescope =
+    Boolean(sessionToken && existing?.scope && existing.isScopeChanged(shopify().config.scopes)) &&
+    Date.now() - (lastRescope.get(shop) ?? 0) > RESCOPE_EVERY_MS;
 
-  if (existing?.accessToken && !existing.isExpired(REFRESH_MARGIN_MS)) return existing;
+  if (existing?.accessToken && !existing.isExpired(REFRESH_MARGIN_MS) && !rescope) return existing;
 
   const refreshUsable =
+    !rescope &&
     existing?.refreshToken &&
     (!existing.refreshTokenExpires || existing.refreshTokenExpires.getTime() > Date.now());
 
@@ -79,6 +88,7 @@ export async function getOfflineSession(shop, sessionToken) {
 
   if (!sessionToken) throw new AuthError(`No usable offline token for ${shop}`);
 
+  if (rescope) lastRescope.set(shop, Date.now());
   const { session } = await shopify().auth.tokenExchange({
     shop,
     sessionToken,

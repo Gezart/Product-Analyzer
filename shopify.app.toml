@@ -11,7 +11,7 @@ include_config_on_deploy = true
 
 [access_scopes]
 # Keep in sync with SHOPIFY_SCOPES in .env.example.
-scopes = "read_products,write_products,read_inventory,read_orders"
+scopes = "read_products,write_products,read_inventory,read_orders,read_reports"
 # Shopify-managed install: the app gets its token by token exchange, no OAuth redirect.
 use_legacy_install_flow = false
 
