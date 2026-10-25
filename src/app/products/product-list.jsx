@@ -98,7 +98,7 @@ export function ProductList() {
                             <s-badge tone={STATUS_INFO[p.status]?.tone}>{STATUS_INFO[p.status]?.label ?? p.status}</s-badge>
                           </td>
                           <td className="py-2 pr-4 text-right">{p.moneyAtStake > 0 ? money.format(p.moneyAtStake) : "—"}</td>
-                          <td className="hidden py-2 pr-4 text-right sm:table-cell">{money.format(p.stockValue)}</td>
+                          <td className="hidden py-2 pr-4 text-right sm:table-cell">{p.status === "unscored" ? "—" : money.format(p.stockValue)}</td>
                           <td className="py-2 text-right">{formatDays(p.daysOfCover)}</td>
                         </tr>
                       ))}

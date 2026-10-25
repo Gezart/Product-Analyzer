@@ -11,6 +11,12 @@ const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 export class AuthError extends Error {}
 
 /**
+ * Shopify refused a token refresh or exchange (revoked, expired or bad token). The request is
+ * answered 401 like any auth failure, but it doesn't mean the app was uninstalled.
+ */
+export class TokenRefusedError extends AuthError {}
+
+/**
  * Authenticates a request from the embedded app.
  * App Bridge adds `Authorization: Bearer <session token>` to same-origin fetches.
  * On first use for a shop, the session token is exchanged for an expiring offline token.
@@ -60,9 +66,11 @@ async function markInstalled(domain) {
 
 const RESCOPE_EVERY_MS = 10 * 60_000;
 
-/** Shopify refusing a token refresh or exchange (revoked, expired or bad token) means: authenticate again. */
+const refused = (error) => error instanceof HttpResponseError && [400, 401, 403].includes(error.response?.code);
+
+/** Shopify refusing a token refresh or exchange means: authenticate again. */
 function asAuthError(error) {
-  if (error instanceof HttpResponseError && [400, 401, 403].includes(error.response?.code)) throw new AuthError(`Shopify refused the token: ${error.message}`);
+  if (refused(error)) throw new TokenRefusedError(`Shopify refused the token: ${error.message}`);
   throw error;
 }
 const lastRescope = new Map();
@@ -84,11 +92,15 @@ export async function getOfflineSession(shop, sessionToken) {
     (!existing.refreshTokenExpires || existing.refreshTokenExpires.getTime() > Date.now());
 
   if (refreshUsable) {
-    const { session } = await shopify()
-      .auth.refreshToken({ shop, refreshToken: existing.refreshToken })
-      .catch(asAuthError);
-    await storeSession(session);
-    return session;
+    try {
+      const { session } = await shopify().auth.refreshToken({ shop, refreshToken: existing.refreshToken });
+      await storeSession(session);
+      return session;
+    } catch (error) {
+      // A refused refresh (e.g. another request refreshed first) falls back to a token exchange when
+      // the request carries a session token; otherwise it's an auth failure.
+      if (!refused(error) || !sessionToken) asAuthError(error);
+    }
   }
 
   if (!sessionToken) throw new AuthError(`No usable offline token for ${shop}`);

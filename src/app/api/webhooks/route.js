@@ -1,4 +1,4 @@
-import { AuthError, getOfflineSession } from "@/lib/auth";
+import { AuthError, getOfflineSession, TokenRefusedError } from "@/lib/auth";
 import { syncPlan } from "@/lib/billing";
 import { db } from "@/lib/db";
 import { cancelShopJobs } from "@/lib/jobs/queue";
@@ -28,7 +28,8 @@ export async function POST(request) {
         // Prefer the live subscription state from Shopify.
         await syncPlan(await getOfflineSession(domain));
       } catch (error) {
-        if (!(error instanceof AuthError)) throw error;
+        // Shopify refusing a token refresh isn't an uninstall: answer 500 so the webhook is retried.
+        if (!(error instanceof AuthError) || error instanceof TokenRefusedError) throw error;
         // No usable token means the app is uninstalled; payloads may arrive out of order, so don't trust them.
         await db().shop.updateMany({ where: { domain }, data: { plan: "free" } });
       }
