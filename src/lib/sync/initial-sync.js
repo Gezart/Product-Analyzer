@@ -233,6 +233,8 @@ export async function runSyncPoll(job, signal) {
       await replaceOrderLines(shopId, from, orderLinesFromBulk(rows, shop.timezone), snapshotAt);
       await setSyncState(shopId, "orders", { status: "done", error: null, lastCursor: from, lastSyncedAt: new Date() });
       await enqueue({ type: "score-shop", shopId });
+      // 90 days of product views; it re-scores when they're in. The analysis doesn't wait for it.
+      await enqueue({ type: "views-sync", shopId });
     } else if (payload.stage === "refresh") {
       await upsertProducts(shopId, assembleProducts(rows), { snapshotAt });
       // Runs just after midnight local time: the stock read now approximates yesterday's closing stock.
@@ -241,7 +243,8 @@ export async function runSyncPoll(job, signal) {
       await pruneScores(shopId).catch((e) => console.error("[prune] scores", e));
       await pruneNotifications(shopId).catch((e) => console.error("[prune] notifications", e));
       await setSyncState(shopId, "refresh", { status: "done", error: null, lastSyncedAt: new Date() });
-      await enqueue({ type: "score-shop", shopId });
+      // Yesterday's views next; that job re-scores once they're in (or without them if unavailable).
+      await enqueue({ type: "views-sync", shopId });
     } else {
       await applyCatchup(shopId, await orderWindowStart(shopId, shop.timezone), orderLinesFromBulk(rows, shop.timezone));
       await setSyncState(shopId, "catchup", { status: "done", error: null, lastSyncedAt: new Date() });

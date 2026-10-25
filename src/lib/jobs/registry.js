@@ -5,6 +5,7 @@ import { closeMonth } from "@/lib/reports";
 import { scoreShop } from "@/lib/score-shop";
 import { runDailyMetrics, runInitialSync, runOrdersCatchup, runRegisterWebhooks, runSyncPoll } from "@/lib/sync/initial-sync";
 import { runSyncInventory, runSyncProduct } from "@/lib/sync/live";
+import { syncViews } from "@/lib/sync/views";
 
 function requireShop(job) {
   if (!job.shopId) throw new PermanentJobError(`${job.type} needs a shop`);
@@ -27,6 +28,11 @@ export const handlers = {
   "register-webhooks": runRegisterWebhooks,
   "orders-catchup": runOrdersCatchup,
   "daily-metrics": runDailyMetrics,
+  /** Product views from ShopifyQL (90 days the first time, then the last 7), then a re-score. */
+  "views-sync": async (job, signal) => {
+    requireShop(job);
+    await syncViews(job, signal);
+  },
   /** Plan runner: closes measurement windows, applies markdown steps, restores prices, guards floors. */
   "rescue-runner": async (job) => {
     // Each part runs even if another fails; the job fails afterwards so it is retried.
