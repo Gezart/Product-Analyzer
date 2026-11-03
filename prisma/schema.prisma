@@ -36,15 +36,17 @@ model Shop {
   installedAt    DateTime  @default(now()) @map("installed_at")
   uninstalledAt  DateTime? @map("uninstalled_at")
 
-  settings        Settings?
-  products        Product[]
-  reports         Report[]
-  notifications   Notification[]
-  syncStates      SyncState[]
-  aiUsage         AiUsage[]
-  jobs            Job[]
-  orderLines      OrderLine[]
-  competitorLinks CompetitorLink[]
+  settings         Settings?
+  products         Product[]
+  reports          Report[]
+  notifications    Notification[]
+  syncStates       SyncState[]
+  aiUsage          AiUsage[]
+  jobs             Job[]
+  orderLines       OrderLine[]
+  competitorLinks  CompetitorLink[]
+  googleConnection GoogleConnection?
+  googleBenchmarks GoogleBenchmark[]
 
   @@map("shops")
 }
@@ -88,17 +90,18 @@ model Product {
   shopifyCreatedAt DateTime? @map("shopify_created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  shop            Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  variants        Variant[]
-  dailyMetrics    ProductDailyMetric[]
-  scores          ProductScore[]
-  diagnoses       Diagnosis[]
-  fixes           Fix[]
-  rescuePlans     RescuePlan[]
-  markdownPlans   MarkdownPlan[]
-  priceChanges    PriceChange[]
-  notifications   Notification[]
-  competitorLinks CompetitorLink[]
+  shop             Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  variants         Variant[]
+  dailyMetrics     ProductDailyMetric[]
+  scores           ProductScore[]
+  diagnoses        Diagnosis[]
+  fixes            Fix[]
+  rescuePlans      RescuePlan[]
+  markdownPlans    MarkdownPlan[]
+  priceChanges     PriceChange[]
+  notifications    Notification[]
+  competitorLinks  CompetitorLink[]
+  googleBenchmarks GoogleBenchmark[]
 
   @@unique([shopId, shopifyGid])
   @@index([shopId])
@@ -393,4 +396,46 @@ model CompetitorLink {
   @@unique([productId, url])
   @@index([shopId])
   @@map("competitor_links")
+}
+
+/// Google Merchant Center connection for the market price (one per shop).
+model GoogleConnection {
+  shopId         String    @id @map("shop_id")
+  /// OAuth refresh token, encrypted (src/lib/crypto.js). Access tokens are never stored.
+  refreshToken   String?   @map("refresh_token")
+  accountId      String?   @map("account_id")
+  accountName    String?   @map("account_name")
+  /// pending (consent not finished) | choose_account | connected | failed
+  status         String    @default("pending")
+  error          String?
+  /// Single-use OAuth state while Google's consent screen is open (10 minutes).
+  oauthState     String?   @unique @map("oauth_state")
+  stateExpiresAt DateTime? @map("state_expires_at")
+  syncedAt       DateTime? @map("synced_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@map("google_connections")
+}
+
+/// Google's price benchmark for one offer (a variant) in one country, from the price competitiveness report.
+model GoogleBenchmark {
+  id        String   @id @default(cuid())
+  shopId    String   @map("shop_id")
+  productId String   @map("product_id")
+  offerId   String   @map("offer_id")
+  country   String
+  price     Decimal  @db.Decimal(12, 2)
+  benchmark Decimal  @db.Decimal(12, 2)
+  currency  String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  shop    Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, offerId, country])
+  @@index([productId])
+  @@map("google_benchmarks")
 }

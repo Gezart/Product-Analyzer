@@ -1,10 +1,20 @@
 import { AuthError, getOfflineSession, TokenRefusedError } from "@/lib/auth";
 import { syncPlan } from "@/lib/billing";
 import { db } from "@/lib/db";
+import { disconnect as disconnectGoogle } from "@/lib/google-merchant";
 import { cancelShopJobs } from "@/lib/jobs/queue";
 import { shopify } from "@/lib/shopify";
 import { handleInventoryWebhook, handleOrderWebhook, handleProductWebhook } from "@/lib/sync/live";
 import { deleteSessions } from "@/lib/session-storage";
+
+/** Google Merchant Center access ends with the app; a failure here never fails the webhook. */
+async function revokeGoogle(shop) {
+  try {
+    await disconnectGoogle(shop, { wait: false });
+  } catch (error) {
+    console.error("[google] disconnect on uninstall", error);
+  }
+}
 
 // Single endpoint for all webhooks, including the mandatory compliance topics.
 // Invalid HMAC → 401 (required by App Store review).
@@ -21,6 +31,7 @@ export async function POST(request) {
       await db().shop.updateMany({ where: { domain }, data: { uninstalledAt: new Date(), plan: "free" } });
       for (const shop of await db().shop.findMany({ where: { domain }, select: { id: true } })) {
         await cancelShopJobs(shop.id);
+        await revokeGoogle(shop);
       }
       break;
     case "APP_SUBSCRIPTIONS_UPDATE":
@@ -52,8 +63,9 @@ export async function POST(request) {
       // We never store customer data (orders keep only date, product, variant, qty, price).
       break;
     case "SHOP_REDACT":
-      // Deletes the shop and, via cascades, every row it owns.
+      // Deletes the shop and, via cascades, every row it owns (Google's access is revoked first).
       await deleteSessions(domain);
+      for (const shop of await db().shop.findMany({ where: { domain }, select: { id: true } })) await revokeGoogle(shop);
       await db().shop.deleteMany({ where: { domain } });
       break;
   }

@@ -1,23 +1,40 @@
 import { addLink, listLinks, MAX_LINKS, removeLink } from "@/lib/competitor-prices";
 import { db } from "@/lib/db";
 import { requireFeature, requireWithinLimit } from "@/lib/feature-gate";
+import { googleBenchmarkFor, googleConfigured } from "@/lib/google-merchant";
 import { HttpError } from "@/lib/http-error";
 import { competitorSummary, gapToMarket } from "@/lib/market-price";
 import { FEATURE_PLAN, hasFeature } from "@/lib/plans";
 import { sanitizeThresholds } from "@/lib/scoring";
 import { appRoute, readJson } from "@/lib/route";
 
-/** The links, the market price they give, and how far the product's price is from it. */
+/**
+ * The links and the market price they give, Google's benchmark for the product (when Merchant Center is
+ * connected), and how far the product's price is from each.
+ */
 async function overview(shop, productId, links) {
-  const [product, settings] = await Promise.all([
-    db().product.findFirst({ where: { id: productId, shopId: shop.id }, select: { price: true } }),
-    db().settings.findUnique({ where: { shopId: shop.id }, select: { thresholds: true } }),
-  ]);
+  const product = await db().product.findFirst({ where: { id: productId, shopId: shop.id }, select: { price: true } });
   if (!product) throw new HttpError("Product not found.", 404);
-  const competitors = competitorSummary(links, shop.currency);
   const price = Number(product.price);
+  const [settings, google, connection] = await Promise.all([
+    db().settings.findUnique({ where: { shopId: shop.id }, select: { thresholds: true } }),
+    googleBenchmarkFor(shop, productId, price),
+    db().googleConnection.findUnique({ where: { shopId: shop.id }, select: { status: true } }),
+  ]);
+  const competitors = competitorSummary(links, shop.currency);
   const marketAbove = sanitizeThresholds(settings?.thresholds).marketAbove;
-  return { links, max: MAX_LINKS, currency: shop.currency, price, competitors, gap: gapToMarket(price, competitors.median), marketAbove };
+  return {
+    links,
+    max: MAX_LINKS,
+    currency: shop.currency,
+    price,
+    competitors,
+    gap: gapToMarket(price, competitors.median),
+    google: google && { benchmark: google.median, country: google.country, gap: gapToMarket(price, google.median), syncedAt: google.syncedAt },
+    // Whether to suggest connecting Google: the app has it set up and this shop hasn't connected yet.
+    googleSuggested: googleConfigured() && (!connection || connection.status === "pending"),
+    marketAbove,
+  };
 }
 
 export const GET = appRoute(async ({ shop, params }) => {
