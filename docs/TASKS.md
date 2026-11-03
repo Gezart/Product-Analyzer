@@ -96,7 +96,7 @@ From the features workspace (Fix center). Decisions: descriptions and SEO with C
 | Branch | Task | Done when | Status |
 | --- | --- | --- | --- |
 | `ai-descriptions` | "Write with AI" in the Fix center (highlighted when the diagnosis finds a short, thin or copied description): from the title, type, variants, current description and photos, in the store's language; facts the AI doesn't know come back as [fill in: …]; also SEO title and meta description; the merchant edits and applies (with Undo); monthly limit per plan in `ai_usage` | A draft appears in the editor, applies to Shopify and can be undone; the limit stops at the plan's number | done |
-| `ai-photos` | "Create photo with AI" in the Fix center when the diagnosis finds few photos: from an existing photo (clean background, new scene); the merchant previews and approves before it goes to Shopify (with Undo); a product with no photo asks for one first; photos marked as AI-made; monthly limit per plan | An approved AI photo is on the product in Shopify and can be undone | todo |
+| `ai-photos` | "Create photo with AI" in the Fix center when the diagnosis finds few photos: from an existing photo (clean background, new scene); the merchant previews and approves before it goes to Shopify (with Undo); a product with no photo asks for one first; photos marked as AI-made; monthly limit per plan | An approved AI photo is on the product in Shopify and can be undone | done |
 | — | Owner: `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in `.env` | Keys in `.env` | todo (owner) |
 
 ## v2 (not in v1)

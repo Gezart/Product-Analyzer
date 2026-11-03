@@ -101,15 +101,16 @@ const markAdded = (draftId, fix) =>
   db().aiPhotoDraft.update({ where: { id: draftId }, data: { status: "added", mediaId: fix.after?.added?.[0] ?? fix.mediaId ?? null, fixId: fix.id, image: null } });
 
 /**
- * A draft left "adding" (the request that added it ended early): its fix says how it went. Added →
- * the draft is marked so; failed → it's a draft again. Otherwise it's still being added (409).
+ * A draft left "adding" (the request that added it ended early): its fix says how it went. On the
+ * product → the draft is marked added; failed or undone → it's a draft again. Otherwise it's still
+ * being added (409).
  */
 async function settleAdding(draft) {
   const fix = await db().fix.findFirst({ where: { productId: draft.productId, type: "photo", after: { path: ["draftId"], equals: draft.id } }, orderBy: { createdAt: "desc" } });
-  if (fix?.status === "applied" || fix?.status === "undone") {
+  if (fix?.status === "applied") {
     await markAdded(draft.id, fix);
     draft.status = "added";
-  } else if (fix?.status === "failed") {
+  } else if (fix?.status === "failed" || fix?.status === "undone") {
     await db().aiPhotoDraft.updateMany({ where: { id: draft.id, status: "adding" }, data: { status: "draft" } });
     draft.status = "draft";
   } else {
