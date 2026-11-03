@@ -7,7 +7,7 @@ export const ORDER_GROUPS = [
   { key: "bestseller_low", reason: "Bestseller, running low on stock" },
   { key: "hidden_gem", reason: "Hidden gem: sells well to the few who see it" },
   { key: "needs_sales", reason: "Needs sales: stock is waiting" },
-  { key: "keep", reason: "Keeps its place" },
+  { key: "keep", reason: "In its current order" },
   { key: "page_problem", reason: "Many see it, few buy: fix its page first" },
   { key: "out_of_season", reason: "Out of season" },
   { key: "sold_out", reason: "Sold out" },
@@ -16,8 +16,12 @@ export const ORDER_GROUPS = [
 const RANK = new Map(ORDER_GROUPS.map((g, i) => [g.key, i]));
 export const REASONS = Object.fromEntries(ORDER_GROUPS.map((g) => [g.key, g.reason]));
 
-/** The top third of the collection's selling products (by 30-day revenue) are its bestsellers. */
+/** The top third of the collection's products that can be bestsellers (by 30-day revenue) are its bestsellers. */
 const BESTSELLER_SHARE = 1 / 3;
+/** Statuses that are never bestsellers here (and don't take a bestseller's place). */
+const NOT_BESTSELLER = new Set(["dead_stock", "slow_mover", "page_problem", "seasonal"]);
+/** A bestseller must be analyzed by the app (`status` known), on sale and selling. */
+const canBeBestseller = (p) => p.status != null && !NOT_BESTSELLER.has(p.status) && p.available && p.active !== false && p.revenue30 > 0;
 
 /**
  * The group of each product. `items` are the collection's products in their current order:
@@ -26,15 +30,13 @@ const BESTSELLER_SHARE = 1 / 3;
  * it, e.g. not analyzed on the plan).
  */
 function groupsOf(items) {
-  const sellers = items.filter((p) => p.available && p.revenue30 > 0).sort((a, b) => b.revenue30 - a.revenue30);
+  const sellers = items.filter(canBeBestseller).sort((a, b) => b.revenue30 - a.revenue30);
   const top = new Set(sellers.slice(0, Math.ceil(sellers.length * BESTSELLER_SHARE)).map((p) => p.id));
   return items.map((p) => {
     if (p.active === false) return "not_on_sale";
     if (!p.available) return "sold_out";
     if (p.status === "seasonal") return "out_of_season";
-    if (top.has(p.id) && !["dead_stock", "slow_mover", "page_problem"].includes(p.status)) {
-      return p.status === "stockout_risk" ? "bestseller_low" : "bestseller";
-    }
+    if (top.has(p.id)) return p.status === "stockout_risk" ? "bestseller_low" : "bestseller";
     if (p.status === "hidden_gem") return "hidden_gem";
     if (p.status === "slow_mover" || p.status === "dead_stock") return "needs_sales";
     if (p.status === "page_problem") return "page_problem";
@@ -44,7 +46,7 @@ function groupsOf(items) {
 
 /**
  * The proposed order: bestsellers first (by revenue; those about to run out after them, so they don't
- * sell out sooner), then hidden gems and products that need sales (most money waiting first), then the
+ * sell out sooner), then hidden gems, then products that need sales (most money waiting first), then the
  * rest in their current order, then page problems, out-of-season, sold-out and not-on-sale products. Each entry:
  * `{ id, group, from, to }` (positions from 0).
  */
@@ -55,7 +57,6 @@ export function proposeOrder(items) {
   const within = {
     bestseller: (a, b) => b.p.revenue30 - a.p.revenue30,
     bestseller_low: (a, b) => b.p.revenue30 - a.p.revenue30,
-    hidden_gem: byMoney,
     needs_sales: byMoney,
   };
   entries.sort((a, b) => RANK.get(a.group) - RANK.get(b.group) || within[a.group]?.(a, b) || a.from - b.from);

@@ -33,13 +33,17 @@ export function CollectionOrderView() {
   }, []);
 
   useEffect(() => {
-    if (!picked) return;
+    if (!picked) {
+      setData(null);
+      return;
+    }
     let live = true;
     setData(null);
     setError(null);
     fetch(`/api/collection-order/${encodeURIComponent(picked)}`)
       .then(async (res) => {
         const body = await res.json().catch(() => ({}));
+        if (res.status === 403 && body.upgrade) return live && setUpgrade(body.error);
         if (!res.ok) throw new Error(body.error ?? `Failed (${res.status})`);
         if (live) setData(body);
       })
@@ -83,6 +87,7 @@ export function CollectionOrderView() {
                   </option>
                 ))}
               </select>
+              {list.truncated && <span className="text-zinc-500">Only the first 2,500 collections are listed.</span>}
               {list.automatic > 0 && (
                 <span className="text-zinc-500">
                   {list.automatic} other {list.automatic === 1 ? "collection is" : "collections are"} sorted automatically (best selling, price, date…) and
@@ -94,7 +99,7 @@ export function CollectionOrderView() {
         </s-stack>
       </s-section>
 
-      {picked && !data && !error && (
+      {picked && !data && !error && !upgrade && (
         <s-section>
           <s-spinner accessibilityLabel="Loading the proposed order" />
         </s-section>

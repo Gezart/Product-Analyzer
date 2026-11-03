@@ -29,9 +29,12 @@ const ORDER_QUERY = `#graphql
     }
   }`;
 
-export const collectionGid = (id) => (/^\d+$/.test(String(id)) ? `gid://shopify/Collection/${id}` : null);
+export const collectionGid = (id) => (/^[1-9]\d{0,18}$/.test(String(id)) ? `gid://shopify/Collection/${id}` : null);
 
-/** The shop's collections (up to 2,500): which are sorted manually, and how many products each has. */
+/**
+ * The shop's collections (up to 2,500): which are sorted manually, and how many products each has.
+ * `truncated` when the shop has more.
+ */
 export async function orderCollections(session) {
   const all = [];
   let after = null;
@@ -40,10 +43,11 @@ export async function orderCollections(session) {
     all.push(...data.collections.nodes);
     after = data.collections.pageInfo.hasNextPage ? data.collections.pageInfo.endCursor : null;
   } while (after && all.length < 2_500);
-  return all.map((c) => {
+  const collections = all.map((c) => {
     const count = c.productsCount?.count ?? 0;
     return { id: c.id, title: c.title, manual: c.sortOrder === "MANUAL", count, tooLarge: count > MAX_COLLECTION_PRODUCTS };
   });
+  return { collections, truncated: after != null };
 }
 
 /**

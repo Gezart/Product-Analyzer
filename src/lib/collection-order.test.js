@@ -57,7 +57,31 @@ test("a dead-stock top seller is never a bestseller; ties keep the current order
   assert.deepEqual(proposeOrder([]), []);
 });
 
-test("moved count", () => {
-  assert.equal(movedCount(["a", "b", "c"], ["a", "c", "b"]), 2);
-  assert.equal(movedCount(["a", "b"], ["a", "b"]), 0);
+test("only analyzed products that can be bestsellers take the bestseller places", () => {
+  // Dead stock, page problems, out-of-season and products the app doesn't analyze (status null) sell
+  // the most here, but neither become bestsellers nor take a bestseller's place.
+  const items = [
+    item("h1", "healthy", 100),
+    item("dead", "dead_stock", 9000, { moneyAtStake: 50 }),
+    item("page", "page_problem", 8000),
+    item("season", "seasonal", 7000),
+    item("unknown", null, 6000),
+    item("h2", "healthy", 90),
+    item("h3", "healthy", 80),
+  ];
+  // Can be bestsellers: h1, h2, h3 → top third is 1 (h1).
+  assert.deepEqual(proposeOrder(items).map((e) => `${e.id}:${e.group}`), [
+    "h1:bestseller",
+    "dead:needs_sales",
+    "unknown:keep",
+    "h2:keep",
+    "h3:keep",
+    "page:page_problem",
+    "season:out_of_season",
+  ]);
+});
+
+test("hidden gems keep their current order among themselves (not by money)", () => {
+  const items = [item("x", "healthy", 0), item("g1", "hidden_gem", 0, { moneyAtStake: 10 }), item("g2", "hidden_gem", 0, { moneyAtStake: 900 })];
+  assert.deepEqual(proposeOrder(items).map((e) => `${e.id}:${e.group}`), ["g1:hidden_gem", "g2:hidden_gem", "x:keep"]);
 });
