@@ -21,6 +21,8 @@ export function FixCenter({ productId, onChanged }) {
   const [seoDescription, setSeoDescription] = useState("");
   const [mediaIds, setMediaIds] = useState([]);
   const [collectionIds, setCollectionIds] = useState([]);
+  /** The merchant's text from before "Write with AI", to bring back. */
+  const [beforeAi, setBeforeAi] = useState(null);
   // Drafts are filled from the live product the first time it loads (it may not on the first try).
   const hadLive = useRef(false);
 
@@ -75,6 +77,7 @@ export function FixCenter({ productId, onChanged }) {
     setBusy(null);
     // Keep the merchant's text on failure; on success only the applied section is reset.
     await load(res.ok ? [type] : []);
+    if (res.ok && (type === "description" || type === "seo")) setBeforeAi(null);
     if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
     const note = body.pending ? " Shopify is still finishing it; it can take a minute to show." : "";
     setMessage({ tone: "success", text: `${LABELS[type]} updated in Shopify. The old version is saved; you can undo it below.${note}` });
@@ -112,6 +115,7 @@ export function FixCenter({ productId, onChanged }) {
     const body = await res.json().catch(() => ({}));
     setBusy(null);
     if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
+    setBeforeAi({ description, seoTitle, seoDescription });
     setDescription(body.draft.descriptionHtml);
     setSeoTitle(body.draft.seoTitle);
     setSeoDescription(body.draft.seoDescription);
@@ -145,6 +149,14 @@ export function FixCenter({ productId, onChanged }) {
   // AI drafts leave [fill in: …] for facts only the merchant knows: nothing applies until they're gone.
   const descriptionFillIns = fillInsLeft(description);
   const seoFillIns = fillInsLeft(seoTitle, seoDescription);
+  function restoreText() {
+    setDescription(beforeAi.description);
+    setSeoTitle(beforeAi.seoTitle);
+    setSeoDescription(beforeAi.seoDescription);
+    setBeforeAi(null);
+    setMessage(null);
+  }
+
   const fillInNote = (left) => left.length > 0 && <s-text tone="caution">Fill in {left.join(", ")} first (where it says [fill in: …]).</s-text>;
   const ai = data.ai?.descriptions;
   const weakDescription = ["short_description", "missing_details", "duplicate_description"].some((c) => data.reasonCodes?.includes(c));
@@ -183,6 +195,7 @@ export function FixCenter({ productId, onChanged }) {
               <s-text-area label="Description (HTML)" rows={8} value={description} ref={listen("input", (el) => setDescription(el.value))} />
               {hintFor("description")}
               {ai?.upgrade && <s-text tone="neutral">Writing the description with AI is included from the Starter plan.</s-text>}
+              {ai && !ai.upgrade && !ai.configured && <s-text tone="neutral">Writing with AI isn't set up for this app yet.</s-text>}
               {ai && !ai.upgrade && ai.configured && (
                 <s-stack direction="inline" gap="small" alignItems="center">
                   <s-button
@@ -196,6 +209,11 @@ export function FixCenter({ productId, onChanged }) {
                   <s-text tone="neutral">
                     {ai.left} of {ai.limit} AI drafts left this month{ai.left === 0 ? " (they renew on the 1st)" : ""}
                   </s-text>
+                  {beforeAi && (
+                    <s-button variant="tertiary" disabled={busy !== null || undefined} ref={listen("click", restoreText)}>
+                      Back to my text
+                    </s-button>
+                  )}
                 </s-stack>
               )}
               {fillInNote(descriptionFillIns)}

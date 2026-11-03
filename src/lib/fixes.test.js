@@ -12,6 +12,9 @@ test("validates each fix type", () => {
   assert.equal(validateFix("images", { mediaIds: ["gid://shopify/MediaImage/1", "gid://shopify/MediaImage/1"] }).ok, false);
   assert.equal(validateFix("collection", { collectionIds: ["gid://shopify/Product/1"] }).ok, false);
   assert.equal(validateFix("price", {}).ok, false);
+  // An AI draft's placeholders block applying, on the server too.
+  assert.equal(validateFix("description", { descriptionHtml: "<p>Made of [fill in: material].</p>" }).error, "Fill in the [fill in: …] parts first.");
+  assert.equal(validateFix("seo", { seoTitle: "Shirt", seoDescription: "In [Fill-in size" }).ok, false);
 });
 
 test("same state: collections as sets, images in order", () => {

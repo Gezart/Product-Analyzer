@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getPlan, hasFeature, planFromSubscriptions, PLANS, productLimit, remainingTrialDays, withinLimit } from "./plans.js";
+import { aiLimit, aiUpgradePlan, getPlan, hasFeature, planFromSubscriptions, PLANS, productLimit, remainingTrialDays, withinLimit } from "./plans.js";
 
 test("plans match the pricing table", () => {
   assert.deepEqual(
@@ -63,4 +63,21 @@ test("product limit: most money in stock first, stable on ties", () => {
   assert.deepEqual([...withinLimit(products, 2, new Set(["d"]))].sort(), ["b", "d"]);
   // After a downgrade (more analyzed than places): the analyzed ones with the most stock.
   assert.deepEqual([...withinLimit(products, 1, new Set(["a", "c", "d"]))], ["a"]);
+});
+
+test("AI uses a month per plan and where to get more", () => {
+  assert.deepEqual(PLANS.map((p) => [p.id, aiLimit(p.id, "texts"), aiLimit(p.id, "photos")]), [
+    ["free", 0, 0],
+    ["starter", 30, 0],
+    ["growth", 150, 50],
+    ["pro", 500, 200],
+  ]);
+  assert.equal(aiLimit("enterprise", "texts"), 0);
+  assert.equal(aiUpgradePlan("free", "texts"), "starter");
+  assert.equal(aiUpgradePlan("starter", "texts"), "growth");
+  assert.equal(aiUpgradePlan("starter", "photos"), "growth");
+  assert.equal(aiUpgradePlan("growth", "photos"), "pro");
+  assert.equal(aiUpgradePlan("pro", "texts"), null);
+  assert.ok(hasFeature("starter", "aiDescriptions") && !hasFeature("free", "aiDescriptions"));
+  assert.ok(hasFeature("growth", "aiPhotos") && !hasFeature("starter", "aiPhotos"));
 });

@@ -6,6 +6,9 @@ export const FIX_TYPES = ["title", "description", "seo", "images", "collection"]
 
 const LIMITS = { title: 255, descriptionHtml: 100_000, seoTitle: 70, seoDescription: 320 };
 const GID = (type) => new RegExp(`^gid://shopify/${type}/\\d+$`);
+/** An AI draft's placeholder the merchant hasn't filled in yet (`[fill in: material]`). */
+const FILL_IN = /\[\s*fill[\s-]*in\b/i;
+const UNFILLED = "Fill in the [fill in: …] parts first.";
 
 /** Validates the merchant's edit for one fix type. Returns the clean state or an error message. */
 export function validateFix(type, raw) {
@@ -34,13 +37,16 @@ export function validateFix(type, raw) {
     }
     case "description": {
       const d = str("descriptionHtml", LIMITS.descriptionHtml);
-      return "error" in d ? { ok: false, error: d.error } : { ok: true, type, after: { descriptionHtml: d.value } };
+      if ("error" in d) return { ok: false, error: d.error };
+      if (FILL_IN.test(d.value)) return { ok: false, error: UNFILLED };
+      return { ok: true, type, after: { descriptionHtml: d.value } };
     }
     case "seo": {
       const t = str("seoTitle", LIMITS.seoTitle);
       if ("error" in t) return { ok: false, error: t.error };
       const d = str("seoDescription", LIMITS.seoDescription);
       if ("error" in d) return { ok: false, error: d.error };
+      if (FILL_IN.test(t.value) || FILL_IN.test(d.value)) return { ok: false, error: UNFILLED };
       return { ok: true, type, after: { seoTitle: t.value, seoDescription: d.value } };
     }
     case "images": {

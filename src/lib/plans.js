@@ -43,6 +43,17 @@ export function hasFeature(planId, feature) {
   return rank(planId) >= rank(FEATURE_PLAN[feature]);
 }
 
+/** AI uses a plan includes each month: `kind` "texts" (descriptions) or "photos" (unknown plans count as Free). */
+export function aiLimit(planId, kind) {
+  const plan = getPlan(planId) ?? PLANS[0];
+  return (kind === "photos" ? plan.aiPhotos : plan.aiTexts) ?? 0;
+}
+
+/** The next plan with more AI uses of `kind`, for the upgrade link; null on the top plan. */
+export function aiUpgradePlan(planId, kind) {
+  return PLANS.find((p) => aiLimit(p.id, kind) > aiLimit(planId, kind))?.id ?? null;
+}
+
 /** Products analyzed on a plan (unknown plans count as Free). */
 export function productLimit(planId) {
   return (getPlan(planId) ?? PLANS[0]).products;

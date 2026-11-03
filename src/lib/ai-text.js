@@ -24,7 +24,7 @@ export const DESCRIPTION_SYSTEM = `You write product descriptions for an online 
 
 Write in the language of the product's title and current description; if that's unclear, write in English.
 
-Never invent facts. Use only the product data you're given and what is plainly visible in the photos (such as color or shape). Anything a shopper needs that you don't know for sure (material, dimensions, size and fit, care, origin, what's included) goes in as a placeholder the merchant fills in, written exactly as [fill in: what's missing], for example [fill in: material]. List every placeholder you used in fill_in.
+Never invent facts. Use only the product data you're given and what is plainly visible in the photos (such as color or shape). Anything a shopper needs that you don't know for sure (material, dimensions, size and fit, care, origin, what's included) goes in as a placeholder the merchant fills in, written exactly as [fill in: what's missing], for example [fill in: material]: keep the words "fill in" in English whatever language you write in, and use square brackets for nothing else. List every placeholder you used in fill_in.
 
 The description: 120 to 250 words of simple HTML using only <p>, <ul>, <li>, <strong> and <em>. Say what it is and who it's for, then a short list of the key details (size or dimensions, material, how to use or care for it), then why it's worth it. Plain, specific and honest: no exaggeration, no claims you can't back.
 
@@ -65,26 +65,54 @@ export function descriptionPrompt(product, reasonCodes = []) {
 }
 
 const ALLOWED_TAGS = new Set(["p", "ul", "ol", "li", "strong", "em", "b", "i", "br", "h3", "h4"]);
+const TAG = /<\s*(\/?)\s*([a-z][a-z0-9]*)\b[^<>]*>/gi;
+const escapeText = (t) => t.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** Removes `pattern` until nothing matches (so removed pieces can't join into a new match). */
+function removeAll(text, pattern) {
+  let out = text;
+  for (let before = null; before !== out; ) {
+    before = out;
+    out = out.replace(pattern, "");
+  }
+  return out;
+}
 
 /**
  * Only simple tags, without attributes, reach Shopify: scripts, styles, links, images and every
- * attribute (onclick, style, href) are dropped; their text stays (except inside script/style).
+ * attribute (onclick, style, href) are dropped; their text stays (except inside script/style). Text
+ * between tags is escaped, so pieces of removed tags can never form a new tag.
  */
 export function cleanDescriptionHtml(html) {
-  return String(html ?? "")
-    .replace(/<\s*(script|style|iframe|object|embed|template)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<\s*(\/?)\s*([a-z][a-z0-9]*)\b[^>]*>/gi, (_, slash, tag) => (ALLOWED_TAGS.has(tag.toLowerCase()) ? `<${slash}${tag.toLowerCase()}>` : ""))
-    .replace(/<(?![a-z/])/gi, "&lt;")
-    .trim();
+  let text = removeAll(String(html ?? ""), /<!--[\s\S]*?-->/g);
+  text = removeAll(text, /<\s*(script|style|iframe|object|embed|template)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi);
+  let out = "";
+  let last = 0;
+  for (const m of text.matchAll(TAG)) {
+    out += escapeText(text.slice(last, m.index));
+    const tag = m[2].toLowerCase();
+    if (ALLOWED_TAGS.has(tag)) out += `<${m[1]}${tag}>`;
+    last = m.index + m[0].length;
+  }
+  return (out + escapeText(text.slice(last))).trim();
 }
+
+/** A placeholder: `[fill in: material]` (also without the colon or the closing bracket). */
+const FILL_IN = /\[\s*fill[\s-]*in\b\s*:?\s*([^\]<\n]*)\]?/gi;
 
 /** The [fill in: …] placeholders still in a text, for the merchant to finish before applying. */
 export function fillInsLeft(...texts) {
   const found = new Set();
-  for (const t of texts) for (const m of String(t ?? "").matchAll(/\[fill in:\s*([^\]]*)\]/gi)) found.add(m[1].trim());
+  for (const t of texts) for (const m of String(t ?? "").matchAll(FILL_IN)) found.add(m[1].trim() || "the missing detail");
   return [...found];
 }
+
+/**
+ * In the AI's draft every bracketed part is a placeholder (the prompt asks for no other brackets): one
+ * written another way (`[à compléter : matière]`) becomes `[fill in: à compléter : matière]`, so it's
+ * found and blocks Apply like the others.
+ */
+const markPlaceholders = (text) => String(text ?? "").replace(/\[([^\]\n]{1,120})\]/g, (all, inner) => (/^\s*fill[\s-]*in\b/i.test(inner) ? all : `[fill in: ${inner.trim()}]`));
 
 /** What a request cost, from the API's usage (cached input billed as input: an upper bound). */
 export function requestCostUsd(usage) {
@@ -95,8 +123,14 @@ export function requestCostUsd(usage) {
 /** The draft from Claude's JSON answer, cleaned and cut to Shopify's limits; null when it isn't usable. */
 export function draftFromAnswer(json) {
   if (!json || typeof json.description_html !== "string" || !json.description_html.trim()) return null;
-  const html = cleanDescriptionHtml(json.description_html);
-  const seoTitle = String(json.seo_title ?? "").trim().slice(0, 70);
-  const seoDescription = String(json.seo_description ?? "").trim().slice(0, 320);
-  return { descriptionHtml: html, seoTitle, seoDescription, fillIn: fillInsLeft(html, seoTitle, seoDescription) };
+  const html = markPlaceholders(cleanDescriptionHtml(json.description_html));
+  const seoTitle = markPlaceholders(json.seo_title).trim().slice(0, 70);
+  const seoDescription = markPlaceholders(json.seo_description).trim().slice(0, 320);
+  const fillIn = fillInsLeft(html, seoTitle, seoDescription);
+  // The AI says it left details open but didn't mark them in the text: mark them, so they're checked.
+  const listed = (Array.isArray(json.fill_in) ? json.fill_in : []).map((f) => String(f).trim()).filter(Boolean);
+  if (!fillIn.length && listed.length) {
+    return { descriptionHtml: `${html}\n<p>[fill in: ${listed.join(", ")}]</p>`, seoTitle, seoDescription, fillIn: [listed.join(", ")] };
+  }
+  return { descriptionHtml: html, seoTitle, seoDescription, fillIn };
 }

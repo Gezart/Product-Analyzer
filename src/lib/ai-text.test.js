@@ -32,11 +32,17 @@ test("only simple tags without attributes reach Shopify", () => {
   assert.equal(cleanDescriptionHtml("<P>Hi</P><!-- note --><br/>"), "<p>Hi</p><br>");
   assert.equal(cleanDescriptionHtml("5 < 6 and <3"), "5 &lt; 6 and &lt;3");
   assert.equal(cleanDescriptionHtml(null), "");
+  // Pieces of removed tags never join into a new tag.
+  assert.equal(cleanDescriptionHtml("<<a>img src=x onerror=alert(1)>"), "&lt;img src=x onerror=alert(1)&gt;");
+  assert.equal(cleanDescriptionHtml("<<x>script>alert(1)<</x>/script>"), "&lt;script&gt;alert(1)&lt;/script&gt;");
+  assert.equal(cleanDescriptionHtml("<scr<script>x</script>ipt>alert(1)</script>"), "");
+  assert.equal(cleanDescriptionHtml("<p>a > b</p>"), "<p>a &gt; b</p>");
 });
 
 test("placeholders left to fill in, across the description and SEO", () => {
   assert.deepEqual(fillInsLeft("<p>Made of [fill in: material], [Fill in: care].</p>", "Shirt [fill in: material]", ""), ["material", "care"]);
   assert.deepEqual(fillInsLeft("<p>Done.</p>"), []);
+  assert.deepEqual(fillInsLeft("<p>Size [fill in size</p>", "[Fill-in]"), ["size", "the missing detail"]);
 });
 
 test("the cost of a request at Claude Opus 5.5 prices", () => {
@@ -50,6 +56,13 @@ test("the draft from Claude's answer: cleaned, cut to Shopify's limits, placehol
   assert.equal(d.descriptionHtml, "<p>Linen <b>shirt</b> in [fill in: material].</p>");
   assert.equal(d.seoTitle.length, 70);
   assert.deepEqual(d.fillIn, ["material"]);
+  // A placeholder written another way is still one; one only listed is added to the text.
+  const fr = draftFromAnswer({ description_html: "<p>Fait en [à compléter : matière].</p>", seo_title: "x", seo_description: "y", fill_in: ["matière"] });
+  assert.equal(fr.descriptionHtml, "<p>Fait en [fill in: à compléter : matière].</p>");
+  assert.deepEqual(fr.fillIn, ["à compléter : matière"]);
+  const listed = draftFromAnswer({ description_html: "<p>Linen shirt.</p>", seo_title: "x", seo_description: "y", fill_in: ["care"] });
+  assert.equal(listed.descriptionHtml, "<p>Linen shirt.</p>\n<p>[fill in: care]</p>");
+  assert.deepEqual(listed.fillIn, ["care"]);
   assert.equal(draftFromAnswer({ description_html: "  " }), null);
   assert.equal(draftFromAnswer(null), null);
 });

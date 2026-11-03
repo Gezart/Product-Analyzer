@@ -12,7 +12,8 @@ export class AiError extends Error {
 }
 
 let client = null;
-const anthropic = () => (client ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
+// A draft takes well under a minute; one retry for a dropped connection or an overloaded API.
+const anthropic = () => (client ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 90_000, maxRetries: 1 }));
 
 /** The app owner has set the API key. */
 export const claudeConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);

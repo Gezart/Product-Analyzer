@@ -3,13 +3,12 @@
 import { db } from "@/lib/db";
 import { HttpError } from "@/lib/http-error";
 import { localDateKey } from "@/lib/jobs/schedule";
-import { getPlan, PLANS } from "@/lib/plans";
+import { aiLimit, aiUpgradePlan } from "@/lib/plans";
 
 /** The store's month, "YYYY-MM": uses renew on the 1st in the store's timezone. */
 const monthOf = (shop) => localDateKey(new Date(), shop.timezone).slice(0, 7);
 
-/** AI descriptions a plan includes per month. */
-export const aiTextLimit = (planId) => (getPlan(planId) ?? PLANS[0]).aiTexts ?? 0;
+const aiTextLimit = (planId) => aiLimit(planId, "texts");
 
 /** This month's AI descriptions: used, the plan's limit, and how many are left. */
 export async function aiAllowance(shop) {
@@ -18,12 +17,6 @@ export async function aiAllowance(shop) {
   const limit = aiTextLimit(shop.plan);
   const used = row?.calls ?? 0;
   return { month, used, limit, left: Math.max(0, limit - used) };
-}
-
-/** The next plan with more AI descriptions, for the "upgrade" link. */
-function morePlan(planId) {
-  const current = aiTextLimit(planId);
-  return PLANS.find((p) => (p.aiTexts ?? 0) > current)?.id ?? null;
 }
 
 /**
@@ -37,7 +30,7 @@ export async function reserveAiText(shop) {
   const taken = await db().$executeRaw`
     UPDATE "ai_usage" SET "calls" = "calls" + 1 WHERE "shop_id" = ${shop.id} AND "month" = ${month} AND "calls" < ${limit}`;
   if (taken === 0) {
-    const upgrade = morePlan(shop.plan);
+    const upgrade = aiUpgradePlan(shop.plan, "texts");
     throw new HttpError(`This month's ${limit} AI descriptions are used up. They renew on the 1st${upgrade ? ", or upgrade for more" : ""}.`, 429, upgrade ? { upgrade } : {});
   }
   return month;
