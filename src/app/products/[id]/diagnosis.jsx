@@ -31,7 +31,7 @@ export function Diagnosis({ productId }) {
   }, [productId]);
 
   return (
-    <s-section heading={sellingWell ? "What could still be better" : "Why it isn't selling"}>
+    <s-section heading={sellingWell ? "What could still be better" : "Why it isn't selling"} id="diagnosis">
       {sellingWell && reasons?.length > 0 && <s-text tone="neutral">This product sells well; these are page improvements, not reasons it isn't selling.</s-text>}
       {error && <s-banner tone="critical">Could not run the diagnosis.</s-banner>}
       {upgrade && <UpgradeBanner>{upgrade}</UpgradeBanner>}

@@ -58,3 +58,8 @@ test("season notes: one product opens it, several open the seasonal list", () =>
   assert.match(ended.body, /^€1,251 in stock\. An end-of-season markdown clears it before the next season/);
   assert.equal(ended.href, "/products?status=seasonal");
 });
+
+test("the weekly plan in the inbox", () => {
+  const n = describe({ type: "weekly_plan", data: { week: "2026-11-02", actions: [{ title: "Linen Shirt" }, { title: "Mug" }] } });
+  assert.deepEqual(n, { title: "Your plan for this week", body: "2 actions, starting with Linen Shirt.", href: "/plan?week=2026-11-02" });
+});

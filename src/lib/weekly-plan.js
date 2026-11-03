@@ -7,9 +7,9 @@ const STOCKOUT_PLACES = 2;
 
 /**
  * The action for one product, or null when there's nothing to do this week (being measured, on a
- * markdown, or healthy). `p`: `{ productId, title, status, moneyAtStake, daysOfCover, markdownReason,
- * topReason, measuring, markdownRunning }` (`topReason`: the latest diagnosis's first reason, `{ code,
- * label }`; `markdownReason`: why a markdown is due, or null).
+ * markdown, healthy, or diagnosed with nothing found). `p`: `{ productId, title, status, moneyAtStake,
+ * daysOfCover, markdownReason, diagnosed, topReason, measuring, markdownRunning }` (`topReason`: the
+ * latest diagnosis's first reason, `{ code, label, link }`; `markdownReason`: why a markdown is due, or null).
  */
 export function actionFor(p) {
   if (p.measuring || p.markdownRunning) return null;
@@ -19,12 +19,16 @@ export function actionFor(p) {
     return { kind: "reorder", text: days == null ? "Reorder before it sells out." : `Reorder: about ${days} day${days === 1 ? "" : "s"} of stock left.`, href: at("#variants") };
   }
   if (p.markdownReason) return { kind: "markdown", text: `Start the markdown. ${p.markdownReason}`, href: at("") };
-  if (p.topReason && ["dead_stock", "slow_mover", "page_problem", "hidden_gem"].includes(p.status)) {
-    return { kind: "fix_page", text: `Fix the page: ${p.topReason.label.toLowerCase()}.`, href: at("#page") };
-  }
+  // A hidden gem sells to whoever sees it: more eyes first, whatever its page says.
   if (p.status === "hidden_gem") return { kind: "visibility", text: "Give it a better place in its collections: it sells well to the few who see it.", href: "/collections" };
-  if (["dead_stock", "slow_mover", "page_problem"].includes(p.status)) return { kind: "diagnose", text: "Run a diagnosis to see what holds it back.", href: at("#page") };
-  return null;
+  if (!["dead_stock", "slow_mover", "page_problem"].includes(p.status)) return null;
+  if (p.topReason) {
+    const link = /^#[a-z-]+$/.test(p.topReason.link ?? "") ? p.topReason.link : "#diagnosis";
+    return { kind: "fix_page", text: `What holds it back: ${p.topReason.label.toLowerCase()}.`, href: at(link) };
+  }
+  // Diagnosed and nothing found: no action to suggest here (its other signs are on the product page).
+  if (p.diagnosed) return null;
+  return { kind: "diagnose", text: "Run a diagnosis to see what holds it back.", href: at("#diagnosis") };
 }
 
 /**

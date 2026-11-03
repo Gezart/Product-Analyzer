@@ -15,25 +15,29 @@ const CANDIDATES = 15;
 
 /** This week's actions for a shop (see `pickActions`). */
 export async function buildWeeklyPlan(shopId) {
-  const { top } = summarize(await latestScores(shopId), CANDIDATES);
-  if (!top.length) return [];
-  const ids = top.map((r) => r.productId);
-  const [open, running, diagnoses, products] = await Promise.all([
-    db().rescuePlan.findMany({ where: { productId: { in: ids }, verdict: null }, select: { productId: true } }),
-    db().markdownPlan.findMany({ where: { productId: { in: ids }, status: { in: ["active", "paused"] } }, select: { productId: true } }),
-    db().diagnosis.findMany({ where: { productId: { in: ids } }, orderBy: { createdAt: "desc" }, distinct: ["productId"], select: { productId: true, reasons: true } }),
-    db().product.findMany({ where: { id: { in: ids } }, include: { shop: true } }),
+  // Products already handled (being measured, on a markdown) leave first, so they don't take places.
+  const [scores, open, running] = await Promise.all([
+    latestScores(shopId),
+    db().rescuePlan.findMany({ where: { product: { shopId }, verdict: null }, select: { productId: true } }),
+    db().markdownPlan.findMany({ where: { product: { shopId }, status: { in: ["active", "paused"] } }, select: { productId: true } }),
   ]);
   const measuring = new Set(open.map((r) => r.productId));
   const onMarkdown = new Set(running.map((r) => r.productId));
+  const { top } = summarize(scores.filter((r) => !measuring.has(r.productId) && !onMarkdown.has(r.productId)), CANDIDATES);
+  if (!top.length) return [];
+  const ids = top.map((r) => r.productId);
+  const [diagnoses, products] = await Promise.all([
+    db().diagnosis.findMany({ where: { productId: { in: ids } }, orderBy: { createdAt: "desc" }, distinct: ["productId"], select: { productId: true, reasons: true } }),
+    db().product.findMany({ where: { id: { in: ids } }, include: { shop: true } }),
+  ]);
   const reasonOf = new Map(diagnoses.map((d) => [d.productId, d.reasons?.[0] ?? null]));
+  const diagnosed = new Set(diagnoses.map((d) => d.productId));
   const byId = new Map(products.map((p) => [p.id, p]));
   const candidates = [];
   for (const r of top) {
     const product = byId.get(r.productId);
-    const busy = measuring.has(r.productId) || onMarkdown.has(r.productId);
-    // A markdown is checked only where it could be the action (not for products already handled).
-    const markdown = !busy && product && r.status !== "stockout_risk" ? await markdownEligibility(product).catch(() => null) : null;
+    // A markdown is checked only where it could be the action.
+    const markdown = product && r.status !== "stockout_risk" ? await markdownEligibility(product).catch(() => null) : null;
     const reason = reasonOf.get(r.productId);
     candidates.push({
       productId: r.productId,
@@ -42,9 +46,10 @@ export async function buildWeeklyPlan(shopId) {
       moneyAtStake: r.moneyAtStake,
       daysOfCover: r.daysOfCover,
       markdownReason: markdown?.reason ?? null,
-      topReason: reason ? { code: reason.code, label: REASON_TITLES[reason.code] ?? reason.code } : null,
-      measuring: measuring.has(r.productId),
-      markdownRunning: onMarkdown.has(r.productId),
+      diagnosed: diagnosed.has(r.productId),
+      topReason: reason ? { code: reason.code, label: REASON_TITLES[reason.code] ?? reason.code, link: reason.link ?? null } : null,
+      measuring: false,
+      markdownRunning: false,
     });
   }
   return pickActions(candidates);

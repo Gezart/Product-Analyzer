@@ -34,6 +34,21 @@ export function ProductView() {
       .catch((e) => setError(e.message));
   }, [id, version]);
 
+  // A link to a section (e.g. from the weekly plan) arrives before the page has loaded: scroll once it has.
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (!data || scrolled.current || !window.location.hash) return;
+    scrolled.current = true;
+    const id = decodeURIComponent(window.location.hash.slice(1));
+    // Sections that load their own data (e.g. the diagnosis) show up a moment later.
+    const tryScroll = (tries) => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      else if (tries > 0) setTimeout(() => tryScroll(tries - 1), 300);
+    };
+    tryScroll(10);
+  }, [data]);
+
   if (error) return <s-page heading="Product"><s-banner tone="critical">{error}</s-banner></s-page>;
   if (!data) return <s-page heading="Product"><s-spinner accessibilityLabel="Loading product" /></s-page>;
 

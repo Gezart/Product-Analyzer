@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
-const BUTTON = { reorder: "See stock", markdown: "Start the markdown", fix_page: "Fix the page", visibility: "Collections", diagnose: "Diagnose" };
+const BUTTON = { reorder: "See stock", markdown: "Start the markdown", fix_page: "See why", visibility: "Collections", diagnose: "Diagnose" };
 const dayLabel = (key) => new Date(`${key}T00:00:00Z`).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 /** This week's plan: the 3–5 actions picked on Monday, each with a button to where it's done. */
@@ -40,7 +40,15 @@ export function WeeklyPlanView() {
         <s-stack gap="base">
           {error && <s-banner tone="critical">{error}</s-banner>}
           {!data && !error && <s-spinner accessibilityLabel="Loading the plan" />}
-          {data && !plan && <s-text>No plan yet. Every Monday the most useful things to do that week show up here and in the inbox.</s-text>}
+          {data && !plan && week && data.weeks.length > 0 && (
+            <s-text>
+              No plan is kept for that week.{" "}
+              <Link href="/plan" className="underline">
+                See the latest
+              </Link>
+            </s-text>
+          )}
+          {data && !plan && !(week && data.weeks.length > 0) && <s-text>No plan yet. Every Monday the most useful things to do that week show up here and in the inbox.</s-text>}
           {plan && (
             <>
               <s-stack direction="inline" gap="small" alignItems="center">
