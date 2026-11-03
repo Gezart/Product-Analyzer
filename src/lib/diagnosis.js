@@ -3,6 +3,9 @@
 // Pure (no imports) so node:test can load it. AI explanations are v2.
 
 const PRICE_ABOVE = 0.25;
+/** Above the market price: flagged above the merchant's threshold (default 10%), high above 25%. */
+const MARKET_ABOVE = 0.1;
+const MARKET_HIGH = 0.25;
 const MIN_PEERS = 3;
 export const MIN_IMAGES = 3;
 export const MIN_WORDS = 80;
@@ -19,6 +22,15 @@ export function median(values) {
   const s = [...values].sort((a, b) => a - b);
   const mid = Math.floor(s.length / 2);
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+/**
+ * How far `price` is above (positive) or below (negative) `market`, as a share rounded to 4 decimals (so
+ * 55 vs 50 is exactly 10% wherever it is shown or compared); null without a market price.
+ */
+export function gapToMarket(price, market) {
+  if (!(market > 0) || !(price > 0)) return null;
+  return Math.round((price / market - 1) * 10000) / 10000;
 }
 
 const pct = (n) => `${Math.round(n * 100)}%`;
@@ -81,6 +93,23 @@ export function diagnose(p, ctx) {
       data: { price: p.price, peerMedian: group.peers.median, peers: group.peers.count, group: group.key, abovePct: above },
       link: "#overview",
     });
+  }
+
+  // 1b. Price above the market price: the median of competitors' prices for the same product, in the
+  //     shop's currency only (`p.market`, built by the caller). Like rule 1, not for a product that sells well.
+  const marketAbove = ctx.marketAbove ?? MARKET_ABOVE;
+  if (p.market?.median > 0 && p.price > 0 && !p.sellingWell) {
+    const gap = gapToMarket(p.price, p.market.median);
+    if (gap > marketAbove) {
+      const n = p.market.count;
+      reasons.push({
+        code: "price_above_market",
+        severity: gap > Math.max(MARKET_HIGH, marketAbove) ? "high" : "medium",
+        evidence: `Price is ${pct(gap)} above the market price ${money(p.market.median, ctx.currency)} (the median of ${n} competitor price${n === 1 ? "" : "s"} you added).`,
+        data: { price: p.price, marketMedian: p.market.median, prices: n, source: p.market.source ?? "competitors", abovePct: gap, threshold: marketAbove },
+        link: "#market",
+      });
+    }
   }
 
   // 2. Fewer than 3 images.
@@ -201,7 +230,7 @@ export function diagnose(p, ctx) {
 export function reasonSignature(reasons) {
   return reasons
     .map((r) => {
-      const items = ["outOfStock", "missing", "sameAs", "group"]
+      const items = ["outOfStock", "missing", "sameAs", "group", "source"]
         .map((k) => r.data[k])
         .filter((v) => v != null)
         .map((v) => (Array.isArray(v) ? [...v].sort().join("|") : String(v)));

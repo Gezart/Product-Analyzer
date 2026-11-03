@@ -20,6 +20,8 @@ export function ProductView() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [version, setVersion] = useState(0);
+  // Bumped when competitor prices change: only the diagnosis needs to run again.
+  const [marketVersion, setMarketVersion] = useState(0);
   const refresh = useRef(undefined);
   useEffect(() => () => clearTimeout(refresh.current), []);
 
@@ -93,8 +95,8 @@ export function ProductView() {
 
         {data.rescuePlan && <RescuePlan plan={data.rescuePlan} onChanged={() => setVersion((v) => v + 1)} />}
         <Markdown productId={data.product.id} money={money2} onChanged={() => setVersion((v) => v + 1)} />
-        <Diagnosis productId={data.product.id} key={`diagnosis-${version}`} />
-        <MarketPrice productId={data.product.id} />
+        <Diagnosis productId={data.product.id} key={`diagnosis-${version}-${marketVersion}`} />
+        <MarketPrice productId={data.product.id} onChanged={() => setMarketVersion((v) => v + 1)} />
         <FixCenter
           productId={data.product.id}
           onChanged={() => {

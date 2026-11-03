@@ -3,6 +3,8 @@
 
 import { median } from "./diagnosis.js";
 
+export { gapToMarket } from "./diagnosis.js";
+
 const round2 = (n) => Math.round(n * 100) / 100;
 
 /**
@@ -21,8 +23,3 @@ export function competitorSummary(links, currency) {
   };
 }
 
-/** How far `price` is above (positive) or below (negative) `market`, as a share; null without a market price. */
-export function gapToMarket(price, market) {
-  if (!(market > 0) || !(price > 0)) return null;
-  return price / market - 1;
-}

@@ -89,6 +89,7 @@ test("defaults match the plan", () => {
     deadDays: 90,
     stockoutCoverDays: 14,
     minViews: 20,
+    marketAbove: 0.1,
   });
 });
 

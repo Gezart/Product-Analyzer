@@ -15,7 +15,7 @@ function linkPrice(link) {
 }
 
 /** Competitors' prices for this product: links the merchant adds, read when added and every night. */
-export function MarketPrice({ productId }) {
+export function MarketPrice({ productId, onChanged }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [url, setUrl] = useState("");
@@ -41,6 +41,7 @@ export function MarketPrice({ productId }) {
       if (!res.ok) throw await apiError(res);
       setData(await res.json());
       if (method === "POST") setUrl("");
+      onChanged?.(); // the diagnosis compares with the new market price
     } catch (e) {
       setMessage(e.message);
     } finally {
@@ -73,7 +74,7 @@ export function MarketPrice({ productId }) {
               </s-text>
               <span className="text-2xl font-semibold">{money.format(competitors.median)}</span>
               {gap != null && (
-                <span className={`text-sm font-medium ${gap > 0.1 ? "text-orange-800" : "text-zinc-700"}`}>
+                <span className={`text-sm font-medium ${gap > data.marketAbove ? "text-orange-800" : "text-zinc-700"}`}>
                   Your price {money.format(data.price)} is{" "}
                   {Math.abs(gap) < 0.005 ? "the same" : `${pct(gap)} ${gap > 0 ? "higher" : "lower"}`}
                 </span>

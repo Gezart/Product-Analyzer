@@ -1,5 +1,13 @@
 # History
 
+## 2026-11-03 · market-price-rule
+- New diagnosis reason "Price is above the market": the price vs the median of the product's competitor prices (shop currency only); medium above the merchant's threshold (default 10%), high above 25% (or the threshold, if higher); not for products that sell well; links to the Market price section
+- Settings: new "Diagnosis" section with "Above the market price by" (1–100%); shares are stored rounded so a price exactly at the threshold isn't flagged
+- Product list: "vs market" column (orange above the threshold) and "Most above market" sort, once a product has a comparable competitor price
+- One rounded gap (`gapToMarket`) for the rule, the list and the product page, so they always agree; adding or removing a link re-runs the diagnosis
+- Starter and up; rules version `rules-v3` (diagnoses are stored fresh once)
+- Verified on a local Postgres: 18% → medium with evidence, Free plan → none, threshold 20% → none, 35% → high, exactly 10% → none, list gaps, settings save and validation
+
 ## 2026-11-03 · competitor-prices
 - Up to 5 competitor links per product (`competitor_links`, RLS on; migration applied to Supabase); the price is read when a link is added and every night (`competitor-prices` job, 5:00 store time)
 - Price from the page's main product in JSON-LD (the shop's currency first when there are several), `product:price`/`og:price` tags or microdata; Shopify stores fall back to `/products/<handle>.js` in the page's currency; amounts like "Rs. 1,299", "€1.299", "1.299,00" and "₹1,29,900" are read correctly

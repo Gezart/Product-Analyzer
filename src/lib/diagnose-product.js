@@ -2,11 +2,13 @@ import { DAY_MS } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { diagnose, median, reasonSignature } from "@/lib/diagnosis";
 import { localDateKey } from "@/lib/jobs/schedule";
+import { competitorSummary } from "@/lib/market-price";
+import { hasFeature } from "@/lib/plans";
 import { sanitizeThresholds } from "@/lib/scoring";
 
 /** Rules version stored with each diagnosis (AI-written summaries come in v2). */
 /** Bumped when a rule changes, so the next diagnosis is stored fresh. */
-export const RULES_VERSION = "rules-v2";
+export const RULES_VERSION = "rules-v3";
 
 async function sessions30(shopId, timeZone) {
   const today = new Date(`${localDateKey(new Date(), timeZone)}T00:00:00Z`);
@@ -26,7 +28,7 @@ async function buildContext(shopId, timeZone, currency) {
     db().settings.findUnique({ where: { shopId }, select: { thresholds: true } }),
     sessions30(shopId, timeZone),
   ]);
-  const minViews = sanitizeThresholds(settings?.thresholds).minViews;
+  const { minViews, marketAbove } = sanitizeThresholds(settings?.thresholds);
   const push = (map, key, v) => {
     const list = map.get(key);
     if (list) list.push(v);
@@ -65,6 +67,7 @@ async function buildContext(shopId, timeZone, currency) {
     medianViewToCart: median(viewToCart),
     medianCartToPurchase: median(cartToPurchase),
     minViews,
+    marketAbove,
   };
   return { context, sessions };
 }
@@ -82,22 +85,31 @@ async function sameDescription(shopId, productId) {
   return rows.map((r) => r.id);
 }
 
+/** The market price from the product's competitor links (shop currency only), or null below the plan. */
+async function marketPrice(shop, productId) {
+  if (!shop?.currency || !hasFeature(shop.plan, "marketPrice")) return null;
+  const links = await db().competitorLink.findMany({ where: { shopId: shop.id, productId, status: "ok" }, select: { price: true, currency: true, status: true } });
+  const summary = competitorSummary(links, shop.currency);
+  return summary.median == null ? null : { median: summary.median, count: summary.count, source: "competitors" };
+}
+
 /**
  * Diagnoses one product with the v1 rules. A new `diagnoses` row is stored only when the reasons
  * (or the items they name) changed, so the history shows when a problem appeared or was fixed.
  */
 export async function diagnoseProduct(shopId, productId) {
-  const shop = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true, currency: true } });
+  const shop = await db().shop.findUnique({ where: { id: shopId }, select: { id: true, timezone: true, currency: true, plan: true } });
   const product = await db().product.findFirst({
     where: { id: productId, shopId },
     include: { variants: { select: { options: true, inventoryQty: true, sellsWhenOut: true }, orderBy: { shopifyGid: "asc" } } },
   });
   if (!product) return null;
-  const [{ context, sessions }, duplicates, score, rescue] = await Promise.all([
+  const [{ context, sessions }, duplicates, score, rescue, market] = await Promise.all([
     buildContext(shopId, shop?.timezone ?? null, shop?.currency ?? null),
     sameDescription(shopId, productId),
     db().productScore.findFirst({ where: { productId }, orderBy: { computedAt: "desc" }, select: { status: true } }),
     db().rescuePlan.findFirst({ where: { productId }, orderBy: { startedAt: "desc" }, select: { verdict: true } }),
+    marketPrice(shop, productId),
   ]);
   // A product that sells well isn't "not selling": its price isn't questioned and the page says so —
   // unless its last fixes made sales worse or changed nothing.
@@ -120,6 +132,7 @@ export async function diagnoseProduct(shopId, productId) {
       pageDataKnown,
       duplicateOf: pageDataKnown ? duplicates : null,
       sellingWell,
+      market,
       variants: product.variants.map((v) => ({
         title: Object.values((v.options ?? {})).join(" / ") || "Default",
         stock: v.inventoryQty,

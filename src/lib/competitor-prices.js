@@ -4,6 +4,7 @@
 import { readCompetitorPrice } from "@/lib/competitor-price";
 import { db } from "@/lib/db";
 import { HttpError } from "@/lib/http-error";
+import { competitorSummary, gapToMarket } from "@/lib/market-price";
 import { hasFeature } from "@/lib/plans";
 import { normalizeLink } from "@/lib/public-address";
 import { fetchPublicPage, PageFetchError } from "@/lib/public-fetch";
@@ -92,4 +93,28 @@ export async function refreshShopLinks(shopId, signal, { fetchPage = fetchPublic
   await Promise.all(Array.from({ length: Math.min(PARALLEL, links.length) }, worker));
   const checked = Math.min(next, links.length);
   return { checked, remaining: links.length - checked };
+}
+
+/**
+ * For the product list: each product's gap to its market price (the competitors' median in the shop's
+ * currency), as a share above (positive) or below. Products without a comparable price are left out.
+ */
+export async function marketGaps(shop) {
+  if (!shop.currency || !hasFeature(shop.plan, "marketPrice")) return new Map();
+  const links = await db().competitorLink.findMany({
+    where: { shopId: shop.id, status: "ok", currency: shop.currency, product: { status: { not: "DELETED" } } },
+    select: { productId: true, price: true, currency: true, status: true, product: { select: { price: true } } },
+  });
+  const byProduct = new Map();
+  for (const link of links) {
+    const list = byProduct.get(link.productId) ?? [];
+    list.push(link);
+    byProduct.set(link.productId, list);
+  }
+  const gaps = new Map();
+  for (const [productId, list] of byProduct) {
+    const gap = gapToMarket(Number(list[0].product.price), competitorSummary(list, shop.currency).median);
+    if (gap != null) gaps.set(productId, gap);
+  }
+  return gaps;
 }
