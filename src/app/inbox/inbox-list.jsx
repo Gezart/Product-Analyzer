@@ -16,6 +16,8 @@ const KIND = {
   markdown_restore_failed: { icon: "alert", tile: "bg-red-100 text-red-700" },
   price_guard: { icon: "alert", tile: "bg-red-100 text-red-700" },
   monthly_report: { icon: "report", tile: "bg-sky-100 text-sky-700" },
+  season_soon: { icon: "spark", tile: "bg-teal-100 text-teal-700" },
+  season_ended: { icon: "tag", tile: "bg-teal-100 text-teal-700" },
 };
 const DEFAULT_KIND = { icon: "bell", tile: "bg-zinc-100 text-zinc-600" };
 

@@ -1,8 +1,31 @@
-// Markdown ladder — docs/PLAN.md → "Markdown ladder" and module 7. Pure (no imports) so node:test can
-// load it. The money rule: a price NEVER goes below cost × (1 + minimum margin). A variant without a
+// Markdown ladder — docs/PLAN.md → "Markdown ladder" and module 7. Pure (relative imports only) so
+// node:test can load it. The money rule: a price NEVER goes below cost × (1 + minimum margin). A variant without a
 // known cost has no known floor, so it is never discounted.
 
+import { justEnded } from "./season.js";
+import { seasonWaiting } from "./scoring.js";
+
 export const LADDER = { steps: [0.1, 0.2, 0.3], stepDays: 14, sellThroughStop: 0.5 };
+
+/**
+ * Why a product qualifies for a markdown now: `{ kind, reason }`, or null. Products not analyzed
+ * (draft, archived, excluded, over the plan) never do. Right after its season ends (and well before the
+ * next) a seasonal product with stock left gets an end-of-season markdown; otherwise one waiting for its
+ * season gets none. Else: a rescue plan that changed nothing, or dead stock.
+ * `season` is the product's season state (or null), `stock` its units in stock.
+ */
+export function markdownReason({ active, status, rescueVerdict, stock, season }) {
+  if (!active || status === "excluded" || status === "over_limit") return null;
+  if (justEnded(season) && stock > 0) {
+    const days = season.daysSinceEnd;
+    const ago = days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`;
+    return { kind: "end_of_season", reason: `Its season ended ${ago}: an end-of-season markdown clears the stock before its next season.` };
+  }
+  if (seasonWaiting(season)) return null;
+  if (rescueVerdict === "no_change") return { kind: "rescue", reason: "The rescue plan ended with no change." };
+  if (status === "dead_stock") return { kind: "dead_stock", reason: "Dead stock: no sale for a long time." };
+  return null;
+}
 
 const cents = (n) => Math.round(n * 100);
 const fromCents = (c) => c / 100;

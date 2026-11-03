@@ -3,11 +3,10 @@ import { DAY_MS } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { errorMessage, HttpError } from "@/lib/http-error";
 import { localDateKey } from "@/lib/jobs/schedule";
-import { dueStep, guardWrites, LADDER, liveStock, proposeLadder, restoreWrites, safeToWrite, settleWrites, stepWrites, stockCleared, withOutcomes } from "@/lib/markdown";
+import { dueStep, guardWrites, LADDER, liveStock, markdownReason, proposeLadder, restoreWrites, safeToWrite, settleWrites, stepWrites, stockCleared, withOutcomes } from "@/lib/markdown";
 import { readLiveVariants, writeVariantPrices } from "@/lib/markdown-shopify";
 import { notify } from "@/lib/notify";
 import { seasonOf, seasonState } from "@/lib/season";
-import { seasonWaiting } from "@/lib/scoring";
 import { seasonalCollectionsOf } from "@/lib/settings";
 import { shopifyFailure } from "@/lib/shopify-errors";
 
@@ -218,20 +217,23 @@ async function productSeason(product) {
   return season && seasonState(season.ranges, localDateKey(new Date(), product.shop.timezone));
 }
 
-/** Why a product qualifies for a markdown now, or null. `product` comes with its shop. */
+/** Why a product qualifies for a markdown now (`{ reason, rescueId }`), or null. `product` comes with its shop. */
 async function eligibility(product) {
   const productId = product.id;
-  const [rescue, score, season] = await Promise.all([
+  const [rescue, score, season, variants] = await Promise.all([
     db().rescuePlan.findFirst({ where: { productId }, orderBy: { startedAt: "desc" } }),
     db().productScore.findFirst({ where: { productId }, orderBy: { computedAt: "desc" }, select: { status: true } }),
     productSeason(product),
+    db().variant.findMany({ where: { productId }, select: { inventoryQty: true } }),
   ]);
-  // Out of season (or early in it) a seasonal product is waiting for its season, not failing: no
-  // markdown, whatever its status or rescue result.
-  if (seasonWaiting(season)) return null;
-  if (rescue?.verdict === "no_change") return { reason: "The rescue plan ended with no change.", rescueId: rescue.id };
-  if (score?.status === "dead_stock") return { reason: "Dead stock: no sale for a long time.", rescueId: null };
-  return null;
+  const found = markdownReason({
+    active: product.status === "ACTIVE",
+    status: score?.status ?? null,
+    rescueVerdict: rescue?.verdict ?? null,
+    stock: variants.reduce((n, v) => n + Math.max(0, v.inventoryQty), 0),
+    season,
+  });
+  return found && { reason: found.reason, rescueId: found.kind === "rescue" ? rescue.id : null };
 }
 
 async function context(shopId, productId) {

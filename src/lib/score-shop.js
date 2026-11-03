@@ -4,7 +4,7 @@ import { localDateKey } from "@/lib/jobs/schedule";
 import { attentionSummary } from "@/lib/notifications";
 import { notify } from "@/lib/notify";
 import { productLimit, withinLimit } from "@/lib/plans";
-import { seasonOf, seasonState, unitsSinceStart } from "@/lib/season";
+import { seasonNotices, seasonOf, seasonState, unitsSinceStart } from "@/lib/season";
 import { scoreProducts, stockFromVariants } from "@/lib/scoring";
 import { seasonalCollectionsOf } from "@/lib/settings";
 import { knownOrderDays } from "@/lib/sync/constants";
@@ -21,13 +21,44 @@ function stockColumns(p) {
 }
 
 /**
+ * Inbox notes about seasons, each once: a season starting within 30 days ("check stock and pages"), and
+ * a season that just ended with stock left ("an end-of-season markdown clears it").
+ */
+async function notifySeasons(shopId, items, currency, now) {
+  const { soon, ended } = seasonNotices(items);
+  if (!soon.length && !ended.length) return;
+  const sent = new Set(
+    (
+      await db().notification.findMany({
+        where: { shopId, type: { in: ["season_soon", "season_ended"] }, createdAt: { gte: new Date(now.getTime() - 400 * DAY_MS) } },
+        select: { data: true },
+      })
+    ).map((n) => n.data?.key),
+  );
+  const notes = [
+    ...soon.map((g) => ({ type: "season_soon", key: `soon:${g.date}`, g })),
+    ...ended.map((g) => ({ type: "season_ended", key: `ended:${g.date}`, g })),
+  ];
+  for (const { type, key, g } of notes) {
+    if (sent.has(key)) continue;
+    await notify({
+      shopId,
+      type,
+      // One product: the note opens it; several: the list of seasonal products.
+      productId: g.count === 1 ? g.productIds[0] : null,
+      data: { key, date: g.date, days: g.days, count: g.count, stockValue: g.stockValue, currency },
+    });
+  }
+}
+
+/**
  * Recomputes metrics, status and money at stake for every product of a shop and writes one
  * `product_scores` row per product (inactive, deleted or excluded products get status "excluded";
  * products beyond the plan's limit get "over_limit"). Returns the number of products scored.
  */
 export async function scoreShop(shopId, now = new Date()) {
   // "Today" is the store's local date, the same calendar the daily metrics are stored in.
-  const shopRow = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true, plan: true } });
+  const shopRow = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true, plan: true, currency: true } });
   const todayKey = localDateKey(now, shopRow?.timezone);
   const today = new Date(`${todayKey}T00:00:00Z`);
   const d30 = new Date(today.getTime() - 30 * DAY_MS);
@@ -187,6 +218,8 @@ export async function scoreShop(shopId, now = new Date()) {
       ...overLimit.map((p) => ({ productId: p.id, computedAt: now, status: "over_limit", moneyAtStake: "0.00", ...stockColumns(p) })),
     ],
   });
+  await notifySeasons(shopId, inputs.map((p) => ({ id: p.id, stock: p.stock, stockValue: p.stockValue, state: seasons.get(p.id) })), shopRow?.currency ?? null, now);
+
   const summary = attentionSummary(previous, results);
   // The first analysis is the first run that scored a product (none yet, or all excluded: nothing to report).
   if (summary.firstRun && results.length > 0) await notify({ shopId, type: "analysis_ready", data: { products: results.length, counts: summary.counts } });

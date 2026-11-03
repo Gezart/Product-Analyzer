@@ -46,3 +46,15 @@ test("describe: text and link per type; unknown types still render", () => {
   });
   assert.deepEqual(describe({ type: "something_new", productId: null }), { title: "something new", body: "", href: "/" });
 });
+
+test("season notes: one product opens it, several open the seasonal list", () => {
+  const soon = describe({ type: "season_soon", productId: null, data: { date: "2026-11-01", days: 27, count: 3 } });
+  assert.deepEqual(soon, { title: "Season starts November 1: 3 seasonal products", body: "Check stock and product pages before the season starts.", href: "/products?status=seasonal" });
+  const one = describe({ type: "season_soon", productId: "p1", productTitle: "Wool coat", data: { date: "2026-11-01", count: 1 } });
+  assert.equal(one.title, "Season starts November 1: Wool coat");
+  assert.equal(one.href, "/products/p1");
+  const ended = describe({ type: "season_ended", productId: null, data: { date: "2026-08-31", count: 4, stockValue: 1250.5, currency: "EUR" } });
+  assert.equal(ended.title, "Season ended with stock left: 4 products");
+  assert.match(ended.body, /^€1,251 in stock\. An end-of-season markdown clears it before the next season/);
+  assert.equal(ended.href, "/products?status=seasonal");
+});
