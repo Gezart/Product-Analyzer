@@ -1,5 +1,13 @@
 # History
 
+## 2026-11-03 · google-market-price
+- Settings: "Google Merchant Center" section: connect (Google's consent screen in a new window), choose the account when there are several, read now, disconnect (access revoked, also below the plan and on uninstall); Starter and up
+- OAuth: single-use state for 10 minutes (claimed atomically), `content` scope checked, and after Google the merchant confirms the store being connected, so a consent link sent by someone else can't attach their Google account to another store; refresh token stored encrypted (`google_connections`, RLS on); a failed connect revokes Google's token
+- Nightly `google-benchmarks` job: Google's price competitiveness report (Merchant API `reports:search`, field names from Google's discovery documents), matched to the shop's own variants by Shopify's offer IDs (`shopify_<COUNTRY>_<product>_<variant>`) into `google_benchmarks` (RLS on)
+- Market price section shows Google's average price (country, read date) next to the competitors' median; the "above the market" diagnosis and the "vs market" column use Google's benchmark when a product has no competitor links, matched to the variant priced like the product; benchmarks are used only while connected and read in the last 3 days
+- Verified on a local Postgres with Google stubbed: confirm page, connect with one or two accounts, reused/expired/denied/parallel links, missing scope or refresh token, wrong account, two report pages, other shops' offers ignored, diagnosis and list from Google, stale or revoked data unused, disconnect, Free plan, not set up
+- Open: a real test needs the owner's Google Cloud project and OAuth client (see TASKS); check on the dev store that the new window opens from Shopify admin; migration applied to Supabase
+
 ## 2026-11-03 · market-price-rule
 - New diagnosis reason "Price is above the market": the price vs the median of the product's competitor prices (shop currency only); medium above the merchant's threshold (default 10%), high above 25% (or the threshold, if higher); not for products that sell well; links to the Market price section
 - Settings: new "Diagnosis" section with "Above the market price by" (1–100%); shares are stored rounded so a price exactly at the threshold isn't flagged

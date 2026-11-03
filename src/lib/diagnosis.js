@@ -95,17 +95,22 @@ export function diagnose(p, ctx) {
     });
   }
 
-  // 1b. Price above the market price: the median of competitors' prices for the same product, in the
-  //     shop's currency only (`p.market`, built by the caller). Like rule 1, not for a product that sells well.
+  // 1b. Price above the market price, in the shop's currency only (`p.market`, built by the caller): the
+  //     median of the competitor links the merchant added, or else Google's benchmark price for the same
+  //     product. Like rule 1, not for a product that sells well.
   const marketAbove = ctx.marketAbove ?? MARKET_ABOVE;
   if (p.market?.median > 0 && p.price > 0 && !p.sellingWell) {
     const gap = gapToMarket(p.price, p.market.median);
     if (gap > marketAbove) {
       const n = p.market.count;
+      const where =
+        p.market.source === "google"
+          ? `Google's benchmark: what shoppers pay on average for this product on Google${p.market.country ? ` in ${p.market.country}` : ""}`
+          : `the median of ${n} competitor price${n === 1 ? "" : "s"} you added`;
       reasons.push({
         code: "price_above_market",
         severity: gap > Math.max(MARKET_HIGH, marketAbove) ? "high" : "medium",
-        evidence: `Price is ${pct(gap)} above the market price ${money(p.market.median, ctx.currency)} (the median of ${n} competitor price${n === 1 ? "" : "s"} you added).`,
+        evidence: `Price is ${pct(gap)} above the market price ${money(p.market.median, ctx.currency)} (${where}).`,
         data: { price: p.price, marketMedian: p.market.median, prices: n, source: p.market.source ?? "competitors", abovePct: gap, threshold: marketAbove },
         link: "#market",
       });

@@ -1,8 +1,9 @@
 import { DAY_MS } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { diagnose, median, reasonSignature } from "@/lib/diagnosis";
+import { googleBenchmarkFor } from "@/lib/google-merchant";
 import { localDateKey } from "@/lib/jobs/schedule";
-import { competitorSummary } from "@/lib/market-price";
+import { competitorSummary, marketFrom } from "@/lib/market-price";
 import { hasFeature } from "@/lib/plans";
 import { sanitizeThresholds } from "@/lib/scoring";
 
@@ -85,12 +86,15 @@ async function sameDescription(shopId, productId) {
   return rows.map((r) => r.id);
 }
 
-/** The market price from the product's competitor links (shop currency only), or null below the plan. */
-async function marketPrice(shop, productId) {
+/**
+ * The market price in the shop's currency: the median of the product's competitor links, or else Google's
+ * benchmark for it. Null below the plan or without either.
+ */
+async function marketPrice(shop, productId, price) {
   if (!shop?.currency || !hasFeature(shop.plan, "marketPrice")) return null;
   const links = await db().competitorLink.findMany({ where: { shopId: shop.id, productId, status: "ok" }, select: { price: true, currency: true, status: true } });
   const summary = competitorSummary(links, shop.currency);
-  return summary.median == null ? null : { median: summary.median, count: summary.count, source: "competitors" };
+  return marketFrom(summary, summary.median == null ? await googleBenchmarkFor(shop, productId, price) : null);
 }
 
 /**
@@ -109,7 +113,7 @@ export async function diagnoseProduct(shopId, productId) {
     sameDescription(shopId, productId),
     db().productScore.findFirst({ where: { productId }, orderBy: { computedAt: "desc" }, select: { status: true } }),
     db().rescuePlan.findFirst({ where: { productId }, orderBy: { startedAt: "desc" }, select: { verdict: true } }),
-    marketPrice(shop, productId),
+    marketPrice(shop, productId, Number(product.price)),
   ]);
   // A product that sells well isn't "not selling": its price isn't questioned and the page says so —
   // unless its last fixes made sales worse or changed nothing.

@@ -1,4 +1,5 @@
 import { refreshShopLinks } from "@/lib/competitor-prices";
+import { syncBenchmarks } from "@/lib/google-merchant";
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { enqueue } from "@/lib/jobs/queue";
 import { guardPrices, runMarkdownPlans } from "@/lib/markdown-engine";
@@ -68,6 +69,10 @@ export const handlers = {
       await enqueue({ type: "competitor-prices", shopId, payload: { round: round + 1 }, uniqueKey: `competitor-prices:more:${job.id}` });
     }
   },
+  /** Google's price benchmarks from the shop's Merchant Center (when connected). */
+  "google-benchmarks": async (job, signal) => {
+    await syncBenchmarks(requireShop(job), signal);
+  },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
   "sync-inventory": runSyncInventory,
@@ -81,6 +86,7 @@ export const nightlyJobs = [
   { type: "register-webhooks", hour: 3 },
   { type: "orders-catchup", hour: 4 },
   { type: "competitor-prices", hour: 5 },
+  { type: "google-benchmarks", hour: 5 },
   { type: "price-guard", hour: 6 },
   // Stores last month's report once it is over (no-op on other days).
   { type: "monthly-report", hour: 6 },

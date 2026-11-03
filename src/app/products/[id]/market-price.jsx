@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { apiError } from "@/app/api-error";
 import { listen } from "@/app/polaris-events";
 import { UpgradeBanner } from "@/app/upgrade-banner";
@@ -14,7 +15,27 @@ function linkPrice(link) {
   return moneyFormatter(link.currency ?? undefined, 2).format(link.price) + (link.currency ? "" : " (currency unknown)");
 }
 
-/** Competitors' prices for this product: links the merchant adds, read when added and every night. */
+/** One market price and how far the product's price is from it. */
+function MarketBox({ label, value, gap, price, money, above }) {
+  return (
+    <s-box padding="base" background="subdued" borderRadius="base">
+      <s-stack gap="small-200">
+        <s-text tone="neutral">{label}</s-text>
+        <span className="text-2xl font-semibold">{money.format(value)}</span>
+        {gap != null && (
+          <span className={`text-sm font-medium ${gap > above ? "text-orange-800" : "text-zinc-700"}`}>
+            Your price {money.format(price)} is {Math.abs(gap) < 0.005 ? "the same" : `${pct(gap)} ${gap > 0 ? "higher" : "lower"}`}
+          </span>
+        )}
+      </s-stack>
+    </s-box>
+  );
+}
+
+/**
+ * The market price for this product: Google's benchmark (when Merchant Center is connected) and the
+ * competitors' prices from links the merchant adds, read when added and every night.
+ */
 export function MarketPrice({ productId, onChanged }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -60,30 +81,44 @@ export function MarketPrice({ productId, onChanged }) {
   }
 
   const money = moneyFormatter(data.currency, 2);
-  const { competitors, gap } = data;
+  const { competitors, gap, google } = data;
   const full = data.links.length >= data.max;
 
   return (
     <s-section heading="Market price" id="market">
       <s-stack gap="base">
-        {competitors.median != null ? (
-          <s-box padding="base" background="subdued" borderRadius="base">
-            <s-stack gap="small-200">
-              <s-text tone="neutral">
-                Competitors · median of {competitors.count} price{competitors.count === 1 ? "" : "s"}
-              </s-text>
-              <span className="text-2xl font-semibold">{money.format(competitors.median)}</span>
-              {gap != null && (
-                <span className={`text-sm font-medium ${gap > data.marketAbove ? "text-orange-800" : "text-zinc-700"}`}>
-                  Your price {money.format(data.price)} is{" "}
-                  {Math.abs(gap) < 0.005 ? "the same" : `${pct(gap)} ${gap > 0 ? "higher" : "lower"}`}
-                </span>
-              )}
-            </s-stack>
-          </s-box>
-        ) : (
+        {(google || competitors.median != null) && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {competitors.median != null && (
+              <MarketBox
+                label={`Competitors · median of ${competitors.count} price${competitors.count === 1 ? "" : "s"}`}
+                value={competitors.median}
+                gap={gap}
+                price={data.price}
+                money={money}
+                above={data.marketAbove}
+              />
+            )}
+            {google && (
+              <MarketBox
+                label={`Google Shopping · average price${google.country ? ` in ${google.country}` : ""} · read ${day(google.syncedAt)}`}
+                value={google.benchmark}
+                gap={google.gap}
+                price={data.price}
+                money={money}
+                above={data.marketAbove}
+              />
+            )}
+          </div>
+        )}
+        {competitors.median == null && (
           <s-text tone="neutral">
             Add links to the same product in other shops. Their prices are compared with yours (in {data.currency ?? "your currency"} only).
+          </s-text>
+        )}
+        {data.googleSuggested && (
+          <s-text tone="neutral">
+            Sell on Google? Connect Google Merchant Center in <Link href="/settings" className="underline">Settings</Link> to see what shoppers pay for this product there.
           </s-text>
         )}
 

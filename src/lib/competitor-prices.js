@@ -3,8 +3,10 @@
 
 import { readCompetitorPrice } from "@/lib/competitor-price";
 import { db } from "@/lib/db";
+import { productBenchmark } from "@/lib/google-benchmark";
+import { googleIsFresh } from "@/lib/google-merchant";
 import { HttpError } from "@/lib/http-error";
-import { competitorSummary, gapToMarket } from "@/lib/market-price";
+import { competitorSummary, gapToMarket, marketFrom } from "@/lib/market-price";
 import { hasFeature } from "@/lib/plans";
 import { normalizeLink } from "@/lib/public-address";
 import { fetchPublicPage, PageFetchError } from "@/lib/public-fetch";
@@ -96,8 +98,9 @@ export async function refreshShopLinks(shopId, signal, { fetchPage = fetchPublic
 }
 
 /**
- * For the product list: each product's gap to its market price (the competitors' median in the shop's
- * currency), as a share above (positive) or below. Products without a comparable price are left out.
+ * For the product list: each product's gap to its market price in the shop's currency (the competitors'
+ * median, or else Google's benchmark), as a share above (positive) or below. Products without a
+ * comparable price are left out.
  */
 export async function marketGaps(shop) {
   if (!shop.currency || !hasFeature(shop.plan, "marketPrice")) return new Map();
@@ -114,6 +117,23 @@ export async function marketGaps(shop) {
   const gaps = new Map();
   for (const [productId, list] of byProduct) {
     const gap = gapToMarket(Number(list[0].product.price), competitorSummary(list, shop.currency).median);
+    if (gap != null) gaps.set(productId, gap);
+  }
+  if (!(await googleIsFresh(shop.id))) return gaps;
+  const benchmarks = await db().googleBenchmark.findMany({
+    where: { shopId: shop.id, currency: shop.currency, product: { status: { not: "DELETED" } } },
+    select: { productId: true, price: true, benchmark: true, currency: true, country: true, product: { select: { price: true } } },
+  });
+  const byProductGoogle = new Map();
+  for (const row of benchmarks) {
+    if (gaps.has(row.productId)) continue;
+    const list = byProductGoogle.get(row.productId) ?? [];
+    list.push(row);
+    byProductGoogle.set(row.productId, list);
+  }
+  for (const [productId, rows] of byProductGoogle) {
+    const price = Number(rows[0].product.price);
+    const gap = gapToMarket(price, marketFrom(null, productBenchmark(rows, shop.currency, price))?.median);
     if (gap != null) gaps.set(productId, gap);
   }
   return gaps;

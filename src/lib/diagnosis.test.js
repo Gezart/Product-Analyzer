@@ -218,3 +218,9 @@ test("above the market: exactly 25% is medium; round prices exactly at the thres
     assert.equal(marketReason(product({ price, market: market(median) })), undefined, `${price} vs ${median}`);
   }
 });
+
+test("above the market from Google's benchmark names Google and the country", () => {
+  const r = marketReason(product({ price: 61.5, market: { median: 52, count: 1, country: "DE", source: "google" } }), ctx({ currency: "EUR" }));
+  assert.equal(r.evidence, "Price is 18% above the market price €52.00 (Google's benchmark: what shoppers pay on average for this product on Google in DE).");
+  assert.equal(r.data.source, "google");
+});

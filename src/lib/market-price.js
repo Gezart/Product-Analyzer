@@ -8,6 +8,15 @@ export { gapToMarket } from "./diagnosis.js";
 const round2 = (n) => Math.round(n * 100) / 100;
 
 /**
+ * Which market price counts for a product: the competitors' median when the merchant added links that
+ * give one (they chose the exact product), or else Google's benchmark. `{ median, count, source, … }` or null.
+ */
+export function marketFrom(competitors, google) {
+  if (competitors?.median != null) return { median: competitors.median, count: competitors.count, source: "competitors" };
+  return google?.median > 0 ? google : null;
+}
+
+/**
  * The competitors' price for a product: the median of links read successfully in the shop's currency.
  * Links in another currency or without one are counted but never compared.
  */
