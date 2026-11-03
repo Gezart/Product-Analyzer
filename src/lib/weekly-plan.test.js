@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { actionFor, pickActions, weekOf } from "./weekly-plan.js";
+import { actionFor, lastWeekOf, pickActions, recapOf, verdictLine, weekOf } from "./weekly-plan.js";
 
 const p = (productId, status, moneyAtStake, extra = {}) => ({ productId, title: productId, status, moneyAtStake, daysOfCover: null, markdownReason: null, topReason: null, measuring: false, markdownRunning: false, ...extra });
 
@@ -47,4 +47,21 @@ test("the week a day falls in starts on Monday", () => {
   assert.equal(weekOf("2026-11-08"), "2026-11-02"); // Sunday
   assert.equal(weekOf("2026-11-03"), "2026-11-02");
   assert.equal(weekOf("2027-01-01"), "2026-12-28"); // across the year
+});
+
+test("last week's results: verdicts with extra sales, markdowns started and ended", () => {
+  assert.deepEqual(lastWeekOf("2026-11-09"), { from: "2026-11-02", to: "2026-11-08" });
+  assert.deepEqual(lastWeekOf("2027-01-04"), { from: "2026-12-28", to: "2027-01-03" });
+  const improved = { productId: "a", title: "A", price: 25, verdict: "improved", result: { after: { units: 14 }, expectedUnits: 9.6 } };
+  assert.deepEqual(verdictLine(improved), { productId: "a", title: "A", verdict: "improved", extraUnits: 4, extraSales: 100 });
+  // Worse or unknown: no extra sales; never below zero.
+  assert.equal(verdictLine({ ...improved, verdict: "worse" }).extraSales, null);
+  assert.equal(verdictLine({ ...improved, result: { after: { units: 5 }, expectedUnits: 9 } }).extraUnits, 0);
+  const recap = recapOf({
+    verdicts: [{ productId: "w", title: "W", price: 10, verdict: "worse", result: {} }, improved, { productId: "b", title: "B", price: 10, verdict: "improved", result: { after: { units: 30 }, expectedUnits: 10 } }],
+    started: [{ productId: "m", title: "M" }],
+  });
+  assert.deepEqual(recap.verdicts.map((v) => v.productId), ["b", "a", "w"]);
+  assert.equal(recap.extraSales, 300);
+  assert.equal(recapOf({}), null);
 });

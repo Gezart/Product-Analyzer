@@ -116,7 +116,7 @@ From the features workspace (Weekly plan). Decision: in the inbox for now; email
 | Branch | Task | Done when | Status |
 | --- | --- | --- | --- |
 | `weekly-plan` | Every Monday (store time) the inbox gets "Your plan for this week": 3–5 actions picked by money at stake from the products that need attention: reorder (stock-out risk), start the markdown (when one is due), fix the page (the diagnosis's top reason), give a hidden gem a better place (Collections), or diagnose; products being measured or on a markdown are left out. A "This week" page lists them with a button to each product | A Monday plan with its actions is in the inbox and opens the page | done |
-| `weekly-recap` | The plan's "Last week" part: rescue verdicts that came in (with the extra sales of the improved ones), markdowns started and finished, each with a button to the product | Last week's results show with the plan | todo |
+| `weekly-recap` | The plan's "Last week" part: rescue verdicts that came in (with the extra sales of the improved ones), markdowns started and finished, each with a button to the product | Last week's results show with the plan | doing |
 
 ## v2 (not in v1)
 

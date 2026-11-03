@@ -8,7 +8,8 @@ import { localDateKey } from "@/lib/jobs/schedule";
 import { markdownEligibility } from "@/lib/markdown-engine";
 import { notify } from "@/lib/notify";
 import { latestScores } from "@/lib/scores";
-import { pickActions, weekOf } from "@/lib/weekly-plan";
+import { asDate, DAY_MS } from "@/lib/dates";
+import { lastWeekOf, pickActions, recapOf, weekOf } from "@/lib/weekly-plan";
 
 /** Candidates looked at: the dashboard's action list, a bit longer (some drop out as already handled). */
 const CANDIDATES = 15;
@@ -56,8 +57,33 @@ export async function buildWeeklyPlan(shopId) {
 }
 
 /**
- * Job "weekly-plan" (nightly; acts on Mondays in the store's timezone): this week's plan in the inbox,
- * once per week, when there's something to do.
+ * Last week's results for a plan's week: rescue verdicts whose window ended last week, and markdowns
+ * started or ended last week (see `recapOf`).
+ */
+export async function lastWeekRecap(shopId, week) {
+  const { from, to } = lastWeekOf(week);
+  const start = asDate(from);
+  const end = new Date(asDate(to).getTime() + DAY_MS);
+  const [plans, started, ended] = await Promise.all([
+    // A window runs at most 60 days: older plans can't have ended last week.
+    db().rescuePlan.findMany({
+      where: { product: { shopId }, verdict: { in: ["improved", "no_change", "worse", "not_enough_data"] }, startedAt: { gte: new Date(start.getTime() - 70 * DAY_MS) } },
+      select: { productId: true, verdict: true, result: true, product: { select: { title: true, price: true } } },
+    }),
+    db().markdownPlan.findMany({ where: { product: { shopId }, startedAt: { gte: start, lt: end } }, select: { productId: true, product: { select: { title: true } } } }),
+    db().markdownPlan.findMany({ where: { product: { shopId }, endedAt: { gte: start, lt: end } }, select: { productId: true, endReason: true, product: { select: { title: true } } } }),
+  ]);
+  const inWeek = (day) => typeof day === "string" && day >= from && day <= to;
+  return recapOf({
+    verdicts: plans.filter((p) => inWeek(p.result?.window?.to)).map((p) => ({ productId: p.productId, title: p.product.title, price: Number(p.product.price), verdict: p.verdict, result: p.result })),
+    started: started.map((m) => ({ productId: m.productId, title: m.product.title })),
+    ended: ended.map((m) => ({ productId: m.productId, title: m.product.title, endReason: m.endReason })),
+  });
+}
+
+/**
+ * Job "weekly-plan" (nightly; acts on Mondays in the store's timezone): this week's plan, with last
+ * week's results, in the inbox, once per week, when there's something to do or to report.
  */
 export async function sendWeeklyPlan(shopId, now = new Date()) {
   const shop = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true, currency: true, uninstalledAt: true } });
@@ -66,9 +92,9 @@ export async function sendWeeklyPlan(shopId, now = new Date()) {
   if (weekOf(today) !== today) return; // not Monday
   const sent = await db().notification.findFirst({ where: { shopId, type: "weekly_plan", data: { path: ["week"], equals: today } }, select: { id: true } });
   if (sent) return;
-  const actions = await buildWeeklyPlan(shopId);
-  if (!actions.length) return;
-  await notify({ shopId, type: "weekly_plan", data: { week: today, actions, currency: shop.currency } });
+  const [actions, lastWeek] = await Promise.all([buildWeeklyPlan(shopId), lastWeekRecap(shopId, today)]);
+  if (!actions.length && !lastWeek) return;
+  await notify({ shopId, type: "weekly_plan", data: { week: today, actions, lastWeek, currency: shop.currency } });
 }
 
 /** A week's plan (`week`: its Monday), or the latest one; with the weeks there are plans for. */
