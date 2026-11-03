@@ -5,6 +5,7 @@
 import { movedUp, movesToMeasure } from "@/lib/collection-order";
 import { db } from "@/lib/db";
 import { removeFromRescuePlan, startRescuePlan } from "@/lib/rescue-plans";
+import { recordRisingAction } from "@/lib/rising-actions";
 
 /** Bookkeeping must never change a save's or an undo's outcome once Shopify has been written. */
 async function track(step) {
@@ -31,9 +32,12 @@ export async function startMoveEffects(shopId, save) {
     where: { productId: { in: products.map((p) => p.id) } },
     orderBy: { computedAt: "desc" },
     distinct: ["productId"],
-    select: { productId: true, status: true },
+    select: { productId: true, status: true, rising: true },
   });
   const statusOf = new Map(scores.map((s) => [s.productId, s.status]));
+  // A rising star moved up: its sales since are measured as a rising-star action (not a rescue plan).
+  const shop = await db().shop.findUnique({ where: { id: shopId }, select: { id: true, timezone: true } });
+  for (const s of scores.filter((s) => s.rising)) await track(recordRisingAction(shop, s.productId, "collections", { quiet: true }));
   const place = { collectionGid: save.collectionGid, collectionTitle: save.collectionTitle };
   let measured = 0;
   for (const m of movesToMeasure(moves, (gid) => statusOf.get(idOf.get(gid)))) {

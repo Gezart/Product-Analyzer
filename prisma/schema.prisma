@@ -111,6 +111,7 @@ model Product {
   competitorLinks  CompetitorLink[]
   googleBenchmarks GoogleBenchmark[]
   aiPhotoDrafts    AiPhotoDraft[]
+  risingActions    RisingAction[]
 
   @@unique([shopId, shopifyGid])
   @@index([shopId])
@@ -546,4 +547,20 @@ model CollectionReorder {
 
   @@index([shopId, collectionGid, createdAt])
   @@map("collection_reorders")
+}
+
+/// Something done for a rising star (moved up in a collection, featured on the home page, restocked),
+/// measured by its sales since (units per day) against the 30 days before. Never a rescue verdict.
+model RisingAction {
+  id        String   @id @default(cuid())
+  productId String   @map("product_id")
+  kind      String // collections | home | stock
+  /// The store's day the measurement starts (the day of the action).
+  startedOn DateTime @map("started_on") @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, startedOn])
+  @@map("rising_actions")
 }
