@@ -54,6 +54,19 @@ Status: `todo` · `doing` · `done` · `blocked`.
 | `plan-limits` | Enforce products and diagnoses per plan | Limits block correctly; upgrade prompt shown | products + features done; diagnoses limit waits on owner |
 | `ui-redesign` | Redesign Catalog health, Inbox, Monthly report and Plans (Polaris + Tailwind) | Owner approves the look on the dev store | done (dev-store look pending) |
 
+## Phase 2b · Diagnosis: market price
+
+From the features workspace (Diagnosis). Decision: market price from **A** Google Merchant Center + **C** competitor links. Plan placement proposed as Starter (owner to confirm).
+
+| Branch | Task | Done when | Status |
+| --- | --- | --- | --- |
+| `competitor-prices` | Up to 5 competitor links per product; price read when added and every night (https only, public addresses only, 10 s, size cap); "Market price" section on the product page | A link shows its price or a readable error; no request reaches a private address | doing |
+| `market-price-rule` | Diagnosis rule "above the market price" (>10% medium, >25% high, same currency only); threshold in Settings; "vs market" column in the product list | The rule shows its evidence with the market price and its source | todo |
+| `google-market-price` | Connect Google Merchant Center in Settings (OAuth, account choice); nightly price-competitiveness report mapped to variants; Google benchmark in the "Market price" section; check page | Benchmarks appear for products with a GTIN on the owner's Merchant Center | todo (needs owner: Google Cloud project + OAuth client) |
+| — | Owner: Google Cloud project, Merchant API enabled, OAuth client (ID + secret) in `.env` | Credentials in `.env` | todo (owner) |
+| — | Owner: Google verification of the `content` scope before the App Store | Verified | todo (owner, before App Store) |
+| — | Open questions: diagnosis every night with the main reason in the top 10; keywords beyond English; monthly diagnosis limit | Owner decides | waits on owner |
+
 ## v2 (not in v1)
 
 AI diagnosis and AI drafts (Claude), weekly email digest.

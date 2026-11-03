@@ -1,5 +1,13 @@
 # History
 
+## 2026-11-03 · competitor-prices
+- Up to 5 competitor links per product (`competitor_links`, RLS on; migration applied to Supabase); the price is read when a link is added and every night (`competitor-prices` job, 5:00 store time)
+- Price from the page's JSON-LD offers, `product:price`/`og:price` tags or microdata; Shopify stores fall back to `/products/<handle>.js` (currency unknown, so not compared)
+- Safe fetch (`src/lib/public-fetch.js`): https only, every DNS answer and redirect checked, no private or cloud-metadata addresses, 10 s and 2 MB caps
+- Product page: "Market price" section with the competitors' median (shop currency only), your gap to it, each link's price or a readable error, add/remove; Starter and up (`marketPrice`)
+- Verified on a local Postgres: add, duplicate, bad link, 404 page, other currency, 6th link, other shop, plan gate, nightly refresh and abort; private addresses refused with real DNS
+- Open: a real competitor page wasn't fetched (no internet in the sandbox); test on the dev store
+
 ## 2026-10-25 · customer-fixes
 - From the customer test: a product list (`/products`, in the menu) with status filters and sorting; the dashboard's status tiles and the inbox open it, so every product is reachable; stock-out risks keep 3 places in the Top 10
 - Price rule: a product with a type is compared only with products of the same type (never a mixed collection like a coat among socks); no price reason for products that sell well; prices in the store currency; duplicate-description reasons name the products; "What could still be better" for products that sell well

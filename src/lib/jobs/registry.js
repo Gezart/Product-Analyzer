@@ -1,3 +1,4 @@
+import { refreshShopLinks } from "@/lib/competitor-prices";
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { guardPrices, runMarkdownPlans } from "@/lib/markdown-engine";
 import { runRescuePlans } from "@/lib/rescue-plans";
@@ -51,6 +52,10 @@ export const handlers = {
   "monthly-report": async (job) => {
     await closeMonth(requireShop(job));
   },
+  /** Reads the price on every competitor link (market price). */
+  "competitor-prices": async (job, signal) => {
+    await refreshShopLinks(requireShop(job), signal);
+  },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
   "sync-inventory": runSyncInventory,
@@ -63,6 +68,7 @@ export const nightlyJobs = [
   // Re-subscribe (repairs subscriptions Shopify removed, or a changed app URL), then fill gaps.
   { type: "register-webhooks", hour: 3 },
   { type: "orders-catchup", hour: 4 },
+  { type: "competitor-prices", hour: 5 },
   { type: "price-guard", hour: 6 },
   // Stores last month's report once it is over (no-op on other days).
   { type: "monthly-report", hour: 6 },

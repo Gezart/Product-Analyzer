@@ -7,6 +7,7 @@ import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 import { Diagnosis } from "./diagnosis";
 import { FixCenter } from "./fix-center";
 import { Markdown } from "./markdown";
+import { MarketPrice } from "./market-price";
 import { RescuePlan } from "./rescue-plan";
 import { SalesChart } from "./sales-chart";
 
@@ -93,6 +94,7 @@ export function ProductView() {
         {data.rescuePlan && <RescuePlan plan={data.rescuePlan} onChanged={() => setVersion((v) => v + 1)} />}
         <Markdown productId={data.product.id} money={money2} onChanged={() => setVersion((v) => v + 1)} />
         <Diagnosis productId={data.product.id} key={`diagnosis-${version}`} />
+        <MarketPrice productId={data.product.id} />
         <FixCenter
           productId={data.product.id}
           onChanged={() => {

@@ -6,7 +6,7 @@ export const TRIAL_DAYS = 14;
 
 export const PLANS = [
   { id: "free", name: "Free", price: 0, products: 25, diagnoses: 3, features: ["Dashboard", "Statuses", "Diagnosis"] },
-  { id: "starter", name: "Starter", price: 19, products: 250, diagnoses: 30, features: ["Fix center", "Rescue plans", "Markdown engine"] },
+  { id: "starter", name: "Starter", price: 19, products: 250, diagnoses: 30, features: ["Fix center", "Rescue plans", "Markdown engine", "Market price"] },
   { id: "growth", name: "Growth", price: 39, products: 2000, diagnoses: 150, features: ["Compare", "Monthly reports"] },
   { id: "pro", name: "Pro", price: 79, products: Infinity, diagnoses: 500, features: ["Priority support"] },
 ];
@@ -34,7 +34,7 @@ export function planFromSubscriptions(names) {
 }
 
 /** The plan each feature starts at; every plan includes the features of the plans below it. */
-export const FEATURE_PLAN = { fixCenter: "starter", rescuePlans: "starter", markdown: "starter", compare: "growth", reports: "growth" };
+export const FEATURE_PLAN = { fixCenter: "starter", rescuePlans: "starter", markdown: "starter", marketPrice: "starter", compare: "growth", reports: "growth" };
 
 const rank = (planId) => Math.max(0, PLANS.findIndex((p) => p.id === planId));
 
