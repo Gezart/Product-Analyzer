@@ -85,3 +85,32 @@ test("hidden gems keep their current order among themselves (not by money)", () 
   const items = [item("x", "healthy", 0), item("g1", "hidden_gem", 0, { moneyAtStake: 10 }), item("g2", "hidden_gem", 0, { moneyAtStake: 900 })];
   assert.deepEqual(proposeOrder(items).map((e) => `${e.id}:${e.group}`), ["g1:hidden_gem", "g2:hidden_gem", "x:keep"]);
 });
+
+test("slow movers and out-of-season products never take a bestseller place; running low comes after", () => {
+  const items = [
+    item("h1", "healthy", 300),
+    item("slow", "slow_mover", 9000, { moneyAtStake: 5 }),
+    item("season", "seasonal", 8000),
+    item("low", "stockout_risk", 900),
+    item("h2", "healthy", 200),
+    item("h3", "healthy", 100),
+    item("h4", "healthy", 50),
+    item("h5", "healthy", 40),
+  ];
+  // Can be bestsellers: low 900, h1 300, h2 200, h3 100, h4 50, h5 40 → top third is 2 (low, h1).
+  assert.deepEqual(proposeOrder(items).map((e) => `${e.id}:${e.group}`), [
+    "h1:bestseller",
+    "low:bestseller_low",
+    "slow:needs_sales",
+    "h2:keep",
+    "h3:keep",
+    "h4:keep",
+    "h5:keep",
+    "season:out_of_season",
+  ]);
+});
+
+test("moved count", () => {
+  assert.equal(movedCount(["a", "b", "c"], ["a", "c", "b"]), 2);
+  assert.equal(movedCount(["a", "b"], ["a", "b"]), 0);
+});

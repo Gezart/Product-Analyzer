@@ -35,6 +35,7 @@ export function CollectionOrderView() {
   useEffect(() => {
     if (!picked) {
       setData(null);
+      setError(null);
       return;
     }
     let live = true;
