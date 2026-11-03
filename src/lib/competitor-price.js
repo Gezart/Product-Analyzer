@@ -62,7 +62,7 @@ function firstNumber(value, start) {
     else if (c === "." || c === ",") {
       out += c;
       separator = true;
-    } else if (/['\s\u00a0\u202f]/.test(c) && !separator && /^\d{3}(?!\d)/.test(value.slice(i + 1))) continue;
+    } else if (/['\u2019\s\u00a0\u202f]/.test(c) && !separator && /^\d{3}(?!\d)/.test(value.slice(i + 1))) continue;
     else break;
   }
   return out.replace(/[.,]+$/, "");
@@ -106,7 +106,7 @@ function jsonLdProducts(html) {
   return products;
 }
 
-const norm = (v) => (typeof v === "string" ? v.trim().toLowerCase() : "");
+const norm = (v) => (typeof v === "string" ? decodeEntities(v).replace(/[\u2018\u2019]/g, "'").trim().toLowerCase() : "");
 
 /** Two JSON-LD products describe the same item: same @id, url or name. */
 function sameProduct(a, b) {
@@ -170,6 +170,7 @@ export function priceFromHtml(html, preferred = null) {
   const products = jsonLdProducts(html);
   const offers = products.filter((p) => p === products[0] || sameProduct(p, products[0])).map(offerPrices).find((list) => list.length) ?? [];
   const pageCurrency = currencyOf(metaContent(html, ["product:price:currency", "og:price:currency"]));
+  const anyCurrency = pageCurrency ?? currencyFromHtml(html);
   if (offers.length) {
     const fallback = pageCurrency ?? offers.find((p) => p.currency)?.currency ?? null;
     const withCurrency = offers.map((o) => ({ ...o, currency: o.currency ?? fallback }));
@@ -179,7 +180,7 @@ export function priceFromHtml(html, preferred = null) {
   }
   // Price tags are often written for people (Shopify themes print "1.299,00"), so they are read as text.
   const metaPrice = parseAmount(metaContent(html, ["product:price:amount", "og:price:amount"]) ?? "", { currency: pageCurrency });
-  if (metaPrice != null) return { price: metaPrice, currency: pageCurrency, source: "meta" };
+  if (metaPrice != null) return { price: metaPrice, currency: anyCurrency, source: "meta" };
   const itemprop = html.match(/itemprop\s*=\s*["']price["'][^>]*content\s*=\s*["']([^"']+)["']|content\s*=\s*["']([^"']+)["'][^>]*itemprop\s*=\s*["']price["']/i);
   const microCurrency = currencyOf(metaContent(html, ["priceCurrency"]));
   const microPrice = parseAmount(itemprop?.[1] ?? itemprop?.[2] ?? "", { machine: true, currency: microCurrency });
