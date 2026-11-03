@@ -35,7 +35,7 @@ const statusList = (counts) =>
 
 const VERDICTS = {
   improved: ["Fixes worked", "Sales improved after the fixes. Keep the changes."],
-  worse: ["Fixes made it worse", "Undo the fixes with one click on the product page."],
+  worse: ["Fixes made it worse", "Undo them from the product page."],
   no_change: ["No change after fixes", "A markdown is proposed on the product page."],
   not_enough_data: ["Not enough data to judge the fixes", "Too few visits, or too little history before the fixes."],
 };

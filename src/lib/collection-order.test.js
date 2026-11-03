@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { movedCount, movedUp, orderError, proposeOrder, sequentialMoves } from "./collection-order.js";
+import { movedCount, movedUp, movesToMeasure, orderError, proposeOrder, sequentialMoves } from "./collection-order.js";
 
 const item = (id, status, revenue30 = 0, extra = {}) => ({ id, status, revenue30, moneyAtStake: 0, available: true, ...extra });
 
@@ -155,17 +155,29 @@ test("an order to save lists each product once and differs from now", () => {
   assert.match(orderError(["a", "b"], ["a", "b"]), /already/);
 });
 
-test("products moved up into the first places are the ones measured", () => {
+test("products moved up by 3 places or more into the first places", () => {
   const before = ["a", "b", "c", "d", "e"];
   const after = ["e", "a", "c", "b", "d"];
-  // e: 4 → 0 (up); a: 0 → 1 (down); c stays; b: 1 → 3 (down); d: 3 → 4 (down).
+  // e: 4 → 0 (up 4); a: 0 → 1 (down); c stays; b, d down.
   assert.deepEqual(movedUp(before, after), [{ id: "e", from: 4, to: 0 }]);
-  // Only into the first places: moving up from 30 to 26 isn't measured.
+  // Only into the first places: moving up from 30 to 26 isn't counted.
   const long = Array.from({ length: 40 }, (_, i) => `p${i}`);
   const moved = [...long];
   moved.splice(26, 0, moved.splice(30, 1)[0]);
   moved.splice(2, 0, moved.splice(35, 1)[0]);
   assert.deepEqual(movedUp(long, moved).map((m) => m.id), ["p35"]);
-  // A product added since (not in `before`) isn't counted.
+  // The first product moved to place 24: the 23 below slide up one place each, none counted.
+  const thirty = Array.from({ length: 30 }, (_, i) => `q${i}`);
+  const slid = [...thirty.slice(1, 24), "q0", ...thirty.slice(24)];
+  assert.deepEqual(movedUp(thirty, slid), []);
+  // Up exactly 3 counts, 2 doesn't; a product added since (not in `before`) isn't counted.
+  assert.deepEqual(movedUp(["a", "b", "c", "d"], ["d", "a", "b", "c"]).map((m) => m.id), ["d"]);
+  assert.deepEqual(movedUp(["a", "b", "c"], ["c", "a", "b"]), []);
   assert.deepEqual(movedUp(["a"], ["x", "a"]), []);
+});
+
+test("only hidden gems and products that need sales are measured", () => {
+  const status = { g: "hidden_gem", s: "slow_mover", d: "dead_stock", h: "healthy", r: "stockout_risk", n: null };
+  const moves = Object.keys(status).map((id, i) => ({ id, from: 10 + i, to: i }));
+  assert.deepEqual(movesToMeasure(moves, (id) => status[id]).map((m) => m.id), ["g", "s", "d"]);
 });

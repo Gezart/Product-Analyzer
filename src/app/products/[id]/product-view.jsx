@@ -48,7 +48,9 @@ export function ProductView() {
     : rescue && !rescue.verdict
       ? "Wait for the rescue plan's result (below)."
       : rescue?.verdict === "worse" && rescue.fixIds.length > 0
-        ? "Undo the fixes (see the rescue plan below)."
+        ? (rescue.moves ?? []).length === rescue.fixIds.length
+          ? "Undo the new collection order (see the rescue plan below)."
+          : "Undo the fixes (see the rescue plan below)."
         : justEnded(season) && data.stock > 0 && data.product.status === "ACTIVE" && !["excluded", "over_limit"].includes(data.score?.status)
           ? "Its season has ended: start an end-of-season markdown to clear the stock (see below)."
           : rescue?.verdict === "no_change" && !seasonWaiting(season)

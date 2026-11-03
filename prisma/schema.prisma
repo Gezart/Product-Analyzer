@@ -189,7 +189,7 @@ model Fix {
   id          String    @id @default(cuid())
   productId   String    @map("product_id")
   diagnosisId String?   @map("diagnosis_id")
-  type        String // title | description | seo | images | collection
+  type        String // title | description | seo | images | collection | photo | position
   before      Json
   after       Json
   status      String    @default("suggested") // suggested | approved | applied | undone | failed
