@@ -37,6 +37,20 @@ test("amounts with a currency abbreviation, grouping and spaces", () => {
   assert.equal(parseAmount("0.001"), null);
   assert.equal(parseAmount("0.001", { machine: true }), null);
   assert.equal(parseAmount(0.001), null);
+  assert.equal(parseAmount("CHF 1’299.50"), 1299.5);
+});
+
+test("a review widget whose name is written with HTML entities is still the same product", () => {
+  const reviews = { "@type": "Product", name: "Men&#39;s shirt", aggregateRating: { ratingValue: 4.8 } };
+  const theme = { "@type": "Product", name: "Men's shirt", offers: { price: "59.00", priceCurrency: "EUR" } };
+  const html = page(`<script type="application/ld+json">${JSON.stringify(reviews)}</script><script type="application/ld+json">${JSON.stringify(theme)}</script>`);
+  assert.deepEqual(priceFromHtml(html), { price: 59, currency: "EUR", source: "json-ld" });
+});
+
+test("price tags without their own currency use the page's currency from elsewhere", () => {
+  const main = { "@type": "Product", name: "Linen shirt", offers: { "@type": "Offer", priceCurrency: "EUR" } };
+  const html = page(`<meta property="og:price:amount" content="59.00"><script type="application/ld+json">${JSON.stringify(main)}</script>`);
+  assert.deepEqual(priceFromHtml(html), { price: 59, currency: "EUR", source: "meta" });
 });
 
 test("machine amounts (JSON-LD) always use a dot for decimals", () => {
