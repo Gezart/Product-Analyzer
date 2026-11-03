@@ -192,7 +192,7 @@ export function ProductView() {
 /** "In season since 1 Nov" or "Starts 1 Nov (in 114 days)", and where the season comes from. */
 function seasonNote(season) {
   const date = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
-  const when = season.inSeason ? `In season since ${date(season.start)}` : `Starts ${date(season.nextStart)} (in ${season.daysToStart} days)`;
+  const when = season.inSeason ? `In season since ${date(season.start)}` : `Starts ${date(season.nextStart)} (in ${season.daysToStart} day${season.daysToStart === 1 ? "" : "s"})`;
   return `${when} · from ${season.source === "tag" ? "its tag" : "a seasonal collection"}`;
 }
 

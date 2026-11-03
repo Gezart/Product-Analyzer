@@ -186,7 +186,9 @@ export function SettingsForm() {
     setSeasons([...settings.seasonalCollections.filter((c) => c.collectionId !== newSeason.collectionId), newSeason]);
     setNewSeason({ ...newSeason, collectionId: "" });
   }
-  const collectionTitle = (id) => collections?.find((c) => c.id === id)?.title ?? (collections ? "Collection no longer in Shopify" : id);
+  // Beyond a cut-off list a collection may still exist: show its number, not "no longer in Shopify".
+  const collectionTitle = (id) =>
+    collections?.find((c) => c.id === id)?.title ?? (collections && !collectionsTruncated ? "Collection no longer in Shopify" : `Collection ${id.split("/").pop()}`);
 
   function toggleCollection(id, excluded) {
     if (!settings) return;

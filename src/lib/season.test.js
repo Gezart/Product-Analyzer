@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatSeason, parseSeasonTag, seasonOf, seasonState } from "./season.js";
+import { formatSeason, mergeRanges, parseSeasonTag, seasonOf, seasonState } from "./season.js";
 
 test("season tags: month ranges, single months, numbers and named seasons", () => {
   assert.deepEqual(parseSeasonTag("season:nov-feb"), { from: 11, to: 2 });
@@ -11,7 +11,7 @@ test("season tags: month ranges, single months, numbers and named seasons", () =
   assert.deepEqual(parseSeasonTag("SEASON:Winter"), { from: 12, to: 2 });
   assert.deepEqual(parseSeasonTag("season:summer"), { from: 6, to: 8 });
   assert.deepEqual(parseSeasonTag("season:sept-oct"), { from: 9, to: 10 });
-  for (const other of ["winter", "sale", "season:", "season:13-2", "season:ma-jun", "season:nov-feb-mar", "season:christmas", null, ""]) {
+  for (const other of ["season:constructor", "season:__proto__", "season:toString", "winter", "sale", "season:", "season:13-2", "season:ma-jun", "season:nov-feb-mar", "season:christmas", null, ""]) {
     assert.equal(parseSeasonTag(other), null, String(other));
   }
 });
@@ -27,7 +27,7 @@ test("a product's season: its tags first, else a seasonal collection; never the 
   assert.equal(seasonOf({ tags: [], collections: ["gid://shopify/Collection/2"] }, collections), null);
   assert.equal(seasonOf({ tags: ["season:jan-dec"], collections: [] }), null, "all year isn't a season");
   assert.equal(seasonOf({ tags: ["season:jan-jun", "season:jul-dec"], collections: [] }), null);
-  assert.deepEqual(seasonOf({ tags: ["season:winter", "season:dec-feb", "season:jun"], collections: [] }).ranges, [{ from: 12, to: 2 }, { from: 6, to: 6 }]);
+  assert.deepEqual(seasonOf({ tags: ["season:winter", "season:dec-feb", "season:jun"], collections: [] }).ranges, [{ from: 6, to: 6 }, { from: 12, to: 2 }]);
 });
 
 test("in season: this occurrence's first and last day, also across the new year", () => {
@@ -49,4 +49,22 @@ test("out of season: the next start and the last end", () => {
 test("seasons for people", () => {
   assert.equal(formatSeason([{ from: 11, to: 2 }]), "Nov–Feb");
   assert.equal(formatSeason([{ from: 6, to: 8 }, { from: 12, to: 12 }]), "Jun–Aug, Dec");
+});
+
+test("seasons that overlap or touch are one season", () => {
+  assert.deepEqual(mergeRanges([{ from: 6, to: 8 }, { from: 9, to: 10 }]), [{ from: 6, to: 10 }]);
+  assert.deepEqual(mergeRanges([{ from: 12, to: 2 }, { from: 11, to: 1 }]), [{ from: 11, to: 2 }]);
+  assert.deepEqual(mergeRanges([{ from: 12, to: 2 }, { from: 6, to: 6 }]), [{ from: 6, to: 6 }, { from: 12, to: 2 }]);
+  assert.deepEqual(mergeRanges([{ from: 1, to: 6 }, { from: 7, to: 12 }]), []);
+  assert.deepEqual(mergeRanges([]), []);
+  // The season's real start and end, not the second tag's.
+  assert.deepEqual(seasonState(seasonOf({ tags: ["season:jun-aug", "season:sep-oct"] }).ranges, "2026-09-05"), { inSeason: true, start: "2026-06-01", end: "2026-10-31", daysIntoSeason: 96 });
+  assert.deepEqual(seasonState(seasonOf({ tags: ["season:winter", "season:nov-jan"] }).ranges, "2026-12-15"), { inSeason: true, start: "2026-11-01", end: "2027-02-28", daysIntoSeason: 44 });
+  const twoCollections = [{ collectionId: "gid://shopify/Collection/1", from: 6, to: 8 }, { collectionId: "gid://shopify/Collection/2", from: 9, to: 11 }];
+  assert.deepEqual(seasonOf({ tags: [], collections: ["gid://shopify/Collection/1", "gid://shopify/Collection/2"] }, twoCollections).ranges, [{ from: 6, to: 11 }]);
+});
+
+test("a tag that isn't a season never breaks the product's season", () => {
+  assert.deepEqual(seasonOf({ tags: ["season:constructor", "season:nov-feb"] }), { ranges: [{ from: 11, to: 2 }], source: "tag" });
+  assert.equal(seasonOf({ tags: ["season:__proto__"] }), null);
 });

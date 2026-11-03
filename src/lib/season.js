@@ -28,7 +28,7 @@ export function parseSeasonTag(tag) {
   const m = /^\s*season\s*:\s*(.+?)\s*$/i.exec(String(tag ?? ""));
   if (!m) return null;
   const value = m[1].toLowerCase();
-  if (NAMED[value]) return { from: NAMED[value][0], to: NAMED[value][1] };
+  if (Object.hasOwn(NAMED, value)) return { from: NAMED[value][0], to: NAMED[value][1] };
   const parts = value.split(/\s*(?:-|–|—|\bto\b)\s*/);
   if (parts.length === 1) {
     const one = month(parts[0]);
@@ -41,8 +41,23 @@ export function parseSeasonTag(tag) {
 }
 
 const inRange = (m, r) => (r.from <= r.to ? m >= r.from && m <= r.to : m >= r.from || m <= r.to);
-const sameRanges = (list) => [...new Map(list.map((r) => [`${r.from}-${r.to}`, r])).values()];
-const coversYear = (ranges) => MONTHS.every((_, i) => ranges.some((r) => inRange(i + 1, r)));
+
+/**
+ * Ranges joined where they overlap or touch (Jun–Aug + Sep–Oct is Jun–Oct; Dec–Feb + Nov–Jan is
+ * Nov–Feb), in calendar order; [] when they cover the whole year (that isn't a season).
+ */
+export function mergeRanges(ranges) {
+  const on = MONTHS.map((_, i) => ranges.some((r) => inRange(i + 1, r)));
+  if (on.every(Boolean) || !on.some(Boolean)) return [];
+  const merged = [];
+  for (let i = 0; i < 12; i++) {
+    if (!on[i] || on[(i + 11) % 12]) continue; // not the first month of a run
+    let j = i;
+    while (on[(j + 1) % 12]) j = (j + 1) % 12;
+    merged.push({ from: i + 1, to: j + 1 });
+  }
+  return merged;
+}
 
 /**
  * A product's season: `{ ranges, source: "tag" | "collection", collectionId? }`, or null when it has
@@ -50,12 +65,14 @@ const coversYear = (ranges) => MONTHS.every((_, i) => ranges.some((r) => inRange
  * `{ collectionId, from, to }` from Settings.
  */
 export function seasonOf(product, seasonalCollections = []) {
-  const fromTags = sameRanges((product.tags ?? []).map(parseSeasonTag).filter(Boolean));
-  if (fromTags.length) return coversYear(fromTags) ? null : { ranges: fromTags, source: "tag" };
+  const tagged = (product.tags ?? []).map(parseSeasonTag).filter(Boolean);
+  if (tagged.length) {
+    const ranges = mergeRanges(tagged);
+    return ranges.length ? { ranges, source: "tag" } : null;
+  }
   const matches = (seasonalCollections ?? []).filter((c) => product.collections?.includes(c.collectionId));
-  const ranges = sameRanges(matches.map((c) => ({ from: c.from, to: c.to })));
-  if (!ranges.length || coversYear(ranges)) return null;
-  return { ranges, source: "collection", collectionId: matches[0].collectionId };
+  const ranges = mergeRanges(matches.map((c) => ({ from: c.from, to: c.to })));
+  return ranges.length ? { ranges, source: "collection", collectionId: matches[0].collectionId } : null;
 }
 
 const utc = (y, m, d) => new Date(Date.UTC(y, m - 1, d));
@@ -69,7 +86,8 @@ const iso = (d) => d.toISOString().slice(0, 10);
  * - out of season: `{ inSeason: false, nextStart, daysToStart, lastEnd, daysSinceEnd }`.
  * Dates are `YYYY-MM-DD`.
  */
-export function seasonState(ranges, dayKey) {
+export function seasonState(seasonRanges, dayKey) {
+  const ranges = mergeRanges(seasonRanges);
   const day = new Date(`${dayKey}T00:00:00Z`);
   const y = day.getUTCFullYear();
   const m = day.getUTCMonth() + 1;

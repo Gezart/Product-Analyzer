@@ -1,5 +1,13 @@
 # History
 
+## 2026-11-03 · seasonal-tags
+- Product tags are synced (initial import, nightly refresh, live webhooks); existing products get them at the next nightly refresh (migration applied to Supabase)
+- A product's season: a `season:` tag (`season:nov-feb`, `season:11-2`, `season:dec`, `season:winter` = Dec–Feb, northern hemisphere) or a collection marked seasonal in Settings with its months; the product's own tag wins; seasons that overlap or touch are one season, a whole year is none
+- Settings: "Seasonal products" section explains the tag and manages seasonal collections (from/to months)
+- Product page: "Season" with the months and "In season since …" or "Starts … (in N days)", in the store's calendar
+- Verified on a local Postgres: tags stored and updated through the sync code, seasonal collections saved and validated, the season on the product API for a tag, a collection and none
+- Next: the "Seasonal" status (`seasonal-status`) and the reminders (`seasonal-reminders`)
+
 ## 2026-11-03 · google-market-price
 - Settings: "Google Merchant Center" section: connect (Google's consent screen in a new window), choose the account when there are several, read now, disconnect (access revoked, also below the plan and on uninstall); Starter and up
 - OAuth: single-use state for 10 minutes (claimed atomically), `content` scope checked, and after Google the merchant confirms the store being connected, so a consent link sent by someone else can't attach their Google account to another store; refresh token stored encrypted (`google_connections`, RLS on); a failed connect revokes Google's token
