@@ -8,6 +8,7 @@ import { closeMonth } from "@/lib/reports";
 import { scoreShop } from "@/lib/score-shop";
 import { runDailyMetrics, runInitialSync, runOrdersCatchup, runRegisterWebhooks, runSyncPoll } from "@/lib/sync/initial-sync";
 import { runSyncInventory, runSyncProduct } from "@/lib/sync/live";
+import { runReturnsSync } from "@/lib/sync/returns";
 import { syncViews } from "@/lib/sync/views";
 
 /** Follow-up runs per night for shops with many competitor links (each run reads for up to 3 minutes). */
@@ -33,6 +34,8 @@ export const handlers = {
   "sync-poll": runSyncPoll,
   "register-webhooks": runRegisterWebhooks,
   "orders-catchup": runOrdersCatchup,
+  /** Refunds per order line and return reasons (orders with refunds or returns only). */
+  "returns-sync": runReturnsSync,
   "daily-metrics": runDailyMetrics,
   /** Product views from ShopifyQL (90 days the first time, then the last 7), then a re-score. */
   "views-sync": async (job, signal) => {
@@ -85,6 +88,7 @@ export const nightlyJobs = [
   // Re-subscribe (repairs subscriptions Shopify removed, or a changed app URL), then fill gaps.
   { type: "register-webhooks", hour: 3 },
   { type: "orders-catchup", hour: 4 },
+  { type: "returns-sync", hour: 4 },
   { type: "competitor-prices", hour: 5 },
   { type: "google-benchmarks", hour: 5 },
   { type: "price-guard", hour: 6 },

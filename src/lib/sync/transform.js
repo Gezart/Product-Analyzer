@@ -181,3 +181,122 @@ export function createJsonlParser() {
     },
   };
 }
+
+// --- Returns ---
+
+/** Orders with refunds, and orders with returns, in Shopify's order search. */
+export const REFUNDED_SEARCH = "(financial_status:refunded OR financial_status:partially_refunded)";
+export const RETURNED_SEARCH = "(return_status:return_requested OR return_status:in_progress OR return_status:inspection_complete OR return_status:returned)";
+
+/** The orders search: these orders, created in the window (`YYYY-MM-DD`), updated since `since`. */
+export function returnsSearch(filter, windowStart, since) {
+  return `${filter} AND created_at:>='${windowStart}' AND updated_at:>='${since}'`;
+}
+
+/** Returns that didn't happen: declined by the merchant or cancelled. */
+const NOT_RETURNED = new Set(["DECLINED", "CANCELED"]);
+
+/** A refund of shipped goods: anything but a cancellation of an unshipped item (restock type CANCEL). */
+const isReturn = (restockType) => String(restockType ?? "").toUpperCase() !== "CANCEL";
+
+/** Refunded units and money per order line, from `[{ lineGid, productGid, quantity, restockType, amount }]`. */
+function sumRefunds(orderGid, date, updatedAt, items) {
+  const lines = new Map();
+  for (const it of items) {
+    if (!it.lineGid || !it.productGid || !isReturn(it.restockType)) continue;
+    const quantity = Math.max(0, num(it.quantity) ?? 0);
+    const line = lines.get(it.lineGid) ?? { lineGid: it.lineGid, orderGid, productGid: it.productGid, date, returnedQty: 0, refundedAmount: 0, orderUpdatedAt: updatedAt };
+    line.returnedQty += quantity;
+    line.refundedAmount = round2(line.refundedAmount + Math.max(0, num(it.amount) ?? 0));
+    lines.set(it.lineGid, line);
+  }
+  return [...lines.values()].filter((l) => l.returnedQty > 0);
+}
+
+/**
+ * Refunded (returned) units and the money refunded for them, per line of one order from the GraphQL
+ * Admin API (`refunds { refundLineItems { nodes { quantity restockType subtotalSet lineItem { id product { id } } } } }`).
+ * Cancellations of unshipped items aren't returns and are left out. Dates are the order's, in the store's calendar.
+ */
+export function lineRefundsFromOrder(order, timeZone) {
+  if (!isType(order?.id, "Order") || typeof order.createdAt !== "string") return [];
+  const items = (order.refunds ?? []).flatMap((r) =>
+    (r?.refundLineItems?.nodes ?? []).map((n) => ({
+      lineGid: n?.lineItem?.id,
+      productGid: n?.lineItem?.product?.id,
+      quantity: n?.quantity,
+      restockType: n?.restockType,
+      amount: n?.subtotalSet?.shopMoney?.amount,
+    })),
+  );
+  return sumRefunds(order.id, localDateKey(new Date(order.createdAt), timeZone), new Date(order.updatedAt ?? order.createdAt), items);
+}
+
+/** The same from an order webhook (REST payload with `refunds` and `line_items`). */
+export function lineRefundsFromWebhook(order, timeZone) {
+  const orderGid = order?.admin_graphql_api_id ?? (order?.id ? `gid://shopify/Order/${order.id}` : null);
+  if (!orderGid || !order.created_at) return [];
+  const productOf = new Map((order.line_items ?? []).map((li) => [String(li.id), li.product_id]));
+  const items = (order.refunds ?? []).flatMap((r) =>
+    (r?.refund_line_items ?? []).map((rli) => {
+      const lineId = rli.line_item_id ?? rli.line_item?.id;
+      const productId = rli.line_item?.product_id ?? productOf.get(String(lineId));
+      return {
+        lineGid: rli.line_item?.admin_graphql_api_id ?? (lineId ? `gid://shopify/LineItem/${lineId}` : null),
+        productGid: productId ? `gid://shopify/Product/${productId}` : null,
+        quantity: rli.quantity,
+        restockType: rli.restock_type,
+        amount: rli.subtotal_set?.shop_money?.amount ?? rli.subtotal,
+      };
+    }),
+  );
+  return sumRefunds(orderGid, localDateKey(new Date(order.created_at), timeZone), new Date(order.updated_at ?? order.created_at), items);
+}
+
+/** Shopify's older return reasons (before reason definitions), as handle and name. */
+const OLD_REASONS = {
+  COLOR: ["color", "Color"],
+  DEFECTIVE: ["damaged", "Damaged or defective"],
+  NOT_AS_DESCRIBED: ["not-as-described", "Item not as described"],
+  OTHER: ["other", "Other"],
+  SIZE_TOO_LARGE: ["too-big", "Size was too large"],
+  SIZE_TOO_SMALL: ["too-small", "Size was too small"],
+  STYLE: ["style", "Style"],
+  UNKNOWN: ["unknown", "Unknown"],
+  UNWANTED: ["unwanted", "Customer changed their mind"],
+  WRONG_ITEM: ["wrong-item", "Received the wrong item"],
+};
+
+/**
+ * Why items of one order were returned, from the GraphQL Admin API (`returns { returnLineItems { … on
+ * ReturnLineItem { id quantity returnReason returnReasonDefinition { handle name } fulfillmentLineItem
+ * { lineItem { id product { id } } } } } }`). One row per return line; unverified lines, and returns that
+ * were declined or cancelled, are skipped.
+ */
+export function returnReasonsFromOrder(order, timeZone) {
+  if (!isType(order?.id, "Order") || typeof order.createdAt !== "string") return [];
+  const date = localDateKey(new Date(order.createdAt), timeZone);
+  const updatedAt = new Date(order.updatedAt ?? order.createdAt);
+  return (order.returns?.nodes ?? []).filter((ret) => !NOT_RETURNED.has(ret?.status)).flatMap((ret) =>
+    (ret?.returnLineItems?.nodes ?? []).flatMap((n) => {
+      const lineItem = n?.fulfillmentLineItem?.lineItem;
+      if (!n?.id || !lineItem?.id || !lineItem.product?.id) return [];
+      const old = OLD_REASONS[n.returnReason] ?? OLD_REASONS.UNKNOWN;
+      const definition = n.returnReasonDefinition;
+      return [
+        {
+          returnLineGid: n.id,
+          orderGid: order.id,
+          lineGid: lineItem.id,
+          productGid: lineItem.product.id,
+          date,
+          quantity: Math.max(0, num(n.quantity) ?? 0),
+          reason: str(definition?.handle) ?? old[0],
+          reasonName: str(definition?.name) ?? old[1],
+          returnStatus: str(ret.status) ?? "CLOSED",
+          orderUpdatedAt: updatedAt,
+        },
+      ];
+    }),
+  );
+}

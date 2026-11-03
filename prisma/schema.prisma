@@ -47,6 +47,8 @@ model Shop {
   competitorLinks  CompetitorLink[]
   googleConnection GoogleConnection?
   googleBenchmarks GoogleBenchmark[]
+  lineRefunds      LineRefund[]
+  returnReasons    ReturnReason[]
 
   @@map("shops")
 }
@@ -442,4 +444,50 @@ model GoogleBenchmark {
   @@unique([shopId, offerId, country])
   @@index([productId])
   @@map("google_benchmarks")
+}
+
+/// Units refunded per order line after shipping (returns; cancellations of unshipped items aren't counted)
+/// and the money refunded for them. Counted against the order's date, like sales.
+model LineRefund {
+  shopId         String   @map("shop_id")
+  lineGid        String   @map("line_gid")
+  orderGid       String   @map("order_gid")
+  productGid     String   @map("product_gid")
+  /// Order date in the store's timezone.
+  date           DateTime @db.Date
+  returnedQty    Int      @map("returned_qty")
+  refundedAmount Decimal  @map("refunded_amount") @db.Decimal(14, 2)
+  orderUpdatedAt DateTime @map("order_updated_at")
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@id([shopId, lineGid])
+  @@index([shopId, orderGid])
+  @@index([shopId, productGid, date])
+  @@map("line_refunds")
+}
+
+/// Why an item was returned (Shopify returns; needs `read_returns`). One row per return line.
+model ReturnReason {
+  shopId         String   @map("shop_id")
+  returnLineGid  String   @map("return_line_gid")
+  orderGid       String   @map("order_gid")
+  lineGid        String   @map("line_gid")
+  productGid     String   @map("product_gid")
+  /// Order date in the store's timezone.
+  date           DateTime @db.Date
+  quantity       Int
+  /// Stable reason handle, e.g. "too-small"; `reasonName` is how Shopify shows it.
+  reason         String
+  reasonName     String   @map("reason_name")
+  /// The return's status: REQUESTED or OPEN can still be declined or cancelled (re-checked nightly).
+  returnStatus   String   @default("CLOSED") @map("return_status")
+  orderUpdatedAt DateTime @map("order_updated_at")
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@id([shopId, returnLineGid])
+  @@index([shopId, orderGid])
+  @@index([shopId, productGid, date])
+  @@map("return_reasons")
 }

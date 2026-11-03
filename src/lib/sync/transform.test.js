@@ -107,3 +107,101 @@ test("JSONL parser handles lines split across chunks and a missing final newline
   assert.deepEqual(p.push(':2}\n\n{"id":3}'), [{ id: 2 }]);
   assert.deepEqual(p.end(), [{ id: 3 }]);
 });
+
+// --- returns ---
+
+import { lineRefundsFromOrder, lineRefundsFromWebhook, REFUNDED_SEARCH, returnReasonsFromOrder, returnsSearch } from "./transform.js";
+
+const refundItem = (line, product, quantity, restockType, amount) => ({
+  quantity, restockType, subtotalSet: { shopMoney: { amount: String(amount) } }, lineItem: { id: `gid://shopify/LineItem/${line}`, product: { id: `gid://shopify/Product/${product}` } },
+});
+
+test("refunds per line: returns counted, cancellations of unshipped items left out, several refunds summed", () => {
+  const order = {
+    id: "gid://shopify/Order/1",
+    createdAt: "2026-10-31T23:30:00Z",
+    updatedAt: "2026-11-05T10:00:00Z",
+    refunds: [
+      { refundLineItems: { nodes: [refundItem(11, 7, 1, "RETURN", 40), refundItem(12, 8, 2, "CANCEL", 60)] } },
+      { refundLineItems: { nodes: [refundItem(11, 7, 1, "NO_RESTOCK", 39.99), refundItem(13, 9, 1, "LEGACY_RESTOCK", 10)] } },
+    ],
+  };
+  assert.deepEqual(lineRefundsFromOrder(order, "Europe/Berlin"), [
+    { lineGid: "gid://shopify/LineItem/11", orderGid: "gid://shopify/Order/1", productGid: "gid://shopify/Product/7", date: "2026-11-01", returnedQty: 2, refundedAmount: 79.99, orderUpdatedAt: new Date("2026-11-05T10:00:00Z") },
+    { lineGid: "gid://shopify/LineItem/13", orderGid: "gid://shopify/Order/1", productGid: "gid://shopify/Product/9", date: "2026-11-01", returnedQty: 1, refundedAmount: 10, orderUpdatedAt: new Date("2026-11-05T10:00:00Z") },
+  ]);
+  assert.deepEqual(lineRefundsFromOrder({ id: "gid://shopify/Order/2", createdAt: "2026-10-01T00:00:00Z", refunds: [] }, "UTC"), []);
+  assert.deepEqual(lineRefundsFromOrder(null, "UTC"), []);
+});
+
+test("refunds from an order webhook: the same rules, products found through the order's lines", () => {
+  const payload = {
+    id: 1,
+    admin_graphql_api_id: "gid://shopify/Order/1",
+    created_at: "2026-10-31T23:30:00+00:00",
+    updated_at: "2026-11-05T10:00:00+00:00",
+    line_items: [{ id: 11, product_id: 7 }, { id: 12, product_id: 8 }],
+    refunds: [
+      { refund_line_items: [{ line_item_id: 11, quantity: 2, restock_type: "return", subtotal_set: { shop_money: { amount: "80.00" } } }] },
+      { refund_line_items: [{ line_item_id: 12, quantity: 1, restock_type: "cancel", subtotal: "30.00" }] },
+    ],
+  };
+  assert.deepEqual(lineRefundsFromWebhook(payload, "UTC"), [
+    { lineGid: "gid://shopify/LineItem/11", orderGid: "gid://shopify/Order/1", productGid: "gid://shopify/Product/7", date: "2026-10-31", returnedQty: 2, refundedAmount: 80, orderUpdatedAt: new Date("2026-11-05T10:00:00Z") },
+  ]);
+  assert.deepEqual(lineRefundsFromWebhook({ ...payload, refunds: undefined }, "UTC"), []);
+});
+
+test("return reasons: the reason definition, else Shopify's older reason; unverified lines skipped", () => {
+  const order = {
+    id: "gid://shopify/Order/1",
+    createdAt: "2026-10-20T12:00:00Z",
+    updatedAt: "2026-10-28T12:00:00Z",
+    returns: {
+      nodes: [
+        {
+          returnLineItems: {
+            nodes: [
+              { id: "gid://shopify/ReturnLineItem/1", quantity: 1, returnReason: "OTHER", returnReasonDefinition: { handle: "too-small", name: "Too Small" }, fulfillmentLineItem: { lineItem: { id: "gid://shopify/LineItem/11", product: { id: "gid://shopify/Product/7" } } } },
+              { id: "gid://shopify/ReturnLineItem/2", quantity: 2, returnReason: "DEFECTIVE", returnReasonDefinition: null, fulfillmentLineItem: { lineItem: { id: "gid://shopify/LineItem/12", product: { id: "gid://shopify/Product/8" } } } },
+              {},
+            ],
+          },
+        },
+      ],
+    },
+  };
+  const rows = returnReasonsFromOrder(order, "UTC");
+  assert.deepEqual(rows.map((r) => [r.productGid, r.quantity, r.reason, r.reasonName, r.date]), [
+    ["gid://shopify/Product/7", 1, "too-small", "Too Small", "2026-10-20"],
+    ["gid://shopify/Product/8", 2, "damaged", "Damaged or defective", "2026-10-20"],
+  ]);
+});
+
+test("declined or cancelled returns aren't reasons; an unknown older reason reads as Unknown", () => {
+  const line = (id, product, extra) => ({ id: `gid://shopify/ReturnLineItem/${id}`, quantity: 1, fulfillmentLineItem: { lineItem: { id: `gid://shopify/LineItem/${id}`, product: { id: `gid://shopify/Product/${product}` } } }, ...extra });
+  const order = {
+    id: "gid://shopify/Order/1",
+    createdAt: "2026-10-20T12:00:00Z",
+    returns: {
+      nodes: [
+        { status: "DECLINED", returnLineItems: { nodes: [line(1, 7, { returnReason: "STYLE" })] } },
+        { status: "CANCELED", returnLineItems: { nodes: [line(2, 7, { returnReason: "STYLE" })] } },
+        { status: "CLOSED", returnLineItems: { nodes: [line(3, 7, { returnReason: null }), line(4, 7, { returnReason: "SOMETHING_NEW" })] } },
+        { status: "REQUESTED", returnLineItems: { nodes: [line(5, 7, { returnReason: "COLOR" })] } },
+      ],
+    },
+  };
+  assert.deepEqual(returnReasonsFromOrder(order, "UTC").map((r) => [r.returnLineGid.split("/").pop(), r.reason, r.reasonName]), [
+    ["3", "unknown", "Unknown"],
+    ["4", "unknown", "Unknown"],
+    ["5", "color", "Color"],
+  ]);
+});
+
+test("the orders search for returns: the filter, the order window and what changed since", () => {
+  assert.equal(
+    returnsSearch(REFUNDED_SEARCH, "2026-09-05", "2026-11-02T10:00:00.000Z"),
+    "(financial_status:refunded OR financial_status:partially_refunded) AND created_at:>='2026-09-05' AND updated_at:>='2026-11-02T10:00:00.000Z'",
+  );
+});

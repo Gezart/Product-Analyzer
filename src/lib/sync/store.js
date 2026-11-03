@@ -303,3 +303,34 @@ export async function pruneNotifications(shopId, days = 90, unreadDays = 365) {
     where: { shopId, OR: [{ readAt: { not: null }, createdAt: { lt: ago(days) } }, { createdAt: { lt: ago(unreadDays) } }] },
   });
 }
+
+/**
+ * One order's returns replace the stored ones (`model`: "lineRefund" or "returnReason"), unless a newer
+ * version of the order is already stored (webhooks and the nightly read can overlap or come late).
+ * Returns false when skipped as stale.
+ */
+async function replaceForOrder(model, shopId, orderGid, updatedAt, rows) {
+  return db().$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`returns|${shopId}|${orderGid}`}))`;
+    const newer = await tx[model].findFirst({ where: { shopId, orderGid, orderUpdatedAt: { gt: updatedAt } }, select: { orderGid: true } });
+    if (newer) return false;
+    await tx[model].deleteMany({ where: { shopId, orderGid } });
+    if (rows.length) {
+      await tx[model].createMany({ data: rows.map((r) => ({ ...r, shopId, date: new Date(`${r.date}T00:00:00Z`) })), skipDuplicates: true });
+    }
+    return true;
+  });
+}
+
+/** Refunded units and money per line of one order (see `lineRefundsFromOrder`). */
+export const replaceOrderRefunds = (shopId, orderGid, updatedAt, rows) => replaceForOrder("lineRefund", shopId, orderGid, updatedAt, rows);
+
+/** Return reasons of one order (see `returnReasonsFromOrder`). */
+export const replaceOrderReturnReasons = (shopId, orderGid, updatedAt, rows) => replaceForOrder("returnReason", shopId, orderGid, updatedAt, rows);
+
+/** Returns of orders older than the order window are dropped, like their sales. */
+export async function pruneReturns(shopId, windowStart) {
+  const before = new Date(`${windowStart}T00:00:00Z`);
+  await db().lineRefund.deleteMany({ where: { shopId, date: { lt: before } } });
+  await db().returnReason.deleteMany({ where: { shopId, date: { lt: before } } });
+}
