@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { HttpError } from "@/lib/http-error";
 import { FEATURE_PLAN, getPlan, hasFeature, PLANS, productLimit } from "@/lib/plans";
 
-const LABEL = { fixCenter: "The fix center", markdown: "Markdown", marketPrice: "Market price", compare: "Compare", reports: "The monthly report" };
+const LABEL = { fixCenter: "The fix center", markdown: "Markdown", marketPrice: "Market price", aiDescriptions: "Writing with AI", aiPhotos: "Photos with AI", compare: "Compare", reports: "The monthly report" };
 
 /** Throws a 403 (with the plan to upgrade to) when the shop's plan doesn't include `feature`. */
 export function requireFeature(shop, feature) {
