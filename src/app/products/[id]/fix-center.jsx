@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiError } from "@/app/api-error";
 import { listen } from "@/app/polaris-events";
 import { UpgradeBanner } from "@/app/upgrade-banner";
+import { fillInsLeft } from "@/lib/ai-text";
 
 const LABELS = { title: "Title", description: "Description", seo: "SEO", images: "Image order", collection: "Collections" };
 
@@ -102,6 +103,27 @@ export function FixCenter({ productId, onChanged }) {
     onChanged();
   }
 
+  /** "Write with AI": fills the description and SEO drafts; nothing goes to Shopify until Apply. */
+  async function writeWithAi() {
+    if (busy) return;
+    setBusy("ai");
+    setMessage(null);
+    const res = await fetch(`/api/products/${productId}/ai-description`, { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
+    setDescription(body.draft.descriptionHtml);
+    setSeoTitle(body.draft.seoTitle);
+    setSeoDescription(body.draft.seoDescription);
+    setData((d) => ({ ...d, ai: { ...d.ai, descriptions: { ...d.ai.descriptions, ...body.ai } } }));
+    setMessage({
+      tone: "info",
+      text: body.draft.fillIn.length
+        ? `Draft written by AI. Fill in ${body.draft.fillIn.join(", ")} where it says [fill in: …], check the rest, then apply the description and the SEO.`
+        : "Draft written by AI. Check it, then apply the description and the SEO.",
+    });
+  }
+
   const move = (i, delta) => {
     const next = [...mediaIds];
     const [item] = next.splice(i, 1);
@@ -120,6 +142,12 @@ export function FixCenter({ productId, onChanged }) {
   const smart = data.live?.collections.filter((c) => !c.manual) ?? [];
   const mediaById = new Map((data.live?.media ?? []).map((m) => [m.id, m]));
   const hintFor = (type) => data.hints.filter((h) => h.type === type).map((h) => <s-text key={h.code} tone="neutral">💡 {h.hint}</s-text>);
+  // AI drafts leave [fill in: …] for facts only the merchant knows: nothing applies until they're gone.
+  const descriptionFillIns = fillInsLeft(description);
+  const seoFillIns = fillInsLeft(seoTitle, seoDescription);
+  const fillInNote = (left) => left.length > 0 && <s-text tone="caution">Fill in {left.join(", ")} first (where it says [fill in: …]).</s-text>;
+  const ai = data.ai?.descriptions;
+  const weakDescription = ["short_description", "missing_details", "duplicate_description"].some((c) => data.reasonCodes?.includes(c));
 
   return (
     <s-section heading="Fix center">
@@ -154,7 +182,24 @@ export function FixCenter({ productId, onChanged }) {
             <s-stack gap="small">
               <s-text-area label="Description (HTML)" rows={8} value={description} ref={listen("input", (el) => setDescription(el.value))} />
               {hintFor("description")}
-              <div>{button("description", { descriptionHtml: description }, description !== data.live.descriptionHtml)}</div>
+              {ai?.upgrade && <s-text tone="neutral">Writing the description with AI is included from the Starter plan.</s-text>}
+              {ai && !ai.upgrade && ai.configured && (
+                <s-stack direction="inline" gap="small" alignItems="center">
+                  <s-button
+                    variant={weakDescription ? "primary" : "secondary"}
+                    disabled={busy !== null || ai.left === 0 || undefined}
+                    loading={busy === "ai" || undefined}
+                    ref={listen("click", writeWithAi)}
+                  >
+                    Write with AI
+                  </s-button>
+                  <s-text tone="neutral">
+                    {ai.left} of {ai.limit} AI drafts left this month{ai.left === 0 ? " (they renew on the 1st)" : ""}
+                  </s-text>
+                </s-stack>
+              )}
+              {fillInNote(descriptionFillIns)}
+              <div>{button("description", { descriptionHtml: description }, description !== data.live.descriptionHtml && descriptionFillIns.length === 0)}</div>
             </s-stack>
 
             <s-stack gap="small">
@@ -167,13 +212,15 @@ export function FixCenter({ productId, onChanged }) {
                 ref={listen("input", (el) => setSeoDescription(el.value))}
               />
               {hintFor("seo")}
+              {fillInNote(seoFillIns)}
               <div>
                 {button(
                   "seo",
                   { seoTitle, seoDescription },
                   (seoTitle.trim() !== (data.live.seo.title ?? "") || seoDescription.trim() !== (data.live.seo.description ?? "")) &&
                     seoTitle.trim().length <= 70 &&
-                    seoDescription.trim().length <= 320,
+                    seoDescription.trim().length <= 320 &&
+                    seoFillIns.length === 0,
                 )}
               </div>
             </s-stack>

@@ -13,6 +13,7 @@
     "test": "node --test \"src/**/*.test.js\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "@shopify/shopify-api": "^15.0.1",

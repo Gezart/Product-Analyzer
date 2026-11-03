@@ -89,6 +89,16 @@ From the features workspace (Returns). Decisions: a product's return rate is hig
 | `returns-report` | Monthly report: money refunded for returns and the top return reasons | The report shows what returns cost that month | done |
 | — | Owner: deploy the new scope (`shopify app deploy`) so merchants are asked to approve `read_returns` | Scope approved on the dev store | todo (owner) |
 
+## Phase 2e · Fix center: AI descriptions and photos
+
+From the features workspace (Fix center). Decisions: descriptions and SEO with Claude Opus 5.5 (`@anthropic-ai/sdk`); photos with OpenAI gpt-image; descriptions from Starter (30 / 150 / 500 a month on Starter / Growth / Pro), photos from Growth (50 / 200 a month on Growth / Pro).
+
+| Branch | Task | Done when | Status |
+| --- | --- | --- | --- |
+| `ai-descriptions` | "Write with AI" in the Fix center (highlighted when the diagnosis finds a short, thin or copied description): from the title, type, variants, current description and photos, in the store's language; facts the AI doesn't know come back as [fill in: …]; also SEO title and meta description; the merchant edits and applies (with Undo); monthly limit per plan in `ai_usage` | A draft appears in the editor, applies to Shopify and can be undone; the limit stops at the plan's number | doing |
+| `ai-photos` | "Create photo with AI" in the Fix center when the diagnosis finds few photos: from an existing photo (clean background, new scene); the merchant previews and approves before it goes to Shopify (with Undo); a product with no photo asks for one first; photos marked as AI-made; monthly limit per plan | An approved AI photo is on the product in Shopify and can be undone | todo |
+| — | Owner: `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in `.env` | Keys in `.env` | todo (owner) |
+
 ## v2 (not in v1)
 
 AI diagnosis and AI drafts (Claude), weekly email digest.

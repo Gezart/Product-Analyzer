@@ -1,5 +1,15 @@
 # History
 
+## 2026-11-03 · ai-descriptions
+- Fix center: "Write with AI" for the description and SEO (Claude Opus 5.5 through `@anthropic-ai/sdk`, owner approved); highlighted when the diagnosis finds a short, thin or copied description
+- The request carries the title, type, vendor, variant options, tags, current description, what the diagnosis found and up to 4 product photos; the answer comes back in the product's language as structured JSON
+- Facts the AI doesn't know come back as `[fill in: …]`; the merchant edits the draft and Apply stays off until every placeholder is filled; applying and Undo use the existing fix flow
+- The draft's HTML is cleaned before it reaches the editor (only simple tags, no attributes, no scripts)
+- Monthly limit per plan in `ai_usage` (Starter 30, Growth 150, Pro 500; Free gets the upgrade note): a use is reserved atomically before the request and given back when it fails; tokens and cost are recorded either way
+- Refusals, cut-off or unusable answers, a bad key and rate limits give a readable message; `ANTHROPIC_API_KEY` in `.env.example`; without a key the button says it isn't set up yet
+- Verified on a local Postgres with Shopify and the Claude API stubbed: draft cleaned, request shape (model, fallbacks, effort, JSON schema, images only), usage and cost recorded, refusal, unusable answer, bad key, limit reached, two requests at once with one left, Free plan, no key
+- Open: real use needs the owner's `ANTHROPIC_API_KEY`
+
 ## 2026-11-03 · returns-report
 - Monthly report: new "Returns" section for the orders placed that month: money refunded for returns, units back out of units sold, the most common reasons store-wide and the five products with the most money refunded (rate, units, refunded; each opens its page); the current month counts up to today
 - The stored month snapshot includes it (report payload)

@@ -1,3 +1,5 @@
+import { claudeConfigured } from "@/lib/ai/claude";
+import { aiAllowance } from "@/lib/ai/usage";
 import { db } from "@/lib/db";
 import { OVER_LIMIT_MESSAGE, overLimitUpgrade } from "@/lib/feature-gate";
 import { manualCollections, readLiveProduct } from "@/lib/fix-shopify";
@@ -44,5 +46,9 @@ export const GET = appRoute(async ({ shop, session, params }) => {
   const hints = reasons.flatMap((r) =>
     FIX_HINTS[r.code] ? [{ code: r.code, ...FIX_HINTS[r.code], ...(r.data?.hint ? { hint: r.data.hint } : {}), ...(r.data?.hintType ? { type: r.data.hintType } : {}) }] : [],
   );
-  return Response.json({ live, liveError, manualCollections: collections, fixes, hints, diagnosisId: diagnosis?.id ?? null, upgrade });
+  // "Write with AI": on the plan, set up by the app owner, with this month's uses left.
+  const ai = {
+    descriptions: hasFeature(shop.plan, "aiDescriptions") ? { configured: claudeConfigured(), ...(await aiAllowance(shop)) } : { upgrade: FEATURE_PLAN.aiDescriptions },
+  };
+  return Response.json({ live, liveError, manualCollections: collections, fixes, hints, diagnosisId: diagnosis?.id ?? null, upgrade, ai, reasonCodes: reasons.map((r) => r.code) });
 });
