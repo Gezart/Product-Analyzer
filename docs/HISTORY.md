@@ -1,5 +1,14 @@
 # History
 
+## 2026-11-03 · competitor-prices
+- Up to 5 competitor links per product (`competitor_links`, RLS on; migration applied to Supabase); the price is read when a link is added and every night (`competitor-prices` job, 5:00 store time)
+- Price from the page's main product in JSON-LD (the shop's currency first when there are several), `product:price`/`og:price` tags or microdata; Shopify stores fall back to `/products/<handle>.js` in the page's currency; amounts like "Rs. 1,299", "€1.299", "1.299,00" and "₹1,29,900" are read correctly
+- Safe fetch (`src/lib/public-fetch.js`): https only, every DNS answer and redirect checked, no private, cloud-metadata or reserved IPv6 addresses, one 10 s deadline for the whole read, 2 MB cap
+- Nightly: links read in the last 20 h are skipped, a run reads for up to 3 min and queues a follow-up for the rest (so big shops finish and other shops aren't held up); a stopped job stores nothing
+- Product page: "Market price" section with the competitors' median (shop currency only), your gap to it, each link's price or a readable error, add/remove; Starter and up (`marketPrice`); adding locks the product so 5 stays the maximum
+- Verified on a local Postgres: add, duplicate, bad link, 404 page, other currency, 6th link, 7 adds at once, other shop, plan gate, nightly refresh, budget and abort; private addresses refused at connect time
+- Open: a real competitor page wasn't fetched (no internet in the sandbox); test on the dev store
+
 ## 2026-10-25 · customer-fixes
 - From the customer test: a product list (`/products`, in the menu) with status filters and sorting; the dashboard's status tiles and the inbox open it, so every product is reachable; stock-out risks keep 3 places in the Top 10
 - Price rule: a product with a type is compared only with products of the same type (never a mixed collection like a coat among socks); no price reason for products that sell well; prices in the store currency; duplicate-description reasons name the products; "What could still be better" for products that sell well

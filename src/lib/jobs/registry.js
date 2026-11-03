@@ -1,4 +1,6 @@
+import { refreshShopLinks } from "@/lib/competitor-prices";
 import { PermanentJobError } from "@/lib/jobs/errors";
+import { enqueue } from "@/lib/jobs/queue";
 import { guardPrices, runMarkdownPlans } from "@/lib/markdown-engine";
 import { runRescuePlans } from "@/lib/rescue-plans";
 import { closeMonth } from "@/lib/reports";
@@ -6,6 +8,9 @@ import { scoreShop } from "@/lib/score-shop";
 import { runDailyMetrics, runInitialSync, runOrdersCatchup, runRegisterWebhooks, runSyncPoll } from "@/lib/sync/initial-sync";
 import { runSyncInventory, runSyncProduct } from "@/lib/sync/live";
 import { syncViews } from "@/lib/sync/views";
+
+/** Follow-up runs per night for shops with many competitor links (each run reads for up to 3 minutes). */
+const MAX_PRICE_ROUNDS = 20;
 
 function requireShop(job) {
   if (!job.shopId) throw new PermanentJobError(`${job.type} needs a shop`);
@@ -51,6 +56,18 @@ export const handlers = {
   "monthly-report": async (job) => {
     await closeMonth(requireShop(job));
   },
+  /**
+   * Reads the price on every competitor link (market price), a few minutes per run. Links still waiting
+   * go to a follow-up run at the back of the queue, so other shops' jobs aren't held up.
+   */
+  "competitor-prices": async (job, signal) => {
+    const shopId = requireShop(job);
+    const { remaining } = await refreshShopLinks(shopId, signal);
+    const round = Number(job.payload?.round ?? 0);
+    if (remaining > 0 && !signal?.aborted && round < MAX_PRICE_ROUNDS) {
+      await enqueue({ type: "competitor-prices", shopId, payload: { round: round + 1 }, uniqueKey: `competitor-prices:more:${job.id}` });
+    }
+  },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
   "sync-inventory": runSyncInventory,
@@ -63,6 +80,7 @@ export const nightlyJobs = [
   // Re-subscribe (repairs subscriptions Shopify removed, or a changed app URL), then fill gaps.
   { type: "register-webhooks", hour: 3 },
   { type: "orders-catchup", hour: 4 },
+  { type: "competitor-prices", hour: 5 },
   { type: "price-guard", hour: 6 },
   // Stores last month's report once it is over (no-op on other days).
   { type: "monthly-report", hour: 6 },
