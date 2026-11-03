@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { hasFeature } from "@/lib/plans";
 import { averageCost, dailyBaseline, markdownPeriod, monthlyReport, monthRange, previousMonth } from "@/lib/report";
+import { monthReturns } from "@/lib/returns";
 import { isLocalDate, ORDER_DAYS } from "@/lib/sync/constants";
 
 /** Builds a shop's report for `period` ("YYYY-MM") from its plans, fixes and daily metrics. */
@@ -93,7 +94,9 @@ export async function buildReport(shopId, period, now = new Date()) {
       effect: effect.get(f.id) ?? null,
     })),
   });
-  return { ...report, currency: shop.currency };
+  // What returns cost: orders placed this month that came back (up to today in the current month).
+  const returns = await monthReturns(shopId, month.from, month.to < today ? month.to : today);
+  return { ...report, returns, currency: shop.currency };
 }
 
 /**

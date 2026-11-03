@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { listen } from "@/app/polaris-events";
 import { CARD, EYEBROW } from "@/app/status-style";
 import { UpgradeBanner } from "@/app/upgrade-banner";
+import { returnPct } from "@/lib/diagnosis";
 import { monthRange } from "@/lib/report";
 import { moneyFormatter } from "@/lib/status-info";
 
@@ -162,6 +163,8 @@ export function ReportView() {
               )}
             </s-section>
 
+            {report.returns && <ReturnsSection returns={report.returns} money={money} />}
+
             <s-section heading="Fixes applied">
               {report.fixes.length === 0 ? (
                 <s-paragraph>No fixes were applied in this month.</s-paragraph>
@@ -185,6 +188,59 @@ export function ReportView() {
         )}
       </s-stack>
     </s-page>
+  );
+}
+
+/** What returns cost this month: refunds for orders placed in it, the top reasons and products. */
+function ReturnsSection({ returns, money }) {
+  return (
+    <s-section heading="Returns">
+      {returns.returned === 0 ? (
+        <s-paragraph>Nothing from this month&apos;s orders came back.</s-paragraph>
+      ) : (
+        <s-stack gap="base">
+          <s-paragraph>
+            <strong>{money.format(returns.refunded)}</strong> refunded for returns · {returns.returned} of {returns.sold} units came back ({returnPct(returns.rate ?? 0)}).
+          </s-paragraph>
+          {returns.reasons.length > 0 && (
+            <s-text tone="neutral">Most common reasons: {returns.reasons.map((r) => `${r.name} (${r.count})`).join(", ")}</s-text>
+          )}
+          {returns.products.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="text-zinc-500">
+                  <tr>
+                    <th className="py-2 pr-4 font-medium">Product</th>
+                    <th className="py-2 pr-4 text-right font-medium">Came back</th>
+                    <th className="py-2 text-right font-medium">Refunded</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {returns.products.map((p) => (
+                    <tr key={p.productId ?? p.title} className="border-t border-zinc-200">
+                      <td className="py-2 pr-4">
+                        {p.productId ? (
+                          <Link href={`/products/${p.productId}`} className="hover:underline">
+                            {p.title}
+                          </Link>
+                        ) : (
+                          p.title
+                        )}
+                      </td>
+                      <td className="py-2 pr-4 text-right">
+                        {p.returned} of {p.sold} ({returnPct(p.rate ?? 0)})
+                      </td>
+                      <td className="py-2 text-right">{money.format(p.refunded)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <s-text tone="neutral">Orders placed this month that were refunded after shipping (cancellations aren&apos;t counted). Reasons come from Shopify returns.</s-text>
+        </s-stack>
+      )}
+    </s-section>
   );
 }
 

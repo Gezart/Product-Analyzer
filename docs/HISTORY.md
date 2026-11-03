@@ -1,5 +1,10 @@
 # History
 
+## 2026-11-03 · returns-report
+- Monthly report: new "Returns" section for the orders placed that month: money refunded for returns, units back out of units sold, the most common reasons store-wide and the five products with the most money refunded (rate, units, refunded; each opens its page); the current month counts up to today
+- The stored month snapshot includes it (report payload)
+- Verified on a local Postgres: October counts only October's orders, another shop's returns are left out, a reason stored under two names is counted once, November so far, a month with nothing
+
 ## 2026-11-03 · returns-diagnosis
 - New diagnosis reason "Returned often": at least 5 units came back and the product's return rate (returned ÷ sold, last 90 days or since the order history starts) is twice the store's; three times is high; the evidence names the rates, the counts and the most common reason
 - The fix center's hint follows the most common reason (size → size chart and fit notes; color, style or "not as described" → true photos and exact description; damaged → supplier; wrong item → fulfillment; late → delivery times)
