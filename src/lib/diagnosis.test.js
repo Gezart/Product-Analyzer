@@ -224,3 +224,71 @@ test("above the market from Google's benchmark names Google and the country", ()
   assert.equal(r.evidence, "Price is 18% above the market price €52.00 (Google's benchmark: what shoppers pay on average for this product on Google in DE).");
   assert.equal(r.data.source, "google");
 });
+
+// --- returned often ---
+
+import { returnHint } from "./diagnosis.js";
+
+const returnsOf = (returned, sold, topReason = null) => ({ returned, sold, rate: returned / sold, days: 90, topReason });
+const returnsReason = (p, c = ctx({ storeReturnRate: 0.05 })) => diagnose(p, c).find((r) => r.code === "returned_often");
+
+test("returned often: twice the store's rate with at least 5 units back; the most common reason and its hint", () => {
+  const r = returnsReason(product({ returns: returnsOf(12, 66, { handle: "too-small", name: "Too Small", count: 7 }) }));
+  assert.equal(r.severity, "high"); // 18% vs 5%: over three times
+  assert.equal(r.link, "#returns");
+  assert.equal(r.evidence, "18% of the units sold in the last 90 days came back (12 of 66); the store's average is 5%. Most common reason: Too Small (7).");
+  assert.equal(r.data.topReason, "too-small");
+  assert.match(r.data.hint, /size chart/);
+  const medium = returnsReason(product({ returns: returnsOf(6, 50) }));
+  assert.equal(medium.severity, "medium"); // 12%: over twice, under three times
+  assert.equal(medium.data.hint, null);
+  assert.doesNotMatch(medium.evidence, /Most common reason/);
+});
+
+test("returned often: not under twice the store's rate, not under 5 units back, not without a store rate", () => {
+  assert.equal(returnsReason(product({ returns: returnsOf(9, 100) })), undefined); // 9% < 10%
+  assert.equal(returnsReason(product({ returns: returnsOf(4, 10) })), undefined); // 40%, but only 4 back
+  assert.equal(returnsReason(product({ returns: returnsOf(10, 50) }), ctx({ storeReturnRate: 0 })), undefined);
+  assert.equal(returnsReason(product({})), undefined);
+});
+
+test("return hints by reason", () => {
+  assert.match(returnHint("too-big"), /size chart/);
+  assert.match(returnHint("color-too-bright"), /true-color photos/);
+  assert.match(returnHint("not-as-described"), /true-color photos/);
+  assert.match(returnHint("damaged"), /supplier/);
+  assert.match(returnHint("wrong-item"), /fulfillment/);
+  assert.match(returnHint("arrived-late"), /delivery times/);
+  assert.equal(returnHint("unwanted"), null);
+  assert.equal(returnHint(null), null);
+});
+
+import { returnHintType, returnPct } from "./diagnosis.js";
+
+test("returned often: exactly twice is medium and exactly three times is high, despite float rounding", () => {
+  assert.equal(returnsReason(product({ returns: { returned: 9, sold: 30, rate: 9 / 30, days: 90 } }), ctx({ storeReturnRate: 0.1 })).severity, "high");
+  assert.equal(returnsReason(product({ returns: { returned: 6, sold: 20, rate: 6 / 20, days: 90 } }), ctx({ storeReturnRate: 1 / 10 })).severity, "high");
+  assert.equal(returnsReason(product({ returns: { returned: 6, sold: 30, rate: 6 / 30, days: 90 } }), ctx({ storeReturnRate: 0.1 })).severity, "medium");
+  assert.equal(returnsReason(product({ returns: { returned: 6, sold: 31, rate: 6 / 31, days: 90 } }), ctx({ storeReturnRate: 0.1 })), undefined);
+});
+
+test("small return rates keep a decimal, so the store's average never reads 0%", () => {
+  assert.equal(returnPct(0.003), "0.3%");
+  assert.equal(returnPct(0.045), "4.5%");
+  assert.equal(returnPct(0.18), "18%");
+  const r = returnsReason(product({ returns: { returned: 6, sold: 1000, rate: 0.006, days: 90 } }), ctx({ storeReturnRate: 0.003 }));
+  assert.match(r.evidence, /^0\.6% of the units sold .* the store's average is 0\.3%\./);
+});
+
+test("hints the page can't act on go to the general hints", () => {
+  assert.equal(returnHintType("too-small"), "description");
+  assert.equal(returnHintType("color"), "description");
+  assert.equal(returnHintType("damaged"), "other");
+  assert.equal(returnHintType("wrong-item"), "other");
+  assert.equal(returnHintType("arrived-late"), "other");
+  // Text and place come from the same rule: a wrong size is a size hint, under the description.
+  assert.match(returnHint("wrong-size"), /size chart/);
+  assert.equal(returnHintType("wrong-size"), "description");
+  assert.equal(returnPct(0.0004), "under 0.1%");
+  assert.equal(returnPct(0), "0%");
+});

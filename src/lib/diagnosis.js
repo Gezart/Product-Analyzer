@@ -44,6 +44,37 @@ function money(n, currency) {
 }
 const SEVERITY_RANK = { high: 0, medium: 1, low: 2 };
 
+/** Returned often: at least this many units came back, at twice the store's return rate (three times: high). */
+export const MIN_RETURNED = 5;
+const RETURNS_FACTOR = 2;
+const RETURNS_HIGH_FACTOR = 3;
+
+/** A return rate for people: whole percents from 10%, one decimal below ("0.3%", "4.5%"), "under 0.1%" for tiny ones. */
+export function returnPct(rate) {
+  const p = rate * 100;
+  if (p > 0 && p < 0.05) return "under 0.1%";
+  return p >= 10 ? `${Math.round(p)}%` : `${Math.round(p * 10) / 10}%`;
+}
+
+/**
+ * What to change for the most common return reason (Shopify's reason handle), first match wins:
+ * `type` "description" for what the page can fix, "other" for what it can't (supplier, fulfillment, carrier).
+ */
+const RETURN_HINTS = [
+  [/small|big|large|tight|loose|fit|size|long|short|comfort/, "description", "Add a size chart and fit notes (runs small or large, model's size) to the description."],
+  [/colou?r|style|described|looks|different|picture|photo/, "description", "Show it as it really is: true-color photos and an exact description of material and finish."],
+  [/damage|defect|quality|broken/, "other", "Check quality and packaging with your supplier: the page can't fix these returns."],
+  [/wrong/, "other", "Check picking and labels in fulfillment: customers got the wrong item."],
+  [/late|delay/, "other", "Check the delivery times the page promises and your carrier."],
+];
+const hintOf = (handle) => RETURN_HINTS.find(([re]) => re.test(String(handle ?? "").toLowerCase()));
+
+/** The hint's text for a return reason, or null for a general hint. */
+export const returnHint = (handle) => hintOf(handle)?.[2] ?? null;
+
+/** Where the hint shows: under the description editor, or with the general hints ("other"). */
+export const returnHintType = (handle) => hintOf(handle)?.[1] ?? "description";
+
 /** Peer median excluding the product itself, so one expensive product can't hide behind its own price. */
 function peerMedian(prices, own, ownIsListed) {
   if (!prices) return null;
@@ -210,6 +241,32 @@ export function diagnose(p, ctx) {
     }
   }
 
+  // 7b. Returned often: at least 5 units came back and the return rate is at least twice the store's
+  //    (`p.returns` and `ctx.storeReturnRate` over the same recent days, built by the caller).
+  const ret = p.returns;
+  // How many times the store's rate, rounded so exactly 2× or 3× counts (0.1 × 3 is 0.30000000000000004).
+  const times = ret && ctx.storeReturnRate > 0 ? Math.round((ret.rate / ctx.storeReturnRate) * 1e6) / 1e6 : 0;
+  if (ret && ret.returned >= MIN_RETURNED && times >= RETURNS_FACTOR) {
+    const top = ret.topReason;
+    reasons.push({
+      code: "returned_often",
+      severity: times >= RETURNS_HIGH_FACTOR ? "high" : "medium",
+      evidence:
+        `${returnPct(ret.rate)} of the units sold in the last ${ret.days} days came back (${ret.returned} of ${ret.sold}); the store's average is ${returnPct(ctx.storeReturnRate)}.` +
+        (top ? ` Most common reason: ${top.name} (${top.count}).` : ""),
+      data: {
+        returned: ret.returned,
+        sold: ret.sold,
+        rate: ret.rate,
+        storeRate: ctx.storeReturnRate,
+        topReason: top?.handle ?? null,
+        hint: returnHint(top?.handle),
+        hintType: returnHintType(top?.handle),
+      },
+      link: "#returns",
+    });
+  }
+
   // 7. Many add to cart but few buy → likely store-level (shipping cost, checkout), not this product.
   if (p.views30 >= ctx.minViews && p.carts30 >= MIN_CARTS && ctx.medianViewToCart != null && ctx.medianCartToPurchase != null) {
     const viewToCart = p.carts30 / p.views30;
@@ -235,7 +292,7 @@ export function diagnose(p, ctx) {
 export function reasonSignature(reasons) {
   return reasons
     .map((r) => {
-      const items = ["outOfStock", "missing", "sameAs", "group", "source"]
+      const items = ["outOfStock", "missing", "sameAs", "group", "source", "topReason"]
         .map((k) => r.data[k])
         .filter((v) => v != null)
         .map((v) => (Array.isArray(v) ? [...v].sort().join("|") : String(v)));

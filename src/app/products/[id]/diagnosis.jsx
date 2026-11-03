@@ -7,6 +7,7 @@ import { UpgradeBanner } from "@/app/upgrade-banner";
 const TITLES = {
   price_above_peers: "Price is high for its group",
   price_above_market: "Price is above the market",
+  returned_often: "Returned often",
   few_images: "Too few images",
   short_description: "Description is short",
   missing_details: "Description is missing details",

@@ -4,12 +4,13 @@ import { diagnose, median, reasonSignature } from "@/lib/diagnosis";
 import { googleBenchmarkFor } from "@/lib/google-merchant";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { competitorSummary, marketFrom } from "@/lib/market-price";
+import { returnRate, returnWindow, topReturnReasons } from "@/lib/returns";
 import { hasFeature } from "@/lib/plans";
 import { sanitizeThresholds } from "@/lib/scoring";
 
 /** Rules version stored with each diagnosis (AI-written summaries come in v2). */
 /** Bumped when a rule changes, so the next diagnosis is stored fresh. */
-export const RULES_VERSION = "rules-v3";
+export const RULES_VERSION = "rules-v4";
 
 async function sessions30(shopId, timeZone) {
   const today = new Date(`${localDateKey(new Date(), timeZone)}T00:00:00Z`);
@@ -108,13 +109,18 @@ export async function diagnoseProduct(shopId, productId) {
     include: { variants: { select: { options: true, inventoryQty: true, sellsWhenOut: true }, orderBy: { shopifyGid: "asc" } } },
   });
   if (!product) return null;
-  const [{ context, sessions }, duplicates, score, rescue, market] = await Promise.all([
+  const recent = await returnWindow(shopId, shop?.timezone ?? null);
+  const [{ context, sessions }, duplicates, score, rescue, market, storeReturns, productReturns, reasons3] = await Promise.all([
     buildContext(shopId, shop?.timezone ?? null, shop?.currency ?? null),
     sameDescription(shopId, productId),
     db().productScore.findFirst({ where: { productId }, orderBy: { computedAt: "desc" }, select: { status: true } }),
     db().rescuePlan.findFirst({ where: { productId }, orderBy: { startedAt: "desc" }, select: { verdict: true } }),
     marketPrice(shop, productId, Number(product.price)),
+    returnRate(shopId, recent.from),
+    returnRate(shopId, recent.from, product.shopifyGid),
+    topReturnReasons(shopId, recent.from, product.shopifyGid, 1),
   ]);
+  context.storeReturnRate = storeReturns.rate ?? 0;
   // A product that sells well isn't "not selling": its price isn't questioned and the page says so —
   // unless its last fixes made sales worse or changed nothing.
   const sellingWell = ["healthy", "stockout_risk"].includes(score?.status) && !["worse", "no_change"].includes(rescue?.verdict);
@@ -137,6 +143,7 @@ export async function diagnoseProduct(shopId, productId) {
       duplicateOf: pageDataKnown ? duplicates : null,
       sellingWell,
       market,
+      returns: productReturns.sold > 0 ? { ...productReturns, days: recent.days, topReason: reasons3[0] ?? null } : null,
       variants: product.variants.map((v) => ({
         title: Object.values((v.options ?? {})).join(" / ") || "Default",
         stock: v.inventoryQty,

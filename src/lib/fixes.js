@@ -104,6 +104,7 @@ export function applyMoves(list, moves) {
 export const FIX_HINTS = {
   price_above_peers: { type: "description", hint: "Explain what justifies the price (quality, material, what's included) — or consider a rescue plan." },
   price_above_market: { type: "description", hint: "Show why yours is worth more than the competitors' (quality, material, delivery, what's included) — or consider a rescue plan." },
+  returned_often: { type: "description", hint: "Make the page match what arrives: size and fit, material, true photos." },
   few_images: { type: "images", hint: "Add at least 3 images in Shopify, then put the clearest product shot first." },
   short_description: { type: "description", hint: "Write at least 80 words: what it is, who it's for, and why it's worth it." },
   missing_details: { type: "description", hint: "Add size or dimensions, material, and how to use or care for it." },

@@ -1,5 +1,12 @@
 # History
 
+## 2026-11-03 · returns-diagnosis
+- New diagnosis reason "Returned often": at least 5 units came back and the product's return rate (returned ÷ sold, last 90 days or since the order history starts) is twice the store's; three times is high; the evidence names the rates, the counts and the most common reason
+- The fix center's hint follows the most common reason (size → size chart and fit notes; color, style or "not as described" → true photos and exact description; damaged → supplier; wrong item → fulfillment; late → delivery times)
+- Product page: "Returns" line with the rate, units, the store's average, money refunded and the top reasons (the reason's "See the data" link)
+- Rules version `rules-v4`
+- Verified on a local Postgres: 18% vs a 4.5% store average → high with "Too Small (7)", 4 units back → none, under 1% → none, an order before the history window not counted, the product page numbers
+
 ## 2026-11-03 · returns-sync
 - New scope `read_returns` (shopify.app.toml, `.env.example`, PLAN); merchants approve it once after the app update. Until then refunds are still read and reasons are skipped with a note; once approved, reasons are read for the whole 60-day window
 - `line_refunds`: units refunded per order line after shipping (cancellations of unshipped items aren't returns) and the money refunded, counted against the order's date; `return_reasons`: why each returned item came back (Shopify's reason, or its older reason list); declined or cancelled returns don't count; both RLS on (migration applied to Supabase)
