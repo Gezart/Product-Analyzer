@@ -1,5 +1,10 @@
 # History
 
+## 2026-11-03 · seasonal-reminders
+- Inbox, once per season: 30 days before a season starts ("check stock and product pages"), and when a season ends with stock left (stock value, "an end-of-season markdown clears it"); one product opens its page, several open the seasonal list
+- For 30 days after its season ends, a product with stock left can get an end-of-season markdown (the only markdown out of season); the product page says so
+- Verified on a local Postgres: nightly scoring on Sep 10–11, Oct 5–6 and a year later (each note once, only products with stock for the end note), markdown eligibility right after a season, long after one, and in season
+
 ## 2026-11-03 · seasonal-status
 - New status "Seasonal" (no money at stake, not "needs attention"): a seasonal product waiting for its season (out of it, or in its first 30 days; half the season if shorter) is never dead stock, a slow mover or "new"; other statuses (page problem, stock-out risk, hidden gem, healthy) still apply
 - In season, days without a sale count from the season's start; a season shorter than 90 days makes an unsold product dead stock on its last day; in the first 60 days sell-through counts only the season so far

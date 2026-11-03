@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatSeason, mergeRanges, parseSeasonTag, seasonOf, seasonState, unitsSinceStart } from "./season.js";
+import { formatSeason, justEnded, mergeRanges, parseSeasonTag, seasonNotices, seasonOf, seasonState, unitsSinceStart } from "./season.js";
 
 test("season tags: month ranges, single months, numbers and named seasons", () => {
   assert.deepEqual(parseSeasonTag("season:nov-feb"), { from: 11, to: 2 });
@@ -86,4 +86,29 @@ test("sales since each product's season started", () => {
   assert.equal(units.get("a"), 5);
   assert.equal(units.get("b"), undefined);
   assert.equal(units.get("c"), undefined);
+});
+
+test("inbox notices: seasons starting within 30 days, and seasons just ended with stock left", () => {
+  const state = (day, ranges) => seasonState(ranges, day);
+  const winter = [{ from: 11, to: 2 }];
+  const summer = [{ from: 6, to: 8 }];
+  const items = [
+    { id: "coat", stock: 5, stockValue: 500, state: state("2026-10-05", winter) },
+    { id: "boots", stock: 0, stockValue: 0, state: state("2026-10-05", winter) },
+    { id: "swim", stock: 12, stockValue: 240.5, state: state("2026-10-05", summer) },
+    { id: "plain", stock: 3, stockValue: 90, state: null },
+  ];
+  const n = seasonNotices(items);
+  assert.deepEqual(n.soon, [{ date: "2026-11-01", days: 27, count: 2, stockValue: 500, productIds: ["coat", "boots"] }]);
+  assert.deepEqual(n.ended, [], "summer ended 35 days ago: too long for an end-of-season markdown");
+  // A month earlier the summer season had just ended: only products with stock left.
+  const sept = seasonNotices([
+    { id: "swim", stock: 12, stockValue: 240.5, state: state("2026-09-10", summer) },
+    { id: "hat", stock: 0, stockValue: 0, state: state("2026-09-10", summer) },
+  ]);
+  assert.deepEqual(sept.ended, [{ date: "2026-08-31", days: 10, count: 1, stockValue: 240.5, productIds: ["swim"] }]);
+  assert.deepEqual(sept.soon, []);
+  assert.equal(justEnded(state("2026-09-30", summer)), true);
+  assert.equal(justEnded(state("2026-10-01", summer)), false);
+  assert.equal(justEnded(state("2026-07-01", summer)), false);
 });

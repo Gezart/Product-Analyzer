@@ -122,6 +122,39 @@ export function unitsSinceStart(rows, starts) {
   return units;
 }
 
+/** The inbox reminds this many days before a season starts. */
+export const REMINDER_DAYS = 30;
+/** After a season ends with stock left, an end-of-season markdown is proposed for this many days. */
+export const END_MARKDOWN_DAYS = 30;
+
+/** The season ended in the last 30 days: an end-of-season markdown may clear what's left. */
+export const justEnded = (state) => Boolean(state) && !state.inSeason && state.daysSinceEnd <= END_MARKDOWN_DAYS;
+
+/**
+ * What the inbox should say about seasons, from `items` `{ id, stock, stockValue, state }` (`state` from
+ * `seasonState`): seasons starting within 30 days, grouped by start date, and seasons that ended in the
+ * last 30 days with stock left, grouped by end date. Each group: `{ date, days, count, stockValue, productIds }`.
+ */
+export function seasonNotices(items) {
+  const group = (list, dateOf, daysOf) => {
+    const groups = new Map();
+    for (const it of list) {
+      const date = dateOf(it.state);
+      const g = groups.get(date) ?? { date, days: daysOf(it.state), count: 0, stockValue: 0, productIds: [] };
+      g.count += 1;
+      g.stockValue = Math.round((g.stockValue + (it.stockValue ?? 0)) * 100) / 100;
+      g.productIds.push(it.id);
+      groups.set(date, g);
+    }
+    return [...groups.values()].sort((a, b) => a.date.localeCompare(b.date));
+  };
+  const out = items.filter((it) => it.state && !it.state.inSeason);
+  return {
+    soon: group(out.filter((it) => it.state.daysToStart <= REMINDER_DAYS), (s) => s.nextStart, (s) => s.daysToStart),
+    ended: group(out.filter((it) => justEnded(it.state) && it.stock > 0), (s) => s.lastEnd, (s) => s.daysSinceEnd),
+  };
+}
+
 /** "Nov–Feb", "Dec", "Jun–Aug, Dec" for people. */
 export function formatSeason(ranges) {
   const name = (n) => MONTH_NAMES[n - 1].slice(0, 3);

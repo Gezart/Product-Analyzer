@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { seasonGraceDays, seasonWaiting } from "@/lib/scoring";
+import { justEnded } from "@/lib/season";
 import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 import { Diagnosis } from "./diagnosis";
 import { FixCenter } from "./fix-center";
@@ -47,11 +48,13 @@ export function ProductView() {
       ? "Wait for the rescue plan's result (below)."
       : rescue?.verdict === "worse" && rescue.fixIds.length > 0
         ? "Undo the fixes (see the rescue plan below)."
-        : rescue?.verdict === "no_change" && !seasonWaiting(season)
-          ? "Start the markdown (see below)."
-          : data.score?.status === "seasonal" && season
-            ? seasonalNext(season)
-            : info?.action;
+        : justEnded(season) && data.stock > 0
+          ? "Its season has ended: start an end-of-season markdown to clear the stock (see below)."
+          : rescue?.verdict === "no_change" && !seasonWaiting(season)
+            ? "Start the markdown (see below)."
+            : data.score?.status === "seasonal" && season
+              ? seasonalNext(season)
+              : info?.action;
 
   return (
     <s-page heading={data.product.title}>

@@ -85,6 +85,23 @@ export function describe(n) {
       const month = new Date(`${d.period}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
       return { title: `Your ${month} report is ready`, body: `${formatMoney(d.revenueRecovered ?? 0, d.currency)} revenue recovered.`, href: `/reports?period=${d.period}` };
     }
+    case "season_soon": {
+      const when = new Date(`${d.date}T00:00:00Z`).toLocaleDateString("en-US", { day: "numeric", month: "long", timeZone: "UTC" });
+      const what = d.count === 1 ? title : plural(d.count ?? 0, "seasonal product");
+      return {
+        title: `Season starts ${when}: ${what}`,
+        body: "Check stock and product pages before the season starts.",
+        href: d.count === 1 && n.productId ? product : "/products?status=seasonal",
+      };
+    }
+    case "season_ended": {
+      const what = d.count === 1 ? title : plural(d.count ?? 0, "product");
+      return {
+        title: `Season ended with stock left: ${what}`,
+        body: `${formatMoney(d.stockValue ?? 0, d.currency)} in stock. An end-of-season markdown clears it before it waits a whole year; start it on the product page.`,
+        href: d.count === 1 && n.productId ? product : "/products?status=seasonal",
+      };
+    }
     default:
       return { title: n.type.replaceAll("_", " "), body: "", href: product };
   }

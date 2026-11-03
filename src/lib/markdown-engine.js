@@ -6,7 +6,7 @@ import { localDateKey } from "@/lib/jobs/schedule";
 import { dueStep, guardWrites, LADDER, liveStock, proposeLadder, restoreWrites, safeToWrite, settleWrites, stepWrites, stockCleared, withOutcomes } from "@/lib/markdown";
 import { readLiveVariants, writeVariantPrices } from "@/lib/markdown-shopify";
 import { notify } from "@/lib/notify";
-import { seasonOf, seasonState } from "@/lib/season";
+import { justEnded, seasonOf, seasonState } from "@/lib/season";
 import { seasonWaiting } from "@/lib/scoring";
 import { seasonalCollectionsOf } from "@/lib/settings";
 import { shopifyFailure } from "@/lib/shopify-errors";
@@ -226,8 +226,13 @@ async function eligibility(product) {
     db().productScore.findFirst({ where: { productId }, orderBy: { computedAt: "desc" }, select: { status: true } }),
     productSeason(product),
   ]);
-  // Out of season (or early in it) a seasonal product is waiting for its season, not failing: no
-  // markdown, whatever its status or rescue result.
+  // Right after its season ends, what's left can be cleared before it waits a whole year.
+  if (justEnded(season)) {
+    const days = season.daysSinceEnd;
+    return { reason: `Its season ended ${days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`}: an end-of-season markdown clears the stock before it waits a whole year.`, rescueId: null };
+  }
+  // Otherwise out of season (or early in it) a seasonal product is waiting for its season, not failing:
+  // no markdown, whatever its status or rescue result.
   if (seasonWaiting(season)) return null;
   if (rescue?.verdict === "no_change") return { reason: "The rescue plan ended with no change.", rescueId: rescue.id };
   if (score?.status === "dead_stock") return { reason: "Dead stock: no sale for a long time.", rescueId: null };
