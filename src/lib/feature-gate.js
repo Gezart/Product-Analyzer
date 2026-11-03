@@ -4,11 +4,17 @@ import { FEATURE_PLAN, getPlan, hasFeature, PLANS, productLimit } from "@/lib/pl
 
 const LABEL = { fixCenter: "The fix center", markdown: "Markdown", marketPrice: "Market price", aiDescriptions: "Writing with AI", aiPhotos: "Making photos with AI", collectionOrder: "Ordering collections", compare: "Compare", reports: "The monthly report" };
 
+/** `{ error, upgrade }` when the shop's plan doesn't include `feature` (the message and the plan to upgrade to), else null. */
+export function missingFeature(shop, feature) {
+  if (hasFeature(shop.plan, feature)) return null;
+  const plan = getPlan(FEATURE_PLAN[feature]);
+  return { error: `${LABEL[feature]} is included from the ${plan.name} plan.`, upgrade: plan.id };
+}
+
 /** Throws a 403 (with the plan to upgrade to) when the shop's plan doesn't include `feature`. */
 export function requireFeature(shop, feature) {
-  if (hasFeature(shop.plan, feature)) return;
-  const plan = getPlan(FEATURE_PLAN[feature]);
-  throw new HttpError(`${LABEL[feature]} is included from the ${plan.name} plan.`, 403, { upgrade: plan.id });
+  const missing = missingFeature(shop, feature);
+  if (missing) throw new HttpError(missing.error, 403, { upgrade: missing.upgrade });
 }
 
 /**

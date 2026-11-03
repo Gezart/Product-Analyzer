@@ -65,3 +65,35 @@ export function proposeOrder(items) {
 
 /** How many products a new order moves. */
 export const movedCount = (current, target) => target.filter((id, i) => current[i] !== id).length;
+
+/**
+ * The fewest moves for Shopify's collectionReorderProducts to turn `current` into `target`. Shopify
+ * applies them one after another, each `newPosition` counted in the list the previous moves left, so a
+ * product already in its place is skipped (swapping the first two of 1,000 is one move). Ids not in
+ * both lists are left alone (they end up after the ordered ones).
+ */
+export function sequentialMoves(current, target) {
+  const have = new Set(current);
+  const ordered = target.filter((id) => have.has(id));
+  const work = [...current];
+  const moves = [];
+  ordered.forEach((id, position) => {
+    if (work[position] === id) return;
+    work.splice(work.indexOf(id), 1);
+    work.splice(position, 0, id);
+    moves.push({ id, newPosition: String(position) });
+  });
+  return moves;
+}
+
+/**
+ * Whether `order` lists each of the collection's products (`current`) exactly once. Returns an error
+ * message, or null when it does.
+ */
+export function orderError(order, current) {
+  if (!Array.isArray(order) || order.length !== current.length) return "The order must list each of the collection's products once.";
+  const have = new Set(current);
+  if (new Set(order).size !== order.length || !order.every((id) => have.has(id))) return "The order must list each of the collection's products once.";
+  if (order.every((id, i) => current[i] === id)) return "This is already the collection's order.";
+  return null;
+}

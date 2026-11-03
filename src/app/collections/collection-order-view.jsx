@@ -23,8 +23,9 @@ export function CollectionOrderView() {
     fetch("/api/collection-order")
       .then(async (res) => {
         const body = await res.json().catch(() => ({}));
-        if (res.status === 403 && body.upgrade) return setUpgrade(body.error);
         if (!res.ok) throw new Error(body.error ?? `Failed (${res.status})`);
+        // On a plan without the optimizer: only collections with saved orders, to undo them.
+        if (body.upgrade) setUpgrade(body.error);
         setList(body);
       })
       .catch((e) => setError(e.message));
@@ -42,8 +43,8 @@ export function CollectionOrderView() {
           </s-text>
           {upgrade && <UpgradeBanner>{upgrade}</UpgradeBanner>}
           {error && <s-banner tone="critical">{error}</s-banner>}
-          {!list && !upgrade && !error && <s-spinner accessibilityLabel="Loading collections" />}
-          {list && list.collections.length === 0 && (
+          {!list && !error && <s-spinner accessibilityLabel="Loading collections" />}
+          {list && list.collections.length === 0 && !upgrade && (
             <s-banner tone="info">
               No collection is sorted manually. In Shopify, open a collection and set &quot;Sort&quot; to &quot;Manually&quot; to reorder it here.
             </s-banner>
@@ -59,7 +60,9 @@ export function CollectionOrderView() {
                 <option value="">Choose a collection…</option>
                 {list.collections.map((c) => (
                   <option key={c.id} value={numericId(c.id)} disabled={c.tooLarge}>
-                    {c.title} ({c.count.toLocaleString()}){c.tooLarge ? ": too many products to reorder here" : ""}
+                    {c.title}
+                    {c.count != null ? ` (${c.count.toLocaleString()})` : ""}
+                    {c.tooLarge ? ": too many products to reorder here" : ""}
                   </option>
                 ))}
               </select>
@@ -75,8 +78,8 @@ export function CollectionOrderView() {
         </s-stack>
       </s-section>
 
-      {picked && !upgrade && (
-        <s-section heading="Proposed order">
+      {picked && (
+        <s-section heading={upgrade ? "Saved orders" : "Proposed order"}>
           <CollectionOrderEditor key={picked} collectionId={picked} onUpgrade={showUpgrade} />
         </s-section>
       )}

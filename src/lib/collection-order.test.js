@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { movedCount, proposeOrder } from "./collection-order.js";
+import { movedCount, orderError, proposeOrder, sequentialMoves } from "./collection-order.js";
 
 const item = (id, status, revenue30 = 0, extra = {}) => ({ id, status, revenue30, moneyAtStake: 0, available: true, ...extra });
 
@@ -113,4 +113,44 @@ test("slow movers and out-of-season products never take a bestseller place; runn
 test("moved count", () => {
   assert.equal(movedCount(["a", "b", "c"], ["a", "c", "b"]), 2);
   assert.equal(movedCount(["a", "b"], ["a", "b"]), 0);
+});
+
+/** Shopify's semantics: each move in turn, `newPosition` counted in the list as it is then. */
+function applySequential(list, moves) {
+  const out = [...list];
+  for (const m of moves) {
+    out.splice(out.indexOf(m.id), 1);
+    out.splice(Math.min(Number(m.newPosition), out.length), 0, m.id);
+  }
+  return out;
+}
+
+test("collection moves: every order reached with the fewest moves, in batches too", () => {
+  const ids = Array.from({ length: 1000 }, (_, i) => `p${i}`);
+  // Swapping the first two of 1,000 is one move.
+  const swapped = ["p1", "p0", ...ids.slice(2)];
+  assert.deepEqual(sequentialMoves(ids, swapped), [{ id: "p1", newPosition: "0" }]);
+  assert.deepEqual(sequentialMoves(ids, ids), []);
+  // Random orders (and products added or removed since): applied in batches of 250, the target is reached.
+  let seed = 7;
+  const rand = () => ((seed = (seed * 48271) % 2147483647) / 2147483647);
+  for (let run = 0; run < 40; run++) {
+    const n = 1 + Math.floor(rand() * 600);
+    const current = Array.from({ length: n }, (_, i) => `q${i}`);
+    const target = [...current].sort(() => rand() - 0.5).filter(() => rand() > 0.05);
+    const moves = sequentialMoves(current, target);
+    let list = current;
+    for (let i = 0; i < moves.length; i += 250) list = applySequential(list, moves.slice(i, i + 250));
+    assert.deepEqual(list.filter((id) => target.includes(id)), target);
+    assert.ok(moves.length <= target.length);
+  }
+});
+
+test("an order to save lists each product once and differs from now", () => {
+  assert.equal(orderError(["b", "a"], ["a", "b"]), null);
+  assert.match(orderError(["a"], ["a", "b"]), /once/);
+  assert.match(orderError(["a", "a"], ["a", "b"]), /once/);
+  assert.match(orderError(["a", "x"], ["a", "b"]), /once/);
+  assert.match(orderError("a,b", ["a", "b"]), /once/);
+  assert.match(orderError(["a", "b"], ["a", "b"]), /already/);
 });

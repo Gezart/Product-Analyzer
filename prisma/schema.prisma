@@ -533,6 +533,9 @@ model CollectionReorder {
   after           String[]
   status          String    @default("applying") // applying | applied | undoing | undone | failed
   error           String?
+  /// When the running save or undo started; one running longer than 2 min has crashed. At most one
+  /// change per collection runs at a time (partial unique index in the migration).
+  claimedAt       DateTime  @default(now()) @map("claimed_at")
   appliedAt       DateTime? @map("applied_at")
   undoneAt        DateTime? @map("undone_at")
   createdAt       DateTime  @default(now()) @map("created_at")

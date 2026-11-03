@@ -23,13 +23,16 @@ export function CollectionOrderEditor({ collectionId, onUpgrade }) {
   const load = useCallback(async ({ keepOrder = false } = {}) => {
     const res = await fetch(`/api/collection-order/${encodeURIComponent(collectionId)}`).catch(() => null);
     const body = res ? await res.json().catch(() => ({})) : {};
-    if (res?.status === 403 && body.upgrade) return onUpgrade(body.error);
+    if (res?.status === 403 && body.upgrade) {
+      onUpgrade(body.error);
+      return setData({ proposal: null, history: [] }); // nothing saved here to undo
+    }
     if (!res?.ok) return setError(body.error ?? `Failed (${res?.status ?? "network"})`);
     setError(null);
     setData(body);
     // An edited order is kept only while it still fits the collection (same products).
     setOrder((prev) => {
-      const ids = body.proposal.map((p) => p.id);
+      const ids = (body.proposal ?? []).map((p) => p.id);
       return keepOrder && prev.length === ids.length && prev.every((id) => ids.includes(id)) ? prev : ids;
     });
     setConfirming(false);
@@ -41,6 +44,48 @@ export function CollectionOrderEditor({ collectionId, onUpgrade }) {
 
   if (error && !data) return <s-banner tone="critical">{error}</s-banner>;
   if (!data) return <s-spinner accessibilityLabel="Loading the proposed order" />;
+
+  const history = (
+    data.history.length > 0 && (
+      <s-stack gap="small">
+        <s-text>Saved orders</s-text>
+        <ul className="m-0 list-none space-y-1 p-0 text-sm">
+          {data.history.map((h) => (
+            <li key={h.id} className="flex flex-wrap items-center gap-2">
+              <span>{h.moved} products moved</span>
+              <s-badge tone={h.status === "applied" ? "success" : h.status === "failed" ? "critical" : undefined}>{STATUS_LABEL[h.status] ?? h.status}</s-badge>
+              <span className="text-zinc-500">{new Date(h.appliedAt ?? h.createdAt).toLocaleString()}</span>
+              {h.error && <span className="text-red-700">{h.error}</span>}
+              {h.status === "applied" && (
+                <s-button variant="tertiary" disabled={busy !== null || undefined} loading={busy === h.id || undefined} ref={listen("click", () => undo(h.id))}>
+                  Undo
+                </s-button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </s-stack>
+    )
+  );
+  const banner = message && (
+    <s-banner tone={message.tone}>
+      {message.text}
+      {message.forceUndo && (
+        <s-button variant="tertiary" disabled={busy !== null || undefined} ref={listen("click", () => undo(message.forceUndo, true))}>
+          Undo anyway
+        </s-button>
+      )}
+    </s-banner>
+  );
+  // A plan without the optimizer: its saved orders can still be undone.
+  if (!data.proposal) {
+    return (
+      <s-stack gap="base">
+        {banner}
+        {history}
+      </s-stack>
+    );
+  }
 
   const money = moneyFormatter(data.currency);
   const byId = new Map(data.proposal.map((p) => [p.id, p]));
@@ -84,16 +129,7 @@ export function CollectionOrderEditor({ collectionId, onUpgrade }) {
 
   return (
     <s-stack gap="base">
-      {message && (
-        <s-banner tone={message.tone}>
-          {message.text}
-          {message.forceUndo && (
-            <s-button variant="tertiary" disabled={busy !== null || undefined} ref={listen("click", () => undo(message.forceUndo, true))}>
-              Undo anyway
-            </s-button>
-          )}
-        </s-banner>
-      )}
+      {banner}
       {error && <s-banner tone="critical">{error}</s-banner>}
       <s-text tone="neutral">
         {!changed
@@ -175,26 +211,7 @@ export function CollectionOrderEditor({ collectionId, onUpgrade }) {
         </s-stack>
       )}
 
-      {data.history.length > 0 && (
-        <s-stack gap="small">
-          <s-text>Saved orders</s-text>
-          <ul className="m-0 list-none space-y-1 p-0 text-sm">
-            {data.history.map((h) => (
-              <li key={h.id} className="flex flex-wrap items-center gap-2">
-                <span>{h.moved} products moved</span>
-                <s-badge tone={h.status === "applied" ? "success" : h.status === "failed" ? "critical" : undefined}>{STATUS_LABEL[h.status] ?? h.status}</s-badge>
-                <span className="text-zinc-500">{new Date(h.appliedAt ?? h.createdAt).toLocaleString()}</span>
-                {h.error && <span className="text-red-700">{h.error}</span>}
-                {(h.status === "applied" || (["applying", "undoing"].includes(h.status) && Date.now() - Date.parse(h.createdAt) > 120_000)) && (
-                  <s-button variant="tertiary" disabled={busy !== null || undefined} loading={busy === h.id || undefined} ref={listen("click", () => undo(h.id))}>
-                    Undo
-                  </s-button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </s-stack>
-      )}
+      {history}
     </s-stack>
   );
 }
