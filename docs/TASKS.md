@@ -107,7 +107,7 @@ From the features workspace (Collection Optimizer). Decision: the app proposes t
 | --- | --- | --- | --- |
 | `collection-order` | Ordering rule by status: bestsellers first (in stock; about-to-run-out ones after them), then hidden gems, then products that need sales (slow movers, dead stock with stock); the rest keep their order; page problems (fix the page first), out-of-season and sold-out products last. A Collections page lists the manually sorted collections and shows each one's proposed order with the reason per product | The proposed order shows for a manual collection, with a reason for each product | done |
 | `collection-reorder` | Move products by hand in the proposal, then save it to Shopify (only after the merchant confirms), with Undo; a collection changed in Shopify since needs a reload (or Undo anyway) | A saved order is in Shopify and can be undone | done |
-| `collection-effect` | Products moved up get a rescue plan measuring sales after the move vs before; the product page and the monthly report show it | A moved product shows its measurement and verdict | doing |
+| `collection-effect` | Products moved up to help them sell (hidden gems, slow movers, dead stock moved up 3+ places into the first 24) get a rescue plan measuring sales after the move vs before; the product page and the monthly report show it | A moved product shows its measurement and verdict | done |
 
 ## v2 (not in v1)
 
