@@ -18,6 +18,7 @@ const KIND = {
   monthly_report: { icon: "report", tile: "bg-sky-100 text-sky-700" },
   season_soon: { icon: "spark", tile: "bg-teal-100 text-teal-700" },
   season_ended: { icon: "tag", tile: "bg-teal-100 text-teal-700" },
+  weekly_plan: { icon: "target", tile: "bg-indigo-100 text-indigo-600" },
 };
 const DEFAULT_KIND = { icon: "bell", tile: "bg-zinc-100 text-zinc-600" };
 

@@ -102,6 +102,15 @@ export function describe(n) {
         href: d.count === 1 && n.productId ? product : "/products?status=seasonal",
       };
     }
+    case "weekly_plan": {
+      const actions = d.actions ?? [];
+      const first = actions[0];
+      return {
+        title: "Your plan for this week",
+        body: `${plural(actions.length, "action")}${first ? `, starting with ${first.title}` : ""}.`,
+        href: `/plan?week=${d.week}`,
+      };
+    }
     default:
       return { title: n.type.replaceAll("_", " "), body: "", href: product };
   }

@@ -109,6 +109,15 @@ From the features workspace (Collection Optimizer). Decision: the app proposes t
 | `collection-reorder` | Move products by hand in the proposal, then save it to Shopify (only after the merchant confirms), with Undo; a collection changed in Shopify since needs a reload (or Undo anyway) | A saved order is in Shopify and can be undone | done |
 | `collection-effect` | Products moved up to help them sell (hidden gems, slow movers, dead stock moved up 3+ places into the first 24) get a rescue plan measuring sales after the move vs before; the product page and the monthly report show it | A moved product shows its measurement and verdict | done |
 
+## Phase 2g · Weekly plan
+
+From the features workspace (Weekly plan). Decision: in the inbox for now; email later. On every plan (actions that need a higher plan lead to their upgrade note).
+
+| Branch | Task | Done when | Status |
+| --- | --- | --- | --- |
+| `weekly-plan` | Every Monday (store time) the inbox gets "Your plan for this week": 3–5 actions picked by money at stake from the products that need attention: reorder (stock-out risk), start the markdown (when one is due), fix the page (the diagnosis's top reason), give a hidden gem a better place (Collections), or diagnose; products being measured or on a markdown are left out. A "This week" page lists them with a button to each product | A Monday plan with its actions is in the inbox and opens the page | done |
+| `weekly-recap` | The plan's "Last week" part: rescue verdicts that came in (with the extra sales of the improved ones), markdowns started and finished, each with a button to the product | Last week's results show with the plan | todo |
+
 ## v2 (not in v1)
 
 AI diagnosis and AI drafts (Claude), weekly email digest.
