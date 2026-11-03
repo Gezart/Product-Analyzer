@@ -49,6 +49,17 @@ export const MIN_RETURNED = 5;
 const RETURNS_FACTOR = 2;
 const RETURNS_HIGH_FACTOR = 3;
 
+/** A return rate for people: whole percents from 10%, one decimal below ("0.3%", "4.5%"). */
+export function returnPct(rate) {
+  const p = rate * 100;
+  return p >= 10 ? `${Math.round(p)}%` : `${Math.round(p * 10) / 10}%`;
+}
+
+/** Hints the page can't act on (supplier, fulfillment, carrier) aren't shown under a page editor. */
+export function returnHintType(handle) {
+  return /damage|defect|quality|broken|wrong|late|delay/.test(String(handle ?? "").toLowerCase()) ? "other" : "description";
+}
+
 /** What to change for the most common return reason (Shopify's reason handle), or null for a general hint. */
 export function returnHint(handle) {
   const h = String(handle ?? "").toLowerCase();
@@ -226,18 +237,28 @@ export function diagnose(p, ctx) {
     }
   }
 
-  // 8. Returned often: at least 5 units came back and the return rate is at least twice the store's
+  // 7b. Returned often: at least 5 units came back and the return rate is at least twice the store's
   //    (`p.returns` and `ctx.storeReturnRate` over the same recent days, built by the caller).
   const ret = p.returns;
-  if (ret && ret.returned >= MIN_RETURNED && ctx.storeReturnRate > 0 && ret.rate >= ctx.storeReturnRate * RETURNS_FACTOR) {
+  // How many times the store's rate, rounded so exactly 2× or 3× counts (0.1 × 3 is 0.30000000000000004).
+  const times = ret && ctx.storeReturnRate > 0 ? Math.round((ret.rate / ctx.storeReturnRate) * 1e6) / 1e6 : 0;
+  if (ret && ret.returned >= MIN_RETURNED && times >= RETURNS_FACTOR) {
     const top = ret.topReason;
     reasons.push({
       code: "returned_often",
-      severity: ret.rate >= ctx.storeReturnRate * RETURNS_HIGH_FACTOR ? "high" : "medium",
+      severity: times >= RETURNS_HIGH_FACTOR ? "high" : "medium",
       evidence:
-        `${pct(ret.rate)} of the units sold in the last ${ret.days} days came back (${ret.returned} of ${ret.sold}); the store's average is ${pct(ctx.storeReturnRate)}.` +
+        `${returnPct(ret.rate)} of the units sold in the last ${ret.days} days came back (${ret.returned} of ${ret.sold}); the store's average is ${returnPct(ctx.storeReturnRate)}.` +
         (top ? ` Most common reason: ${top.name} (${top.count}).` : ""),
-      data: { returned: ret.returned, sold: ret.sold, rate: ret.rate, storeRate: ctx.storeReturnRate, topReason: top?.handle ?? null, hint: returnHint(top?.handle) },
+      data: {
+        returned: ret.returned,
+        sold: ret.sold,
+        rate: ret.rate,
+        storeRate: ctx.storeReturnRate,
+        topReason: top?.handle ?? null,
+        hint: returnHint(top?.handle),
+        hintType: returnHintType(top?.handle),
+      },
       link: "#returns",
     });
   }

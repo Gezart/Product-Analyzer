@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { returnPct } from "@/lib/diagnosis";
 import { seasonGraceDays, seasonWaiting } from "@/lib/scoring";
 import { justEnded } from "@/lib/season";
 import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
@@ -199,7 +200,7 @@ export function ProductView() {
 
 /** How often the product comes back, against the store, and why. */
 function Returns({ returns, money }) {
-  const pctOf = (n) => (n == null ? "—" : `${Math.round(n * 100)}%`);
+  const pctOf = (n) => (n == null ? "—" : returnPct(n));
   return (
     <div id="returns" className="rounded-lg bg-zinc-50 p-3 text-sm">
       <div className="font-medium">

@@ -262,3 +262,28 @@ test("return hints by reason", () => {
   assert.equal(returnHint("unwanted"), null);
   assert.equal(returnHint(null), null);
 });
+
+import { returnHintType, returnPct } from "./diagnosis.js";
+
+test("returned often: exactly twice is medium and exactly three times is high, despite float rounding", () => {
+  assert.equal(returnsReason(product({ returns: { returned: 9, sold: 30, rate: 9 / 30, days: 90 } }), ctx({ storeReturnRate: 0.1 })).severity, "high");
+  assert.equal(returnsReason(product({ returns: { returned: 6, sold: 20, rate: 6 / 20, days: 90 } }), ctx({ storeReturnRate: 1 / 10 })).severity, "high");
+  assert.equal(returnsReason(product({ returns: { returned: 6, sold: 30, rate: 6 / 30, days: 90 } }), ctx({ storeReturnRate: 0.1 })).severity, "medium");
+  assert.equal(returnsReason(product({ returns: { returned: 6, sold: 31, rate: 6 / 31, days: 90 } }), ctx({ storeReturnRate: 0.1 })), undefined);
+});
+
+test("small return rates keep a decimal, so the store's average never reads 0%", () => {
+  assert.equal(returnPct(0.003), "0.3%");
+  assert.equal(returnPct(0.045), "4.5%");
+  assert.equal(returnPct(0.18), "18%");
+  const r = returnsReason(product({ returns: { returned: 6, sold: 1000, rate: 0.006, days: 90 } }), ctx({ storeReturnRate: 0.003 }));
+  assert.match(r.evidence, /^0\.6% of the units sold .* the store's average is 0\.3%\./);
+});
+
+test("hints the page can't act on go to the general hints", () => {
+  assert.equal(returnHintType("too-small"), "description");
+  assert.equal(returnHintType("color"), "description");
+  assert.equal(returnHintType("damaged"), "other");
+  assert.equal(returnHintType("wrong-item"), "other");
+  assert.equal(returnHintType("arrived-late"), "other");
+});

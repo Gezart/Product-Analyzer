@@ -33,14 +33,26 @@ export async function returnRate(shopId, from, productGid = null) {
   return { sold, returned, refunded: Number(back._sum.refundedAmount ?? 0), rate: sold > 0 ? returned / sold : null };
 }
 
-/** Why a product's items came back since `from`, most common first: `[{ handle, name, count }]`. */
+/**
+ * Why a product's items came back since `from`, most common first (ties by reason, so every caller
+ * agrees): `[{ handle, name, count }]`. One reason can be stored under two names (Shopify's newer and
+ * older wording): it's counted once, with its latest name.
+ */
 export async function topReturnReasons(shopId, from, productGid, limit = 3) {
+  const where = { shopId, productGid, date: { gte: new Date(`${from}T00:00:00Z`) } };
   const rows = await db().returnReason.groupBy({
-    by: ["reason", "reasonName"],
-    where: { shopId, productGid, date: { gte: new Date(`${from}T00:00:00Z`) } },
+    by: ["reason"],
+    where,
     _sum: { quantity: true },
-    orderBy: { _sum: { quantity: "desc" } },
+    orderBy: [{ _sum: { quantity: "desc" } }, { reason: "asc" }],
     take: limit,
   });
-  return rows.map((r) => ({ handle: r.reason, name: r.reasonName, count: r._sum.quantity ?? 0 })).filter((r) => r.count > 0);
+  const names = await db().returnReason.findMany({
+    where: { ...where, reason: { in: rows.map((r) => r.reason) } },
+    distinct: ["reason"],
+    orderBy: [{ reason: "asc" }, { orderUpdatedAt: "desc" }],
+    select: { reason: true, reasonName: true },
+  });
+  const nameOf = new Map(names.map((n) => [n.reason, n.reasonName]));
+  return rows.map((r) => ({ handle: r.reason, name: nameOf.get(r.reason) ?? r.reason, count: r._sum.quantity ?? 0 })).filter((r) => r.count > 0);
 }
