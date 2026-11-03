@@ -1,5 +1,5 @@
 import { AiError, claudeConfigured, writeDescription } from "@/lib/ai/claude";
-import { aiAllowance, recordAiCost, releaseAiText, reserveAiText } from "@/lib/ai/usage";
+import { aiAllowance, recordAiCost, releaseAi, reserveAi } from "@/lib/ai/usage";
 import { descriptionPrompt, draftFromAnswer, MAX_IMAGES } from "@/lib/ai-text";
 import { db } from "@/lib/db";
 import { requireFeature, requireWithinLimit } from "@/lib/feature-gate";
@@ -24,7 +24,7 @@ export const POST = appRoute(async ({ shop, session, params }) => {
   const imageUrls = live.media.filter((m) => m.type === "IMAGE" && m.previewUrl).slice(0, MAX_IMAGES).map((m) => m.previewUrl);
   const prompt = descriptionPrompt({ ...product, title: live.title }, (diagnosis?.reasons ?? []).map((r) => r.code));
 
-  const month = await reserveAiText(shop);
+  const month = await reserveAi(shop, "texts");
   let draft = null;
   try {
     const { json, usage } = await writeDescription({ prompt, imageUrls });
@@ -34,9 +34,9 @@ export const POST = appRoute(async ({ shop, session, params }) => {
   } catch (error) {
     // No draft, no use taken; the tokens a failed answer spent are still counted.
     if (error?.usage) await recordAiCost(shop, month, error.usage);
-    await releaseAiText(shop, month);
+    await releaseAi(shop, month, "texts");
     if (error instanceof AiError) throw new HttpError(error.message, error.status);
     throw error;
   }
-  return Response.json({ draft, ai: await aiAllowance(shop) });
+  return Response.json({ draft, ai: await aiAllowance(shop, "texts") });
 });

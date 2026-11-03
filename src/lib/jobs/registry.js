@@ -1,3 +1,4 @@
+import { pruneDrafts } from "@/lib/ai/photos";
 import { refreshShopLinks } from "@/lib/competitor-prices";
 import { syncBenchmarks } from "@/lib/google-merchant";
 import { PermanentJobError } from "@/lib/jobs/errors";
@@ -76,6 +77,10 @@ export const handlers = {
   "google-benchmarks": async (job, signal) => {
     await syncBenchmarks(requireShop(job), signal);
   },
+  /** AI photos the merchant didn't add within a day are removed with their image. */
+  "ai-photo-drafts": async (job) => {
+    await pruneDrafts(requireShop(job));
+  },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
   "sync-inventory": runSyncInventory,
@@ -85,6 +90,7 @@ export const handlers = {
 export const nightlyJobs = [
   // Catalog refresh + yesterday's closing stock + re-score (as close to midnight as possible).
   { type: "daily-metrics", hour: 0 },
+  { type: "ai-photo-drafts", hour: 2 },
   // Re-subscribe (repairs subscriptions Shopify removed, or a changed app URL), then fill gaps.
   { type: "register-webhooks", hour: 3 },
   { type: "orders-catchup", hour: 4 },

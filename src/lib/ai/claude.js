@@ -1,15 +1,10 @@
 // Claude (Anthropic API) for AI product descriptions. Needs ANTHROPIC_API_KEY.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { AiError } from "@/lib/ai/errors";
 import { AI_TEXT_MODEL, DESCRIPTION_SCHEMA, DESCRIPTION_SYSTEM, requestCostUsd } from "@/lib/ai-text";
 
-/** A failure with a message for the merchant. */
-export class AiError extends Error {
-  constructor(message, status = 502) {
-    super(message);
-    this.status = status;
-  }
-}
+export { AiError };
 
 let client = null;
 // A draft takes well under a minute; one retry for a dropped connection or an overloaded API.
