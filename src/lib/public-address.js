@@ -46,16 +46,24 @@ function expandV6(address) {
 
 function isPublicV6(address) {
   const g = expandV6(address);
-  if (g.every((x) => x === 0)) return false; // unspecified
-  if (g.slice(0, 7).every((x) => x === 0) && g[7] === 1) return false; // loopback
-  // IPv4-mapped (::ffff:a.b.c.d) and NAT64 (64:ff9b::a.b.c.d) addresses follow the IPv4 rules.
-  const v4 = `${g[6] >> 8}.${g[6] & 255}.${g[7] >> 8}.${g[7] & 255}`;
-  if (g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff) return isPublicV4(v4);
-  if (g[0] === 0x64 && g[1] === 0xff9b) return isPublicV4(v4);
+  const zero = (from, to) => g.slice(from, to).every((x) => x === 0);
+  const v4 = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+  // Unspecified, loopback and IPv4-compatible (::a.b.c.d, deprecated): never fetched.
+  if (zero(0, 6)) return false;
+  // IPv4-mapped (::ffff:a.b.c.d), IPv4-translated (::ffff:0:a.b.c.d), NAT64 (64:ff9b::a.b.c.d) and
+  // 6to4 (2002:a.b.c.d::) addresses carry an IPv4 address and follow the IPv4 rules.
+  if (zero(0, 5) && g[5] === 0xffff) return isPublicV4(v4(g[6], g[7]));
+  if (zero(0, 4) && g[4] === 0xffff && g[5] === 0) return isPublicV4(v4(g[6], g[7]));
+  if (g[0] === 0x64 && g[1] === 0xff9b && zero(2, 6)) return isPublicV4(v4(g[6], g[7]));
+  if (g[0] === 0x2002) return isPublicV4(v4(g[1], g[2]));
+  if (g[0] === 0x64 && g[1] === 0xff9b) return false; // local-use NAT64 (64:ff9b:1::/48)
+  if (g[0] === 0x100 && zero(1, 4)) return false; // discard-only
+  if (g[0] === 0x2001 && g[1] === 0) return false; // Teredo
+  if (g[0] === 0x2001 && g[1] === 0x0db8) return false; // documentation
   if ((g[0] & 0xfe00) === 0xfc00) return false; // unique local
   if ((g[0] & 0xffc0) === 0xfe80) return false; // link-local
+  if ((g[0] & 0xffc0) === 0xfec0) return false; // site-local (deprecated)
   if ((g[0] & 0xff00) === 0xff00) return false; // multicast
-  if (g[0] === 0x2001 && g[1] === 0x0db8) return false; // documentation
   return true;
 }
 
@@ -80,6 +88,9 @@ export function normalizeLink(input) {
   if (isIP(host.replace(/^\[|\]$/g, "")) || !host.includes(".") || host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".localhost")) {
     return { error: "Use the shop's web address, not an IP address or a local name." };
   }
+  url.hostname = host; // "shop.com." and "shop.com" are the same link
   url.hash = "";
-  return { url: url.toString(), host: host.replace(/^www\./, "") };
+  const href = url.toString();
+  if (href.length > MAX_URL_LENGTH) return { error: "This link is too long." };
+  return { url: href, host: host.replace(/^www\./, "") };
 }

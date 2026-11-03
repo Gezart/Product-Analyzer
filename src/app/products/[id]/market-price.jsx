@@ -72,10 +72,12 @@ export function MarketPrice({ productId }) {
                 Competitors · median of {competitors.count} price{competitors.count === 1 ? "" : "s"}
               </s-text>
               <span className="text-2xl font-semibold">{money.format(competitors.median)}</span>
-              <span className={`text-sm font-medium ${gap > 0.1 ? "text-orange-800" : "text-zinc-700"}`}>
-                Your price {money.format(data.price)} is{" "}
-                {Math.abs(gap) < 0.005 ? "the same" : `${pct(gap)} ${gap > 0 ? "higher" : "lower"}`}
-              </span>
+              {gap != null && (
+                <span className={`text-sm font-medium ${gap > 0.1 ? "text-orange-800" : "text-zinc-700"}`}>
+                  Your price {money.format(data.price)} is{" "}
+                  {Math.abs(gap) < 0.005 ? "the same" : `${pct(gap)} ${gap > 0 ? "higher" : "lower"}`}
+                </span>
+              )}
             </s-stack>
           </s-box>
         ) : (

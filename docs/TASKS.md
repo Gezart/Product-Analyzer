@@ -60,7 +60,7 @@ From the features workspace (Diagnosis). Decision: market price from **A** Googl
 
 | Branch | Task | Done when | Status |
 | --- | --- | --- | --- |
-| `competitor-prices` | Up to 5 competitor links per product; price read when added and every night (https only, public addresses only, 10 s, size cap); "Market price" section on the product page | A link shows its price or a readable error; no request reaches a private address | doing |
+| `competitor-prices` | Up to 5 competitor links per product; price read when added and every night (https only, public addresses only, 10 s, size cap); "Market price" section on the product page | A link shows its price or a readable error; no request reaches a private address | done (test on dev store) |
 | `market-price-rule` | Diagnosis rule "above the market price" (>10% medium, >25% high, same currency only); threshold in Settings; "vs market" column in the product list | The rule shows its evidence with the market price and its source | todo |
 | `google-market-price` | Connect Google Merchant Center in Settings (OAuth, account choice); nightly price-competitiveness report mapped to variants; Google benchmark in the "Market price" section; check page | Benchmarks appear for products with a GTIN on the owner's Merchant Center | todo (needs owner: Google Cloud project + OAuth client) |
 | — | Owner: Google Cloud project, Merchant API enabled, OAuth client (ID + secret) in `.env` | Credentials in `.env` | todo (owner) |

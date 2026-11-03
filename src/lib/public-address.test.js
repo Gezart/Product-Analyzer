@@ -16,6 +16,14 @@ test("IPv6: loopback, unique local, link-local, mapped private IPv4 and NAT64 to
   for (const ip of ["2606:4700::6810:85e5", "::ffff:8.8.8.8", "2a00:1450:4001:81c::200e"]) assert.equal(isPublicAddress(ip), true, ip);
 });
 
+test("IPv6 forms that carry or reach a private address are not public", () => {
+  // IPv4-compatible, IPv4-translated, 6to4 to loopback, site-local, discard, local NAT64, Teredo
+  for (const ip of ["::127.0.0.1", "::8.8.8.8", "::ffff:0:127.0.0.1", "2002:7f00:1::", "2002:a9fe:a9fe::1", "fec0::1", "100::1", "64:ff9b:1::1", "2001::1"]) {
+    assert.equal(isPublicAddress(ip), false, ip);
+  }
+  for (const ip of ["::ffff:0:8.8.8.8", "2002:808:808::1", "64:ff9b::808:808"]) assert.equal(isPublicAddress(ip), true, ip);
+});
+
 test("anything that isn't an IP address is not treated as public", () => {
   assert.equal(isPublicAddress("localhost"), false);
   assert.equal(isPublicAddress(""), false);
@@ -30,4 +38,10 @@ test("links: https only, default port, real host names, no credentials, fragment
   for (const bad of ["http://shop.example/p", "ftp://shop.example/p", "https://user:pw@shop.example/p", "https://shop.example:8443/p", "https://127.0.0.1/p", "https://[::1]/p", "https://localhost/p", "https://printer.local/p", "https://db.internal/p", "not a link", "", "https://" + "a".repeat(2000) + ".example"]) {
     assert.ok(normalizeLink(bad).error, bad);
   }
+});
+
+test("links: a trailing dot is the same link; the stored link stays within the length limit", () => {
+  assert.deepEqual(normalizeLink("https://shop.example./products/a"), { url: "https://shop.example/products/a", host: "shop.example" });
+  // Short to type, long once encoded (é → %C3%A9).
+  assert.equal(normalizeLink("https://shop.example/" + "é".repeat(400)).error, "This link is too long.");
 });

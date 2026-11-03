@@ -23,6 +23,8 @@ export const GET = appRoute(async ({ shop, params }) => {
 // Body: { url } — adds a link and reads its price right away (up to 10 seconds).
 export const POST = appRoute(async ({ request, shop, params }) => {
   requireFeature(shop, "marketPrice");
+  const product = await db().product.findFirst({ where: { id: params.id, shopId: shop.id }, select: { id: true } });
+  if (!product) throw new HttpError("Product not found.", 404);
   await requireWithinLimit(shop, params.id);
   const body = await readJson(request);
   return Response.json(await overview(shop, params.id, await addLink(shop.id, params.id, body?.url)));
