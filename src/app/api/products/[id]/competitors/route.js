@@ -4,15 +4,20 @@ import { requireFeature, requireWithinLimit } from "@/lib/feature-gate";
 import { HttpError } from "@/lib/http-error";
 import { competitorSummary, gapToMarket } from "@/lib/market-price";
 import { FEATURE_PLAN, hasFeature } from "@/lib/plans";
+import { sanitizeThresholds } from "@/lib/scoring";
 import { appRoute, readJson } from "@/lib/route";
 
 /** The links, the market price they give, and how far the product's price is from it. */
 async function overview(shop, productId, links) {
-  const product = await db().product.findFirst({ where: { id: productId, shopId: shop.id }, select: { price: true } });
+  const [product, settings] = await Promise.all([
+    db().product.findFirst({ where: { id: productId, shopId: shop.id }, select: { price: true } }),
+    db().settings.findUnique({ where: { shopId: shop.id }, select: { thresholds: true } }),
+  ]);
   if (!product) throw new HttpError("Product not found.", 404);
   const competitors = competitorSummary(links, shop.currency);
   const price = Number(product.price);
-  return { links, max: MAX_LINKS, currency: shop.currency, price, competitors, gap: gapToMarket(price, competitors.median) };
+  const marketAbove = sanitizeThresholds(settings?.thresholds).marketAbove;
+  return { links, max: MAX_LINKS, currency: shop.currency, price, competitors, gap: gapToMarket(price, competitors.median), marketAbove };
 }
 
 export const GET = appRoute(async ({ shop, params }) => {

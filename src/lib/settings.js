@@ -19,6 +19,7 @@ const THRESHOLD_RULES = {
   deadDays: { min: 14, max: 365, integer: true },
   stockoutCoverDays: { min: 1, max: 120, integer: true },
   minViews: { min: 1, max: 10_000, integer: true },
+  marketAbove: { min: 0.01, max: 1 },
 };
 
 const GID = { collection: /^gid:\/\/shopify\/Collection\/\d+$/, product: /^gid:\/\/shopify\/Product\/\d+$/ };
@@ -53,7 +54,9 @@ export function validateSettings(raw) {
   for (const key of Object.keys(THRESHOLD_RULES)) {
     const rule = THRESHOLD_RULES[key];
     const v = rawThresholds[key];
-    if (check(v, rule)) thresholds[key] = v;
+    // Shares typed as percentages (11.2% → 0.11199999999999999) are stored rounded, so a price exactly
+    // at the threshold isn't above it.
+    if (check(v, rule)) thresholds[key] = rule.integer ? v : Math.round(v * 10000) / 10000;
     else errors.push({ field: `thresholds.${key}`, ...rule });
   }
 

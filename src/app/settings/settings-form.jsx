@@ -15,11 +15,14 @@ const STATUS_FIELDS = [
   { field: "thresholds.pageProblemConversionRatio", label: "Page problem: conversion below", details: "Share of the store's median conversion.", percent: true },
   { field: "thresholds.hiddenGemViewsBottom", label: "Hidden gem: least viewed", details: "Bottom share of products by views.", percent: true },
 ];
+const DIAGNOSIS_FIELDS = [
+  { field: "thresholds.marketAbove", label: "Above the market price by", details: "How far above the market price before the diagnosis says so. Above 25% is high (or above this, if it's higher).", percent: true },
+];
 const DISCOUNT_FIELDS = [
   { field: "marginFloorPct", label: "Minimum margin (%)", details: "A markdown never prices below cost plus this margin." },
   { field: "maxDiscountPct", label: "Maximum discount (%)", details: "The deepest markdown allowed." },
 ];
-const ALL_FIELDS = [...STATUS_FIELDS, ...DISCOUNT_FIELDS];
+const ALL_FIELDS = [...STATUS_FIELDS, ...DIAGNOSIS_FIELDS, ...DISCOUNT_FIELDS];
 const LIST_LABELS = {
   excludedCollectionIds: "Excluded collections",
   excludedProductIds: "Excluded products",
@@ -186,6 +189,10 @@ export function SettingsForm() {
 
       <s-section heading="Product statuses">
         <div className="grid gap-4 sm:grid-cols-2">{STATUS_FIELDS.map(numberField)}</div>
+      </s-section>
+
+      <s-section heading="Diagnosis">
+        <div className="grid gap-4 sm:grid-cols-2">{DIAGNOSIS_FIELDS.map(numberField)}</div>
       </s-section>
 
       <s-section heading="Discounts">

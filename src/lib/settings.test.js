@@ -49,3 +49,19 @@ test("percentages are rounded to 2 decimals and product IDs are accepted", () =>
   assert.equal(r.value.marginFloorPct, 12.35);
   assert.deepEqual(r.value.excludedProductIds, ["gid://shopify/Product/9"]);
 });
+
+test("the market-price threshold is a share from 1% to 100%", () => {
+  const ok = validateSettings({ ...DEFAULT_SETTINGS, thresholds: { ...DEFAULT_SETTINGS.thresholds, marketAbove: 0.15 } });
+  assert.ok(ok.ok);
+  assert.equal(ok.value.thresholds.marketAbove, 0.15);
+  assert.equal(DEFAULT_SETTINGS.thresholds.marketAbove, 0.1);
+  for (const bad of [0, 1.5, "0.1", null]) {
+    const r = validateSettings({ ...DEFAULT_SETTINGS, thresholds: { ...DEFAULT_SETTINGS.thresholds, marketAbove: bad } });
+    assert.deepEqual(r.errors, [{ field: "thresholds.marketAbove", min: 0.01, max: 1 }], String(bad));
+  }
+});
+
+test("shares are stored rounded, so a percentage typed in the form is exact", () => {
+  const r = validateSettings({ ...DEFAULT_SETTINGS, thresholds: { ...DEFAULT_SETTINGS.thresholds, marketAbove: 11.2 / 100 } });
+  assert.equal(r.value.thresholds.marketAbove, 0.112);
+});

@@ -11,15 +11,23 @@ const STATUSES = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "sto
 const SORTS = {
   money: { label: "Money at stake", compare: (a, b) => b.moneyAtStake - a.moneyAtStake || b.stockValue - a.stockValue },
   days: { label: "Fewest days of stock", compare: (a, b) => (a.daysOfCover ?? Infinity) - (b.daysOfCover ?? Infinity) },
+  market: { label: "Most above market", compare: (a, b) => (b.marketGap ?? -Infinity) - (a.marketGap ?? -Infinity) },
   title: { label: "Name", compare: (a, b) => a.title.localeCompare(b.title) },
 };
+
+/** "+18%" above the market price, "−5%" below, "same" within half a percent. */
+function formatGap(gap) {
+  if (Math.abs(gap) < 0.005) return "same";
+  return `${gap > 0 ? "+" : "−"}${Math.round(Math.abs(gap) * 100)}%`;
+}
 
 /** Every product with its status; filter by status (the dashboard tiles link here) and sort. */
 export function ProductList() {
   const router = useRouter();
   const params = useSearchParams();
   const status = STATUSES.includes(params.get("status")) ? params.get("status") : null;
-  const sort = SORTS[params.get("sort")] ? params.get("sort") : status === "stockout_risk" ? "days" : "money";
+  const defaultSort = status === "stockout_risk" ? "days" : "money";
+  const sort = SORTS[params.get("sort")] ? params.get("sort") : defaultSort;
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
@@ -37,7 +45,10 @@ export function ProductList() {
     router.replace(`/products?${q}`);
   };
   const money = moneyFormatter(data?.currency);
-  const shown = (data?.products ?? []).filter((p) => !status || p.status === status).sort(SORTS[sort].compare);
+  // The market column (and its sort) appears once any product has a comparable competitor price.
+  const hasMarket = (data?.products ?? []).some((p) => p.marketGap != null);
+  const sortBy = sort === "market" && !hasMarket ? defaultSort : sort;
+  const shown = (data?.products ?? []).filter((p) => !status || p.status === status).sort(SORTS[sortBy].compare);
   const counts = Object.fromEntries(STATUSES.map((s) => [s, (data?.products ?? []).filter((p) => p.status === s).length]));
 
   return (
@@ -64,8 +75,8 @@ export function ProductList() {
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-600">
               Sort by
-              {Object.entries(SORTS).map(([key, s]) => (
-                <button key={key} type="button" onClick={() => go({ sort: key })} className={key === sort ? "font-semibold text-zinc-900" : "hover:underline"}>
+              {Object.entries(SORTS).filter(([key]) => key !== "market" || hasMarket).map(([key, s]) => (
+                <button key={key} type="button" onClick={() => go({ sort: key })} className={key === sortBy ? "font-semibold text-zinc-900" : "hover:underline"}>
                   {s.label}
                 </button>
               ))}
@@ -84,6 +95,7 @@ export function ProductList() {
                         <th className="py-2 pr-4 text-right font-medium">Money at stake</th>
                         <th className="hidden py-2 pr-4 text-right font-medium sm:table-cell">Stock value</th>
                         <th className="py-2 text-right font-medium">Days of stock</th>
+                        {hasMarket && <th className="py-2 pl-4 text-right font-medium">vs market</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -100,6 +112,11 @@ export function ProductList() {
                           <td className="py-2 pr-4 text-right">{p.moneyAtStake > 0 ? money.format(p.moneyAtStake) : "—"}</td>
                           <td className="hidden py-2 pr-4 text-right sm:table-cell">{p.status === "unscored" ? "—" : money.format(p.stockValue)}</td>
                           <td className="py-2 text-right">{formatDays(p.daysOfCover)}</td>
+                          {hasMarket && (
+                            <td className={`py-2 pl-4 text-right ${p.marketGap > data.marketAbove ? "font-medium text-orange-800" : ""}`}>
+                              {p.marketGap == null ? "—" : formatGap(p.marketGap)}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

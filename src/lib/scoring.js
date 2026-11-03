@@ -9,6 +9,8 @@ export const DEFAULT_THRESHOLDS = {
   deadDays: 90,
   stockoutCoverDays: 14,
   minViews: 20,
+  /** Diagnosis: price this far above the market price (competitors' median) is flagged. */
+  marketAbove: 0.1,
 };
 
 const SHARE_KEYS = new Set([
@@ -16,6 +18,7 @@ const SHARE_KEYS = new Set([
   "pageProblemConversionRatio",
   "hiddenGemViewsBottom",
   "slowSellThrough",
+  "marketAbove",
 ]);
 
 export const STATUS_WEIGHTS = {
@@ -38,7 +41,7 @@ export function sanitizeThresholds(raw) {
     if (typeof v !== "number" || !Number.isFinite(v) || v < 0) continue;
     if (SHARE_KEYS.has(key) && v > 1) continue;
     if (key === "deadDays" && v === 0) continue;
-    t[key] = v;
+    t[key] = SHARE_KEYS.has(key) ? Math.round(v * 10000) / 10000 : v;
   }
   return t;
 }

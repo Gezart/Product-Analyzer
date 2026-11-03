@@ -171,3 +171,50 @@ test("price: same type only for typed products; collections for untyped; never f
   assert.match(diagnose(product({ price: 40 }), ctx({ currency: "EUR" }))[0].evidence, /median €30\.00/);
   assert.match(diagnose(product({ price: 30, imageCount: 0 }), ctx()).find((r) => r.code === "few_images").evidence, /^No images/);
 });
+
+// --- above the market price (competitor links) ---
+
+const market = (median, count = 3) => ({ median, count, source: "competitors" });
+const marketReason = (p, c = ctx()) => diagnose(p, c).find((r) => r.code === "price_above_market");
+
+test("above the market: medium over 10%, high over 25%, with the market price as evidence", () => {
+  const medium = marketReason(product({ price: 61.5, market: market(52) }), ctx({ currency: "EUR" }));
+  assert.equal(medium.severity, "medium");
+  assert.equal(medium.link, "#market");
+  assert.equal(medium.evidence, "Price is 18% above the market price €52.00 (the median of 3 competitor prices you added).");
+  assert.deepEqual(
+    { ...medium.data, abovePct: Math.round(medium.data.abovePct * 1000) / 1000 },
+    { price: 61.5, marketMedian: 52, prices: 3, source: "competitors", abovePct: 0.183, threshold: 0.1 },
+  );
+  assert.equal(marketReason(product({ price: 70, market: market(52, 1) })).severity, "high");
+  assert.match(marketReason(product({ price: 70, market: market(52, 1) })).evidence, /median of 1 competitor price you added/);
+});
+
+test("above the market: not at or under the threshold, without a market price, or for a product that sells well", () => {
+  assert.equal(marketReason(product({ price: 55, market: market(50) })), undefined); // exactly 10%
+  assert.equal(marketReason(product({ price: 45, market: market(50) })), undefined);
+  assert.equal(marketReason(product({ price: 70 })), undefined);
+  assert.equal(marketReason(product({ price: 70, market: null })), undefined);
+  assert.equal(marketReason(product({ price: 0, market: market(50) })), undefined);
+  assert.equal(marketReason(product({ price: 70, market: market(50), sellingWell: true })), undefined);
+});
+
+test("above the market: the merchant's threshold; high stays at 25% unless the threshold is higher", () => {
+  assert.equal(marketReason(product({ price: 54, market: market(50) }), ctx({ marketAbove: 0.05 })).severity, "medium");
+  assert.equal(marketReason(product({ price: 58, market: market(50) }), ctx({ marketAbove: 0.2 })), undefined);
+  assert.equal(marketReason(product({ price: 70, market: market(50) }), ctx({ marketAbove: 0.3 })).severity, "high");
+  assert.equal(marketReason(product({ price: 64, market: market(50) }), ctx({ marketAbove: 0.3 })), undefined);
+});
+
+test("above the market and above the store's peers are separate reasons", () => {
+  const reasons = codes(product({ price: 80, market: market(50) }), ctx());
+  assert.ok(reasons.includes("price_above_market") && reasons.includes("price_above_peers"));
+});
+
+test("above the market: exactly 25% is medium; round prices exactly at the threshold aren't flagged", () => {
+  assert.equal(marketReason(product({ price: 62.5, market: market(50) })).severity, "medium");
+  assert.equal(marketReason(product({ price: 62.6, market: market(50) })).severity, "high");
+  for (const [price, median] of [[22, 20], [33, 30], [110, 100], [27.5, 25]]) {
+    assert.equal(marketReason(product({ price, market: market(median) })), undefined, `${price} vs ${median}`);
+  }
+});

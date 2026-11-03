@@ -17,9 +17,16 @@ test("no comparable link or no shop currency: no median", () => {
 });
 
 test("gap to the market price", () => {
-  assert.equal(Math.round(gapToMarket(61.5, 52) * 1000) / 1000, 0.183);
+  assert.equal(gapToMarket(61.5, 52), 0.1827);
   assert.equal(gapToMarket(50, 50), 0);
   assert.ok(gapToMarket(40, 50) < 0);
   assert.equal(gapToMarket(50, null), null);
   assert.equal(gapToMarket(0, 50), null);
+});
+
+test("the gap is rounded the same way the diagnosis compares it", () => {
+  assert.equal(gapToMarket(55, 50), 0.1);
+  assert.equal(gapToMarket(33, 30), 0.1);
+  assert.ok(!(gapToMarket(55, 50) > 0.1), "exactly at the threshold isn't above it");
+  assert.equal(gapToMarket(61.5, 52), 0.1827);
 });
