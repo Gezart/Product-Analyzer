@@ -72,6 +72,8 @@ export function verdictLine(plan) {
     productId: plan.productId,
     title: plan.title,
     verdict: plan.verdict,
+    // Which window it was (a later plan doesn't report it twice).
+    windowTo: r.window?.to ?? null,
     extraUnits,
     extraSales: extraUnits == null ? null : Math.round(extraUnits * (plan.price ?? 0) * 100) / 100,
   };

@@ -53,7 +53,7 @@ test("last week's results: verdicts with extra sales, markdowns started and ende
   assert.deepEqual(lastWeekOf("2026-11-09"), { from: "2026-11-02", to: "2026-11-08" });
   assert.deepEqual(lastWeekOf("2027-01-04"), { from: "2026-12-28", to: "2027-01-03" });
   const improved = { productId: "a", title: "A", price: 25, verdict: "improved", result: { after: { units: 14 }, expectedUnits: 9.6 } };
-  assert.deepEqual(verdictLine(improved), { productId: "a", title: "A", verdict: "improved", extraUnits: 4, extraSales: 100 });
+  assert.deepEqual(verdictLine(improved), { productId: "a", title: "A", verdict: "improved", windowTo: null, extraUnits: 4, extraSales: 100 });
   // Worse or unknown: no extra sales; never below zero.
   assert.equal(verdictLine({ ...improved, verdict: "worse" }).extraSales, null);
   assert.equal(verdictLine({ ...improved, result: { after: { units: 5 }, expectedUnits: 9 } }).extraUnits, 0);

@@ -68,3 +68,8 @@ test("the weekly plan with last week's results", () => {
   const n = describe({ type: "weekly_plan", data: { week: "2026-11-09", currency: "EUR", actions: [], lastWeek: { verdicts: [{}, {}], extraSales: 120 } } });
   assert.match(n.body, /^Nothing urgent this week\. Last week: 2 results \(.*120.* extra sales\)\.$/);
 });
+
+test("the weekly plan with only markdown news from last week", () => {
+  const n = describe({ type: "weekly_plan", data: { week: "2026-11-09", actions: [], lastWeek: { verdicts: [], extraSales: 0, markdownsStarted: [{}], markdownsEnded: [{}] } } });
+  assert.equal(n.body, "Nothing urgent this week. Last week: 2 markdown updates.");
+});

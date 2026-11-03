@@ -119,8 +119,8 @@ function LastWeek({ recap, money }) {
         {recap.extraSales > 0 && <s-text>About {money.format(recap.extraSales)} in extra sales from products whose fixes worked.</s-text>}
         {recap.verdicts.length > 0 && (
           <ul className="m-0 list-none space-y-1.5 p-0 text-sm">
-            {recap.verdicts.map((v) => (
-              <li key={v.productId} className="flex flex-wrap items-center gap-2">
+            {recap.verdicts.map((v, i) => (
+              <li key={`${v.productId}-${v.windowTo ?? i}`} className="flex flex-wrap items-center gap-2">
                 <s-badge tone={VERDICT[v.verdict]?.tone}>{VERDICT[v.verdict]?.label ?? v.verdict}</s-badge>
                 {link(v)}
                 {v.extraUnits > 0 && (
@@ -129,18 +129,18 @@ function LastWeek({ recap, money }) {
                   </span>
                 )}
                 {v.verdict === "worse" && <span className="text-zinc-500">Undo the fixes on its page.</span>}
-                {v.verdict === "no_change" && <span className="text-zinc-500">A markdown is proposed on its page.</span>}
+                {v.verdict === "no_change" && <span className="text-zinc-500">See the next step on its page.</span>}
               </li>
             ))}
           </ul>
         )}
         {(recap.markdownsStarted.length > 0 || recap.markdownsEnded.length > 0) && (
           <ul className="m-0 list-none space-y-1.5 p-0 text-sm">
-            {recap.markdownsStarted.map((m) => (
-              <li key={`s-${m.productId}`}>Markdown started: {link(m)}</li>
+            {recap.markdownsStarted.map((m, i) => (
+              <li key={`s-${m.id ?? i}`}>Markdown started: {link(m)}</li>
             ))}
-            {recap.markdownsEnded.map((m) => (
-              <li key={`e-${m.productId}`}>
+            {recap.markdownsEnded.map((m, i) => (
+              <li key={`e-${m.id ?? i}`}>
                 Markdown ended: {link(m)}
                 {m.endReason ? ` (${ENDED[m.endReason] ?? m.endReason})` : ""}
               </li>
