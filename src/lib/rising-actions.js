@@ -33,7 +33,11 @@ export async function recordRisingAction(shop, productId, kind, { quiet = false,
     return await db().risingAction.create({ data: { productId, kind, startedOn: today, reorderId } });
   } catch (error) {
     // Two at once on the same day: the database keeps one (unique product, kind and day).
-    if (error?.code === "P2002") return busy(await openOne());
+    if (error?.code === "P2002") {
+      const again = await openOne();
+      if (again) return busy(again);
+      throw new HttpError("This action was just changed. Try again.", 409); // the other one was removed meanwhile
+    }
     throw error;
   }
 }
