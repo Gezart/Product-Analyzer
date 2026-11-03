@@ -1,5 +1,12 @@
 # History
 
+## 2026-11-03 · collection-order
+- New "Collections" page (nav): lists the collections sorted "Manually" in Shopify (others are counted, with how to switch one to manual; collections over 1,000 products are marked too large) and shows the order the app proposes for the one picked, with each product's new and current place, status, sales in the last 30 days and the reason
+- The ordering rule (pure, tested): bestsellers first (the top third by 30-day revenue of the products that can be bestsellers: analyzed, on sale, in stock, selling, and not dead stock, slow movers, page problems or out of season; ones about to run out right after, so they don't sell out sooner), then hidden gems, then products that need sales (slow movers, dead stock; most money waiting first), then the rest in their current order, then page problems ("fix its page first"), out-of-season, sold-out and not-on-sale products
+- Products the app doesn't know yet or doesn't analyze on the plan (over the limit, excluded) stay with the rest, in their current order; on the plan as the fix center (Starter and up)
+- Nothing is written to Shopify yet (next task: save with Undo)
+- Verified on a local Postgres with Shopify stubbed: a 12-product collection over two pages (every group, a product not synced yet, sales older than 30 days not counted, another shop's product with the same Shopify id not used), an automatic collection, a too large one, a missing one, the Free plan
+
 ## 2026-11-03 · ai-photos
 - Fix center: "Create photo with AI" (OpenAI image API, `gpt-image-2.5-flare`, plain `fetch`, no SDK) from one of the product's photos: a white background (best as the main photo) or a scene (the merchant's own or a fitting one); highlighted when the diagnosis finds too few photos
 - The request asks to keep the product exactly as it is (shape, colors, text, logos) and to add no text, watermarks or other products; source photos are read only from Shopify's CDN (https, at most 2048 px, 20 MB, checked by their bytes as JPEG, PNG or WebP)

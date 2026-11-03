@@ -21,6 +21,7 @@ export default function RootLayout({ children }) {
           </a>
           <a href="/products">Products</a>
           <a href="/inbox">Inbox</a>
+          <a href="/collections">Collections</a>
           <a href="/compare">Compare</a>
           <a href="/reports">Reports</a>
           <a href="/settings">Settings</a>
