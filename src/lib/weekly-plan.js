@@ -93,3 +93,13 @@ export function recapOf({ verdicts = [], started = [], ended = [] }) {
     markdownsEnded: ended,
   };
 }
+
+/**
+ * Whether a rescue verdict belongs in a plan's "last week": its window ended last week (`from`–`to`),
+ * or ended since `earliest` and no earlier plan reported it (`reported`: keys `productId:windowTo`).
+ */
+export function verdictCounts(productId, windowTo, { from, to, earliest, reported }) {
+  if (typeof windowTo !== "string" || windowTo > to) return false;
+  if (windowTo >= from) return true;
+  return windowTo >= earliest && !reported.has(`${productId}:${windowTo}`);
+}

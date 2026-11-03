@@ -3,7 +3,7 @@
 ## 2026-11-03 · weekly-recap
 - The Monday plan now carries last week (Monday to Sunday, the store's calendar) too: rescue verdicts whose window ended last week (improved first, with the units sold above what was expected and their value at the product's price), plus any from the 3 weeks before that no plan reported yet (decided late), each reported once; markdowns that went live or ended last week (failed ones aren't listed); the inbox line adds "Last week: N results (€X extra sales), N markdown updates"; a week with results but nothing to do still sends a plan ("Nothing urgent this week")
 - "This week" page: a "Last week" section with each verdict (badge, product, extra sales, or the next step for worse / no change) and the markdowns, each linking to the product
-- The recap rules are pure and tested (`lastWeekOf`, `verdictLine`, `recapOf`); extra sales are an estimate (extra units × current price)
+- The recap rules are pure and tested (`lastWeekOf`, `verdictLine`, `recapOf`, `verdictCounts`); extra sales are an estimate (extra units × current price)
 - Verified on a local Postgres: an improved verdict (+4 units, €100), a worse one on the Sunday, another shop's left out, a verdict decided late (reported once, not repeated), markdowns started and ended, markdowns ending around midnight in Los Angeles and Tokyo (the store's day decides), a failed markdown left out, a Monday with only results
 
 ## 2026-11-03 · weekly-plan

@@ -9,7 +9,7 @@ import { markdownEligibility } from "@/lib/markdown-engine";
 import { notify } from "@/lib/notify";
 import { latestScores } from "@/lib/scores";
 import { asDate, DAY_MS } from "@/lib/dates";
-import { lastWeekOf, pickActions, recapOf, weekOf } from "@/lib/weekly-plan";
+import { lastWeekOf, pickActions, recapOf, verdictCounts, weekOf } from "@/lib/weekly-plan";
 
 /** Candidates looked at: the dashboard's action list, a bit longer (some drop out as already handled). */
 const CANDIDATES = 15;
@@ -90,10 +90,9 @@ export async function lastWeekRecap(shopId, week) {
   const reported = new Set(earlier.flatMap((n) => (n.data?.week !== week ? (n.data?.lastWeek?.verdicts ?? []).map((v) => `${v.productId}:${v.windowTo}`) : [])));
   const inWeek = (key) => key >= from && key <= to;
   // Last week's verdicts, and earlier ones no plan has reported yet (decided after their week's plan).
-  const counts = (key, productId) => typeof key === "string" && key <= to && (inWeek(key) || (key >= earliest && !reported.has(`${productId}:${key}`)));
   return recapOf({
     verdicts: plans
-      .filter((p) => counts(p.result?.window?.to, p.productId))
+      .filter((p) => verdictCounts(p.productId, p.result?.window?.to, { from, to, earliest, reported }))
       .map((p) => ({ productId: p.productId, title: p.product.title, price: Number(p.product.price), verdict: p.verdict, result: p.result })),
     started: started.map((m) => ({ id: m.id, productId: m.productId, title: m.product.title })),
     ended: ended.filter((m) => inWeek(localDateKey(m.endedAt, timezone))).map((m) => ({ id: m.id, productId: m.productId, title: m.product.title, endReason: m.endReason })),
