@@ -11,7 +11,7 @@ import { monthRange } from "@/lib/report";
 import { moneyFormatter } from "@/lib/status-info";
 
 const monthName = (period) => new Date(`${period}-01T00:00:00Z`).toLocaleString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
-const FIX_LABEL = { title: "Title", description: "Description", seo: "SEO", images: "Image order", collection: "Collections", photo: "Photo added" };
+const FIX_LABEL = { title: "Title", description: "Description", seo: "SEO", images: "Image order", collection: "Collections", photo: "Photo added", position: "Collection position" };
 const EFFECT = { improved: "Improved", no_change: "No change", worse: "Worse", not_enough_data: "Not enough data", cancelled: "Undone", measuring: "Measuring" };
 
 /** A month's results, with the formula next to every number. */

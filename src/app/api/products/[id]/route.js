@@ -31,6 +31,11 @@ export const GET = appRoute(async ({ shop, params }) => {
     db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "webhooks" } } }),
     db().settings.findUnique({ where: { shopId: shop.id }, select: { seasonalCollections: true } }),
   ]);
+  // The plan's new places in collections (Collection Optimizer): shown with it, undone on the Collections page.
+  const planFixIds = product.rescuePlans[0]?.fixIds ?? [];
+  const moves = planFixIds.length
+    ? await db().fix.findMany({ where: { id: { in: planFixIds }, type: "position" }, select: { id: true, status: true, before: true, after: true } })
+    : [];
   // Returns over the recent days: the product's rate, the store's, and the most common reasons.
   const recent = await returnWindow(shop.id, shop.timezone);
   const [productReturns, storeReturns, returnReasons] = await Promise.all([
@@ -118,6 +123,14 @@ export const GET = appRoute(async ({ shop, params }) => {
           fixes: product.rescuePlans[0].fixIds.length,
           extended: Boolean(product.rescuePlans[0].baseline?.extended),
           result: product.rescuePlans[0].result,
+          moves: moves.map((m) => ({
+            fixId: m.id,
+            status: m.status,
+            collectionTitle: m.after?.collectionTitle ?? "",
+            collectionId: String(m.after?.collectionGid ?? "").split("/").pop() || null,
+            from: m.before?.position ?? null,
+            to: m.after?.position ?? null,
+          })),
         }
       : null,
     variants: product.variants.map((v) => ({ id: v.id, sku: v.sku, options: v.options, price: Number(v.price), stock: v.inventoryQty })),

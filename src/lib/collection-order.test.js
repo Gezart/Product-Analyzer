@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { movedCount, orderError, proposeOrder, sequentialMoves } from "./collection-order.js";
+import { movedCount, movedUp, orderError, proposeOrder, sequentialMoves } from "./collection-order.js";
 
 const item = (id, status, revenue30 = 0, extra = {}) => ({ id, status, revenue30, moneyAtStake: 0, available: true, ...extra });
 
@@ -153,4 +153,19 @@ test("an order to save lists each product once and differs from now", () => {
   assert.match(orderError(["a", "x"], ["a", "b"]), /once/);
   assert.match(orderError("a,b", ["a", "b"]), /once/);
   assert.match(orderError(["a", "b"], ["a", "b"]), /already/);
+});
+
+test("products moved up into the first places are the ones measured", () => {
+  const before = ["a", "b", "c", "d", "e"];
+  const after = ["e", "a", "c", "b", "d"];
+  // e: 4 → 0 (up); a: 0 → 1 (down); c stays; b: 1 → 3 (down); d: 3 → 4 (down).
+  assert.deepEqual(movedUp(before, after), [{ id: "e", from: 4, to: 0 }]);
+  // Only into the first places: moving up from 30 to 26 isn't measured.
+  const long = Array.from({ length: 40 }, (_, i) => `p${i}`);
+  const moved = [...long];
+  moved.splice(26, 0, moved.splice(30, 1)[0]);
+  moved.splice(2, 0, moved.splice(35, 1)[0]);
+  assert.deepEqual(movedUp(long, moved).map((m) => m.id), ["p35"]);
+  // A product added since (not in `before`) isn't counted.
+  assert.deepEqual(movedUp(["a"], ["x", "a"]), []);
 });

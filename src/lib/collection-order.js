@@ -97,3 +97,15 @@ export function orderError(order, current) {
   if (order.every((id, i) => current[i] === id)) return "This is already the collection's order.";
   return null;
 }
+
+/** The first places of a collection, what shoppers see first (two rows of a typical grid, or more). */
+export const VISIBLE_PLACES = 24;
+
+/**
+ * The products a new order moved up into the first `places` places: `{ id, from, to }` (positions
+ * from 0). These are the ones whose sales are measured after the move.
+ */
+export function movedUp(before, after, places = VISIBLE_PLACES) {
+  const was = new Map(before.map((id, i) => [id, i]));
+  return after.flatMap((id, to) => (to < places && was.has(id) && was.get(id) > to ? [{ id, from: was.get(id), to }] : []));
+}

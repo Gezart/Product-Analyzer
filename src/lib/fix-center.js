@@ -163,6 +163,8 @@ export async function addPhotoFix(shopId, productId, photo, { ai = false, diagno
 export async function undoFix(shopId, fixId, { force = false } = {}) {
   const fix = await db().fix.findFirst({ where: { id: fixId, product: { shopId } }, include: { product: true } });
   if (!fix) throw new FixError("Fix not found", 404);
+  // A new place in a collection is part of the collection's saved order: undone there, as a whole.
+  if (fix.type === "position") throw new FixError("Undo this on the Collections page: it restores the collection's whole order.", 409);
   // Applied fixes, and attempts that crashed part way (stuck "approved"/"undoing"), can be undone.
   const stale = new Date(Date.now() - IN_PROGRESS_MS);
   const undoable = fix.status === "applied" || (["approved", "undoing"].includes(fix.status) && fix.createdAt < stale);

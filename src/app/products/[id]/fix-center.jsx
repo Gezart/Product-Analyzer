@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiError } from "@/app/api-error";
 import { listen } from "@/app/polaris-events";
@@ -8,7 +9,7 @@ import { UpgradeBanner } from "@/app/upgrade-banner";
 import { fillInsLeft } from "@/lib/ai-text";
 
 const LABELS = { title: "Title", description: "Description", seo: "SEO", images: "Image order", collection: "Collections" };
-const HISTORY_LABELS = { ...LABELS, photo: "Photo added" };
+const HISTORY_LABELS = { ...LABELS, photo: "Photo added", position: "Collection position" };
 
 /** Edit, apply and undo fixes. Every apply saves the old version first; undo restores it exactly. */
 export function FixCenter({ productId, onChanged }) {
@@ -334,7 +335,12 @@ export function FixCenter({ productId, onChanged }) {
                   <s-badge tone={f.status === "applied" ? "success" : f.status === "failed" ? "critical" : undefined}>{f.status}</s-badge>
                   <span className="text-zinc-500">{new Date(f.appliedAt ?? f.createdAt).toLocaleString()}</span>
                   {f.error && <span className="text-red-700">{f.error}</span>}
-                  {(f.status === "applied" || (["approved", "undoing"].includes(f.status) && Date.now() - Date.parse(f.createdAt) > 120_000)) && (
+                  {f.type === "position" && f.status === "applied" && f.collectionId && (
+                    <Link href={`/collections?c=${f.collectionId}`} className="text-sm underline">
+                      Undo on the Collections page
+                    </Link>
+                  )}
+                  {f.type !== "position" && (f.status === "applied" || (["approved", "undoing"].includes(f.status) && Date.now() - Date.parse(f.createdAt) > 120_000)) && (
                     <s-button
                       variant="tertiary"
                       disabled={busy !== null || undefined}
