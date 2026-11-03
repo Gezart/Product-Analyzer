@@ -110,7 +110,7 @@ test("JSONL parser handles lines split across chunks and a missing final newline
 
 // --- returns ---
 
-import { lineRefundsFromOrder, lineRefundsFromWebhook, returnReasonsFromOrder } from "./transform.js";
+import { lineRefundsFromOrder, lineRefundsFromWebhook, REFUNDED_SEARCH, returnReasonsFromOrder, returnsSearch } from "./transform.js";
 
 const refundItem = (line, product, quantity, restockType, amount) => ({
   quantity, restockType, subtotalSet: { shopMoney: { amount: String(amount) } }, lineItem: { id: `gid://shopify/LineItem/${line}`, product: { id: `gid://shopify/Product/${product}` } },
@@ -176,4 +176,32 @@ test("return reasons: the reason definition, else Shopify's older reason; unveri
     ["gid://shopify/Product/7", 1, "too-small", "Too Small", "2026-10-20"],
     ["gid://shopify/Product/8", 2, "damaged", "Damaged or defective", "2026-10-20"],
   ]);
+});
+
+test("declined or cancelled returns aren't reasons; an unknown older reason reads as Unknown", () => {
+  const line = (id, product, extra) => ({ id: `gid://shopify/ReturnLineItem/${id}`, quantity: 1, fulfillmentLineItem: { lineItem: { id: `gid://shopify/LineItem/${id}`, product: { id: `gid://shopify/Product/${product}` } } }, ...extra });
+  const order = {
+    id: "gid://shopify/Order/1",
+    createdAt: "2026-10-20T12:00:00Z",
+    returns: {
+      nodes: [
+        { status: "DECLINED", returnLineItems: { nodes: [line(1, 7, { returnReason: "STYLE" })] } },
+        { status: "CANCELED", returnLineItems: { nodes: [line(2, 7, { returnReason: "STYLE" })] } },
+        { status: "CLOSED", returnLineItems: { nodes: [line(3, 7, { returnReason: null }), line(4, 7, { returnReason: "SOMETHING_NEW" })] } },
+        { status: "REQUESTED", returnLineItems: { nodes: [line(5, 7, { returnReason: "COLOR" })] } },
+      ],
+    },
+  };
+  assert.deepEqual(returnReasonsFromOrder(order, "UTC").map((r) => [r.returnLineGid.split("/").pop(), r.reason, r.reasonName]), [
+    ["3", "unknown", "Unknown"],
+    ["4", "unknown", "Unknown"],
+    ["5", "color", "Color"],
+  ]);
+});
+
+test("the orders search for returns: the filter, the order window and what changed since", () => {
+  assert.equal(
+    returnsSearch(REFUNDED_SEARCH, "2026-09-05", "2026-11-02T10:00:00.000Z"),
+    "(financial_status:refunded OR financial_status:partially_refunded) AND created_at:>='2026-09-05' AND updated_at:>='2026-11-02T10:00:00.000Z'",
+  );
 });

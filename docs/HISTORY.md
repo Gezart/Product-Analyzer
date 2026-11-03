@@ -1,11 +1,12 @@
 # History
 
 ## 2026-11-03 · returns-sync
-- New scope `read_returns` (shopify.app.toml, `.env.example`, PLAN); merchants approve it once after the app update, and until then refunds are still read and reasons are skipped with a note
-- `line_refunds`: units refunded per order line after shipping (cancellations of unshipped items aren't returns) and the money refunded, counted against the order's date; `return_reasons`: why each returned item came back (Shopify's reason, or its older reason list); both RLS on (migration applied to Supabase)
-- Nightly `returns-sync` (and after the first import): only orders with refunds or returns in the 60-day window, found with Shopify's order search and read a few per request (bulk exports can't read refund or return lines); waits and retries when Shopify throttles; drops rows older than the window
+- New scope `read_returns` (shopify.app.toml, `.env.example`, PLAN); merchants approve it once after the app update. Until then refunds are still read and reasons are skipped with a note; once approved, reasons are read for the whole 60-day window
+- `line_refunds`: units refunded per order line after shipping (cancellations of unshipped items aren't returns) and the money refunded, counted against the order's date; `return_reasons`: why each returned item came back (Shopify's reason, or its older reason list); declined or cancelled returns don't count; both RLS on (migration applied to Supabase)
+- Nightly `returns-sync` (and after the first import): only orders with refunds or returns in the window, found with Shopify's order search (bulk exports can't read refund or return lines); requests sized under Shopify's cost limit (3 orders × 3 refunds/returns × 10 lines), orders with more completed by extra requests; throttling waits and retries; refunds and reasons keep their own progress, a run stops after 3 minutes and a follow-up continues; orders whose returns were all declined later are re-checked
 - Order webhooks now include refunds and update them right away; an older version of an order never overwrites a newer one
-- Verified on a local Postgres with Shopify stubbed: two pages of refunded orders, a cancellation left out, reasons with and without definitions, a throttled request retried, a night without `read_returns`, webhooks new/stale/without refunds, old rows pruned
+- Verified on a local Postgres with Shopify stubbed (errors shaped like the Shopify client's): two pages, a cancellation left out, an order with 4 refunds and a second page of lines, a throttled request, a night without `read_returns` then the backfill, a declined return cleared, a run out of time, webhooks new/stale
+- Open: request costs to confirm on the dev store (sizes are kept well under the limit)
 
 ## 2026-11-03 · seasonal-reminders
 - Inbox, once per season: 30 days before a season starts ("check stock and product pages"), and when a season ends with stock left (stock value, "an end-of-season markdown clears it"); one product opens its page, several open the seasonal list

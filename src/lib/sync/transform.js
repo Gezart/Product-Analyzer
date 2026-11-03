@@ -184,6 +184,18 @@ export function createJsonlParser() {
 
 // --- Returns ---
 
+/** Orders with refunds, and orders with returns, in Shopify's order search. */
+export const REFUNDED_SEARCH = "(financial_status:refunded OR financial_status:partially_refunded)";
+export const RETURNED_SEARCH = "(return_status:return_requested OR return_status:in_progress OR return_status:inspection_complete OR return_status:returned)";
+
+/** The orders search: these orders, created in the window (`YYYY-MM-DD`), updated since `since`. */
+export function returnsSearch(filter, windowStart, since) {
+  return `${filter} AND created_at:>='${windowStart}' AND updated_at:>='${since}'`;
+}
+
+/** Returns that didn't happen: declined by the merchant or cancelled. */
+const NOT_RETURNED = new Set(["DECLINED", "CANCELED"]);
+
 /** A refund of shipped goods: anything but a cancellation of an unshipped item (restock type CANCEL). */
 const isReturn = (restockType) => String(restockType ?? "").toUpperCase() !== "CANCEL";
 
@@ -258,13 +270,14 @@ const OLD_REASONS = {
 /**
  * Why items of one order were returned, from the GraphQL Admin API (`returns { returnLineItems { … on
  * ReturnLineItem { id quantity returnReason returnReasonDefinition { handle name } fulfillmentLineItem
- * { lineItem { id product { id } } } } } }`). One row per return line; unverified lines are skipped.
+ * { lineItem { id product { id } } } } } }`). One row per return line; unverified lines, and returns that
+ * were declined or cancelled, are skipped.
  */
 export function returnReasonsFromOrder(order, timeZone) {
   if (!isType(order?.id, "Order") || typeof order.createdAt !== "string") return [];
   const date = localDateKey(new Date(order.createdAt), timeZone);
   const updatedAt = new Date(order.updatedAt ?? order.createdAt);
-  return (order.returns?.nodes ?? []).flatMap((ret) =>
+  return (order.returns?.nodes ?? []).filter((ret) => !NOT_RETURNED.has(ret?.status)).flatMap((ret) =>
     (ret?.returnLineItems?.nodes ?? []).flatMap((n) => {
       const lineItem = n?.fulfillmentLineItem?.lineItem;
       if (!n?.id || !lineItem?.id || !lineItem.product?.id) return [];
