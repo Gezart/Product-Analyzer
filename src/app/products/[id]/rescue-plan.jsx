@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { listen } from "@/app/polaris-events";
 
@@ -19,12 +20,32 @@ export function RescuePlan({ plan, onChanged }) {
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState(null);
 
-  /** One-click undo of every fix in the plan (each restores its own snapshot). */
+  // New places in collections are undone on the Collections page (the whole order at once).
+  const moves = plan.moves ?? [];
+  const moveIds = new Set(moves.map((m) => m.fixId));
+  const pageFixIds = plan.fixIds.filter((id) => !moveIds.has(id));
+  const movesNote = moves.length > 0 && (
+    <div className="space-y-1">
+      {moves.map((m) => (
+        <s-text key={m.fixId} tone="neutral">
+          Moved up in &quot;{m.collectionTitle}&quot;: from place {m.from} to {m.to}
+          {m.status === "undone" ? " (undone)" : ""}.{" "}
+          {m.collectionId && m.status === "applied" && (
+            <Link href={`/collections?c=${m.collectionId}`} className="underline">
+              {plan.verdict === "worse" ? "Undo the new order" : "See the order"}
+            </Link>
+          )}
+        </s-text>
+      ))}
+    </div>
+  );
+
+  /** One-click undo of every page fix in the plan (each restores its own snapshot). */
   async function undoAll() {
     if (undoing) return;
     setUndoing(true);
     setUndoError(null);
-    for (const id of plan.fixIds) {
+    for (const id of pageFixIds) {
       const res = await fetch(`/api/fixes/${id}/undo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       if (!res.ok && res.status !== 409) {
         setUndoError((await res.json().catch(() => ({}))).error ?? `Undo failed (${res.status})`);
@@ -47,6 +68,7 @@ export function RescuePlan({ plan, onChanged }) {
               ? `The window ends at 150 visits or ${plan.extended ? "60" : "30"} days, and not before 14 days.`
               : "The window runs 30 days (visit data isn't connected yet, so sales are compared)."}
           </s-text>
+          {movesNote}
         </s-stack>
       </s-section>
     );
@@ -58,7 +80,8 @@ export function RescuePlan({ plan, onChanged }) {
       <s-stack gap="small">
         <s-badge tone={v.tone}>{v.label}</s-badge>
         <s-text>{v.next}</s-text>
-        {plan.verdict === "worse" && plan.fixIds.length > 0 && (
+        {movesNote}
+        {plan.verdict === "worse" && pageFixIds.length > 0 && (
           <div>
             <s-button variant="primary" loading={undoing || undefined} ref={listen("click", undoAll)}>
               Undo the fixes

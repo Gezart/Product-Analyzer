@@ -97,3 +97,26 @@ export function orderError(order, current) {
   if (order.every((id, i) => current[i] === id)) return "This is already the collection's order.";
   return null;
 }
+
+/** The first places of a collection, what shoppers see first (two rows of a typical grid, or more). */
+export const VISIBLE_PLACES = 24;
+/** A move smaller than this is a product sliding up because others moved down, not a move to measure. */
+export const MIN_JUMP = 3;
+/**
+ * The products a new order moves up to help them sell: hidden gems and products that need sales.
+ * Bestsellers and the rest aren't measured (their sales don't need rescuing, and a "no change" there
+ * must not lead to a markdown).
+ */
+export const MEASURED_STATUSES = new Set(["hidden_gem", "slow_mover", "dead_stock"]);
+
+/**
+ * The products a new order moved up by at least `minJump` places into the first `places`:
+ * `{ id, from, to }` (positions from 0). Products not in `before` (added since) aren't counted.
+ */
+export function movedUp(before, after, { places = VISIBLE_PLACES, minJump = MIN_JUMP } = {}) {
+  const was = new Map(before.map((id, i) => [id, i]));
+  return after.flatMap((id, to) => (to < places && was.has(id) && was.get(id) - to >= minJump ? [{ id, from: was.get(id), to }] : []));
+}
+
+/** Of `moves`, the ones whose product's status (`statusOf(id)`) is one the optimizer moves up to help. */
+export const movesToMeasure = (moves, statusOf) => moves.filter((m) => MEASURED_STATUSES.has(statusOf(m.id)));

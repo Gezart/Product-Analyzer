@@ -2,6 +2,7 @@
 // from the app's statuses and the last 30 days of sales.
 
 import { adminGraphql } from "@/lib/admin";
+import { endMoveEffects, startMoveEffects, trackEffect } from "@/lib/collection-effects";
 import { movedCount, orderError, proposeOrder, REASONS, sequentialMoves } from "@/lib/collection-order";
 import { asDate, DAY_MS } from "@/lib/dates";
 import { db } from "@/lib/db";
@@ -240,12 +241,14 @@ export async function savedCollections(shopId) {
 async function failSave(session, gid, save, live, ids, error) {
   const now = await readCollectionOrder(session, gid).catch(() => null);
   const unchanged = now != null && sameList(now.productIds, live.productIds) && !(error instanceof StillApplying);
-  await db().collectionReorder.update({
+  const kept = await db().collectionReorder.update({
     where: { id: save.id },
     data: unchanged
       ? { status: "failed", error: errorMessage(error) }
       : { status: "applied", appliedAt: new Date(), after: now && !sameList(now.productIds, live.productIds) ? now.productIds : ids, error: errorMessage(error) },
   });
+  // Partly saved: what moved up is measured too (and undone with the order).
+  if (!unchanged) await trackEffect(startMoveEffects(save.shopId, kept));
   throw new HttpError(unchanged ? errorMessage(error) : `Partly saved: ${errorMessage(error)} Reload to see the order, or undo it.`, 502);
 }
 
@@ -283,7 +286,10 @@ export async function saveCollectionOrder(shop, session, gid, { order, expected 
     data: { status: "applied", appliedAt: new Date(), error: pending ? STILL_FINISHING : null },
     select: SAVE_FIELDS,
   });
-  return { ...done, moved: movedCount(done.before, done.after), pending };
+  // The products moved up into the first places get a rescue plan measuring their sales after the move.
+  let measured = 0;
+  await trackEffect(startMoveEffects(shop.id, { ...done, collectionGid: gid, collectionTitle: live.title }).then((n) => (measured = n)));
+  return { ...done, moved: movedCount(done.before, done.after), pending, measured };
 }
 
 /**
@@ -325,5 +331,6 @@ export async function undoCollectionOrder(shop, session, saveId, { force = false
     pending = true;
   }
   const done = await db().collectionReorder.update({ where: { id: save.id }, data: { status: "undone", undoneAt: new Date() }, select: SAVE_FIELDS });
+  await trackEffect(endMoveEffects(save.id));
   return { ...done, moved: movedCount(done.before, done.after), pending };
 }

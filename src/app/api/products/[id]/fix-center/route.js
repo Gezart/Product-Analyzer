@@ -38,7 +38,7 @@ export const GET = appRoute(async ({ shop, session, params }) => {
       where: { productId: id },
       orderBy: { createdAt: "desc" },
       take: 50,
-      select: { id: true, type: true, status: true, createdAt: true, appliedAt: true, undoneAt: true, error: true },
+      select: { id: true, type: true, status: true, createdAt: true, appliedAt: true, undoneAt: true, error: true, after: true },
     }),
     db().diagnosis.findFirst({ where: { productId: id }, orderBy: { createdAt: "desc" } }),
   ]);
@@ -62,7 +62,8 @@ export const GET = appRoute(async ({ shop, session, params }) => {
     live,
     liveError,
     manualCollections: collections,
-    fixes,
+    // A collection position names its collection (it's undone on the Collections page); other fixes' states stay here.
+    fixes: fixes.map(({ after, ...f }) => (f.type === "position" ? { ...f, collectionId: String(after?.collectionGid ?? "").split("/").pop() || null } : f)),
     hints,
     diagnosisId: diagnosis?.id ?? null,
     upgrade,

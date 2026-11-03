@@ -1,5 +1,14 @@
 # History
 
+## 2026-11-03 · collection-effect
+- A saved collection order measures its effect: each hidden gem, slow mover or dead-stock product it moved up by 3 places or more into the first 24 (what shoppers see first) gets a "Collection position" fix and a rescue plan comparing its sales after the move with before (joining a plan already running for the product)
+- Not measured: bestsellers and other healthy products (their sales don't need rescuing, and a "no change" verdict must not lead to a markdown), products that only slid up because others moved down, products the app doesn't know yet; a partly saved order is measured for what moved, an interrupted one isn't
+- Each product's bookkeeping on its own: one failing never stops the others or changes the save's or undo's outcome
+- Undoing the order on the Collections page undoes those moves too and takes them out of their rescue plans (a plan left with no fixes is cancelled); a collection position can't be undone alone from the fix center (it links to the Collections page instead)
+- Product page: the rescue plan says "Moved up in "Summer": from place 5 to 1" with a link to the order (to undo it when the verdict is worse, and the next step says so); the fix center history and the monthly report label it "Collection position"
+- The rule for which products are measured is pure and tested (`movedUp`, `movesToMeasure`)
+- Verified on a local Postgres with Shopify stubbed: a save moving known and not-synced products (a slow mover and a hidden gem measured, one joining a running plan; a healthy product moved up not measured), the product page and fix center, undoing a position alone (refused), undoing the order (moves undone, a plan cancelled, the other kept), a partly saved order, a save moving nothing into the first places
+
 ## 2026-11-03 · collection-reorder
 - Collections page: the proposed order can be changed by hand (↑ ↓, "placed by you", back to the proposal), then saved to Shopify only after the merchant confirms ("Save this order to Shopify? … You can undo it.")
 - Saving reads the collection again first: if its order changed in Shopify since the page was opened, nothing is written (reload); the order must list each product once (pure, tested)
