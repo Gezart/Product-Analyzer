@@ -201,6 +201,8 @@ export async function runReturnsSync(job, signal, { budgetMs = RUN_BUDGET_MS } =
       const open = await db().returnReason.findMany({ where: { shopId, returnStatus: { in: ["REQUESTED", "OPEN"] } }, distinct: ["orderGid"], select: { orderGid: true } });
       const recheck = open.map((r) => r.orderGid).filter((id) => !seen.has(id));
       const recheckProgress = { deadline: progress.deadline, reached: null };
+      // Out of time during the re-check: the reasons' start doesn't move, so the follow-up re-checks all.
+      progress.reached = null;
       for (let i = 0; i < recheck.length && !signal?.aborted; i += 20) {
         const ids = recheck.slice(i, i + 20).map((gid) => `id:${numericId(gid)}`).join(" OR ");
         await eachOrder(session, RETURNS_QUERY, `(${ids}) AND updated_at:>='${since}'`, store, recheckProgress, signal);
