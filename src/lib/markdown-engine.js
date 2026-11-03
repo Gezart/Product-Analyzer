@@ -214,6 +214,8 @@ async function eligibility(productId) {
     db().rescuePlan.findFirst({ where: { productId }, orderBy: { startedAt: "desc" } }),
     db().productScore.findFirst({ where: { productId }, orderBy: { computedAt: "desc" }, select: { status: true } }),
   ]);
+  // Out of season (or early in it) a seasonal product is waiting for its season, not failing: no markdown.
+  if (score?.status === "seasonal") return null;
   if (rescue?.verdict === "no_change") return { reason: "The rescue plan ended with no change.", rescueId: rescue.id };
   if (score?.status === "dead_stock") return { reason: "Dead stock: no sale for a long time.", rescueId: null };
   return null;

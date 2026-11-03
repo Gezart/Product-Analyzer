@@ -9,6 +9,7 @@ export const STATUS_INFO = {
   stockout_risk: { label: "Stock-out risk", action: "Reorder", tone: "attention" },
   healthy: { label: "Healthy", action: "Nothing to do", tone: "success" },
   new: { label: "New", action: "Too early to judge; it's analyzed fully after 30 days", tone: "info" },
+  seasonal: { label: "Seasonal", action: "Out of season (or just started): it's judged 30 days into its season", tone: "info" },
   excluded: { label: "Not analyzed", action: "Draft, archived or excluded in Settings", tone: "neutral" },
   unscored: { label: "Not analyzed yet", action: "Analyzed at the next nightly run", tone: "neutral" },
   over_limit: { label: "Over plan limit", action: "Upgrade your plan to analyze it", tone: "neutral" },

@@ -45,9 +45,11 @@ export function ProductView() {
       ? "Wait for the rescue plan's result (below)."
       : rescue?.verdict === "worse" && rescue.fixIds.length > 0
         ? "Undo the fixes (see the rescue plan below)."
-        : rescue?.verdict === "no_change"
-          ? "Start the markdown (see below)."
-          : info?.action;
+        : data.score?.status === "seasonal" && data.product.season
+          ? seasonalNext(data.product.season)
+          : rescue?.verdict === "no_change"
+            ? "Start the markdown (see below)."
+            : info?.action;
 
   return (
     <s-page heading={data.product.title}>
@@ -187,6 +189,13 @@ export function ProductView() {
       </s-stack>
     </s-page>
   );
+}
+
+/** What a seasonal product needs now: nothing until its season, or a little time early in it. */
+function seasonalNext(season) {
+  if (!season.inSeason) return `Nothing until its season (${season.label}) starts in ${season.daysToStart} day${season.daysToStart === 1 ? "" : "s"}; it isn't dead stock.`;
+  const left = Math.max(0, 30 - season.daysIntoSeason);
+  return `Its season (${season.label}) has just started; it's judged in ${left} day${left === 1 ? "" : "s"}.`;
 }
 
 /** "In season since 1 Nov" or "Starts 1 Nov (in 114 days)", and where the season comes from. */

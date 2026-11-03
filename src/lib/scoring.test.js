@@ -207,6 +207,7 @@ test("weights match the plan", () => {
     stockout_risk: 0,
     healthy: 0,
     new: 0,
+    seasonal: 0,
     excluded: 0,
   });
 });
@@ -254,4 +255,40 @@ test("products sold without stock have no days of stock", () => {
   const p = { stock: 0, units30: 12, units60: 20, unitsPrev30: 8, views30: 0, purchases30: 0, stockValue: 0, costIsEstimate: false };
   assert.equal(computeMetrics({ ...p, sellsWhenOut: true }).daysOfCover, null);
   assert.equal(computeMetrics({ ...p, sellsWhenOut: false }).daysOfCover, 0);
+});
+
+// --- seasonal products ---
+
+const offSeason = { inSeason: false, daysIntoSeason: null };
+const inSeason = (days) => ({ inSeason: true, daysIntoSeason: days });
+
+test("out of season: a seasonal product unsold for months is seasonal, not dead stock or a slow mover", () => {
+  const jacket = product({ id: "j", daysSinceLastSale: 200, ...noSales, season: offSeason });
+  const r = find(scoreProducts(store(jacket)), "j");
+  assert.equal(r.status, "seasonal");
+  assert.equal(r.moneyAtStake, 0);
+  const slow = product({ id: "s", stock: 200, units30: 1, unitsPrev30: 1, units60: 2, daysSinceLastSale: 20, season: offSeason });
+  assert.equal(find(scoreProducts(store(slow)), "s").status, "seasonal");
+  // The same products without a season keep their statuses.
+  assert.equal(find(scoreProducts(store({ ...jacket, season: undefined })), "j").status, "dead_stock");
+  assert.equal(find(scoreProducts(store({ ...slow, season: undefined })), "s").status, "slow_mover");
+});
+
+test("out of season, other statuses still apply (a seasonal product can still sell well or run out)", () => {
+  const selling = product({ id: "h", season: offSeason });
+  assert.equal(find(scoreProducts(store(selling)), "h").status, "healthy");
+  const runningOut = product({ id: "r", stock: 3, units30: 30, unitsPrev30: 10, units60: 40, season: offSeason });
+  assert.equal(find(scoreProducts(store(runningOut)), "r").status, "stockout_risk");
+});
+
+test("in season: judged only after 30 days, and days without a sale count from the season's start", () => {
+  const unsold = { ...noSales, daysSinceLastSale: 250 };
+  assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(10) }))), "a").status, "seasonal");
+  assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(29) }))), "a").status, "seasonal");
+  // 45 days into the season with no sale: not dead (90 days needed in season), but a slow mover.
+  assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(45) }))), "a").status, "slow_mover");
+  // 95 days into the season with no sale: dead stock.
+  assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(95) }))), "a").status, "dead_stock");
+  // Selling in season: healthy as usual.
+  assert.equal(find(scoreProducts(store(product({ id: "a", season: inSeason(45) }))), "a").status, "healthy");
 });

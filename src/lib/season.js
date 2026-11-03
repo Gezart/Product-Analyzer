@@ -87,7 +87,8 @@ const iso = (d) => d.toISOString().slice(0, 10);
  * Dates are `YYYY-MM-DD`.
  */
 export function seasonState(seasonRanges, dayKey) {
-  const ranges = mergeRanges(seasonRanges);
+  const ranges = mergeRanges(seasonRanges ?? []);
+  if (!ranges.length) return null; // no season, or all year
   const day = new Date(`${dayKey}T00:00:00Z`);
   const y = day.getUTCFullYear();
   const m = day.getUTCMonth() + 1;

@@ -29,6 +29,7 @@ export const STATUS_WEIGHTS = {
   stockout_risk: 0,
   healthy: 0,
   new: 0,
+  seasonal: 0,
   excluded: 0,
 };
 
@@ -106,17 +107,31 @@ export function computeBenchmarks(products, t) {
 
 /** Products younger than this aren't judged as slow movers. */
 const NEW_PRODUCT_DAYS = 30;
+/** A seasonal product is judged only after this many days into its season. */
+export const SEASON_GRACE_DAYS = 30;
+/** Statuses a seasonal product can't have out of season (or early in it): it's "seasonal" instead. */
+const NOT_YET = new Set(["dead_stock", "slow_mover", "new"]);
 
 /**
  * First matching status wins: dead stock, stock-out risk, page problem, slow mover (or new, under 30
  * days old), hidden gem, healthy.
  * `historyDays` is how many days of orders are synced; dead stock needs proof of `deadDays` without a sale,
  * capped at the product's age so new products are never dead.
+ * A seasonal product (`p.season`: `{ inSeason, daysIntoSeason }`) is "seasonal" instead of dead stock, a
+ * slow mover or new while out of season and in the first 30 days of its season; in season, days without
+ * a sale count from the season's start.
  */
 export function classify(p, m, b, t, historyDays) {
+  const status = baseStatus(p, m, b, t, historyDays);
+  const judged = p.season?.inSeason && p.season.daysIntoSeason >= SEASON_GRACE_DAYS;
+  return p.season && !judged && NOT_YET.has(status) ? "seasonal" : status;
+}
+
+function baseStatus(p, m, b, t, historyDays) {
   if (p.stock > 0) {
     const known = p.daysSinceLastSale ?? historyDays;
-    const noSaleDays = p.ageDays != null ? Math.min(known, p.ageDays) : known;
+    const sinceSeason = p.season?.inSeason ? p.season.daysIntoSeason : Infinity;
+    const noSaleDays = Math.min(known, p.ageDays ?? Infinity, sinceSeason);
     if (noSaleDays >= t.deadDays) return "dead_stock";
   }
 
