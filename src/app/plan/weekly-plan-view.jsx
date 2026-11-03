@@ -6,6 +6,13 @@ import { useEffect, useState } from "react";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
 const BUTTON = { reorder: "See stock", markdown: "Start the markdown", fix_page: "See why", visibility: "Collections", diagnose: "Diagnose" };
+const VERDICT = {
+  improved: { label: "Improved", tone: "success" },
+  worse: { label: "Worse", tone: "critical" },
+  no_change: { label: "No change", tone: "warning" },
+  not_enough_data: { label: "Not enough data", tone: "info" },
+};
+const ENDED = { stock_cleared: "stock cleared", ladder_finished: "all steps done", cancelled: "stopped" };
 const dayLabel = (key) => new Date(`${key}T00:00:00Z`).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 /** This week's plan: the 3–5 actions picked on Monday, each with a button to where it's done. */
@@ -68,6 +75,7 @@ export function WeeklyPlanView() {
                   </select>
                 )}
               </s-stack>
+              {plan.actions.length === 0 && <s-text tone="neutral">Nothing urgent this week.</s-text>}
               <ol className="m-0 list-none space-y-3 p-0">
                 {plan.actions.map((a, i) => (
                   <li key={a.productId} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-zinc-200 p-4">
@@ -93,6 +101,53 @@ export function WeeklyPlanView() {
           )}
         </s-stack>
       </s-section>
+      {plan?.lastWeek && <LastWeek recap={plan.lastWeek} money={money} />}
     </s-page>
+  );
+}
+
+/** Last week's results: rescue verdicts (with the extra sales of improved ones) and markdowns. */
+function LastWeek({ recap, money }) {
+  const link = (p) => (
+    <Link href={`/products/${p.productId}`} className="underline">
+      {p.title}
+    </Link>
+  );
+  return (
+    <s-section heading="Last week">
+      <s-stack gap="base">
+        {recap.extraSales > 0 && <s-text>About {money.format(recap.extraSales)} in extra sales from products whose fixes worked.</s-text>}
+        {recap.verdicts.length > 0 && (
+          <ul className="m-0 list-none space-y-1.5 p-0 text-sm">
+            {recap.verdicts.map((v, i) => (
+              <li key={`${v.productId}-${v.windowTo ?? i}`} className="flex flex-wrap items-center gap-2">
+                <s-badge tone={VERDICT[v.verdict]?.tone}>{VERDICT[v.verdict]?.label ?? v.verdict}</s-badge>
+                {link(v)}
+                {v.extraUnits > 0 && (
+                  <span className="text-zinc-500">
+                    {v.extraUnits} more sold than expected (about {money.format(v.extraSales)})
+                  </span>
+                )}
+                {v.verdict === "worse" && <span className="text-zinc-500">Undo the fixes on its page.</span>}
+                {v.verdict === "no_change" && <span className="text-zinc-500">See the next step on its page.</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {(recap.markdownsStarted.length > 0 || recap.markdownsEnded.length > 0) && (
+          <ul className="m-0 list-none space-y-1.5 p-0 text-sm">
+            {recap.markdownsStarted.map((m, i) => (
+              <li key={`s-${m.id ?? i}`}>Markdown started: {link(m)}</li>
+            ))}
+            {recap.markdownsEnded.map((m, i) => (
+              <li key={`e-${m.id ?? i}`}>
+                Markdown ended: {link(m)}
+                {m.endReason ? ` (${ENDED[m.endReason] ?? m.endReason})` : ""}
+              </li>
+            ))}
+          </ul>
+        )}
+      </s-stack>
+    </s-section>
   );
 }

@@ -51,3 +51,55 @@ export function weekOf(dayKey) {
   const back = (d.getUTCDay() + 6) % 7; // Monday → 0 … Sunday → 6
   return new Date(d.getTime() - back * 86_400_000).toISOString().slice(0, 10);
 }
+
+/** Last week (Monday to Sunday) for a plan's week (its Monday): `{ from, to }`. */
+export function lastWeekOf(week) {
+  const monday = new Date(`${week}T00:00:00Z`).getTime();
+  const day = (offset) => new Date(monday + offset * 86_400_000).toISOString().slice(0, 10);
+  return { from: day(-7), to: day(-1) };
+}
+
+const VERDICT_ORDER = ["improved", "worse", "no_change", "not_enough_data"];
+
+/**
+ * A rescue verdict for the recap: extra units over what was expected (improved ones only, never below
+ * 0) and those units at the product's price. `plan`: `{ productId, title, price, verdict, result }`.
+ */
+export function verdictLine(plan) {
+  const r = plan.result ?? {};
+  const extraUnits = plan.verdict === "improved" && r.after?.units != null && r.expectedUnits != null ? Math.max(0, Math.round(r.after.units - r.expectedUnits)) : null;
+  return {
+    productId: plan.productId,
+    title: plan.title,
+    verdict: plan.verdict,
+    // Which window it was (a later plan doesn't report it twice).
+    windowTo: r.window?.to ?? null,
+    extraUnits,
+    extraSales: extraUnits == null ? null : Math.round(extraUnits * (plan.price ?? 0) * 100) / 100,
+  };
+}
+
+/**
+ * Last week's results: rescue verdicts (improved first) with the extra sales of the improved ones, and
+ * markdowns started and ended. `null` when nothing happened.
+ */
+export function recapOf({ verdicts = [], started = [], ended = [] }) {
+  if (!verdicts.length && !started.length && !ended.length) return null;
+  const lines = verdicts.map(verdictLine).sort((a, b) => VERDICT_ORDER.indexOf(a.verdict) - VERDICT_ORDER.indexOf(b.verdict) || (b.extraSales ?? 0) - (a.extraSales ?? 0));
+  return {
+    verdicts: lines,
+    extraSales: Math.round(lines.reduce((s, l) => s + (l.extraSales ?? 0), 0) * 100) / 100,
+    markdownsStarted: started,
+    markdownsEnded: ended,
+  };
+}
+
+/**
+ * Whether a rescue verdict belongs in a plan's "last week": its window ended last week (`from`–`to`),
+ * or ended since `earliest` and no earlier plan reported it (`reported`: keys `productId:windowTo`).
+ */
+export function verdictCounts(productId, windowTo, { from, to, earliest, reported }) {
+  if (typeof windowTo !== "string" || windowTo > to) return false;
+  if (windowTo >= from) return true;
+  return windowTo >= earliest && !reported.has(`${productId}:${windowTo}`);
+}

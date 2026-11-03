@@ -105,9 +105,14 @@ export function describe(n) {
     case "weekly_plan": {
       const actions = d.actions ?? [];
       const first = actions[0];
+      const results = d.lastWeek?.verdicts?.length ?? 0;
+      const markdowns = (d.lastWeek?.markdownsStarted?.length ?? 0) + (d.lastWeek?.markdownsEnded?.length ?? 0);
+      const recovered = d.lastWeek?.extraSales > 0 ? ` (${formatMoney(d.lastWeek.extraSales, d.currency)} extra sales)` : "";
+      const todo = actions.length ? `${plural(actions.length, "action")}${first ? `, starting with ${first.title}` : ""}.` : "Nothing urgent this week.";
+      const last = [results ? `${plural(results, "result")}${recovered}` : null, markdowns ? plural(markdowns, "markdown update") : null].filter(Boolean).join(", ");
       return {
         title: "Your plan for this week",
-        body: `${plural(actions.length, "action")}${first ? `, starting with ${first.title}` : ""}.`,
+        body: `${todo}${last ? ` Last week: ${last}.` : ""}`,
         href: `/plan?week=${d.week}`,
       };
     }

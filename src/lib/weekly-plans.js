@@ -8,7 +8,8 @@ import { localDateKey } from "@/lib/jobs/schedule";
 import { markdownEligibility } from "@/lib/markdown-engine";
 import { notify } from "@/lib/notify";
 import { latestScores } from "@/lib/scores";
-import { pickActions, weekOf } from "@/lib/weekly-plan";
+import { asDate, DAY_MS } from "@/lib/dates";
+import { lastWeekOf, pickActions, recapOf, verdictCounts, weekOf } from "@/lib/weekly-plan";
 
 /** Candidates looked at: the dashboard's action list, a bit longer (some drop out as already handled). */
 const CANDIDATES = 15;
@@ -55,9 +56,54 @@ export async function buildWeeklyPlan(shopId) {
   return pickActions(candidates);
 }
 
+/** Verdicts are looked for this far back, so one decided late (after its week's plan) still comes once. */
+const LATE_VERDICT_DAYS = 21;
+
 /**
- * Job "weekly-plan" (nightly; acts on Mondays in the store's timezone): this week's plan in the inbox,
- * once per week, when there's something to do.
+ * Last week's results for a plan's week (see `recapOf`):
+ * - rescue verdicts whose window ended last week, or earlier but not yet in a plan (decided late);
+ * - markdowns that went live (step 1 applied) or ended last week, by the store's calendar.
+ */
+export async function lastWeekRecap(shopId, week) {
+  const shop = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true } });
+  const timezone = shop?.timezone ?? "UTC";
+  const { from, to } = lastWeekOf(week);
+  const start = asDate(from);
+  const end = new Date(asDate(to).getTime() + DAY_MS);
+  const earliest = shiftKey(from, -LATE_VERDICT_DAYS);
+  const [plans, started, ended, earlier] = await Promise.all([
+    // A window runs at most 60 days: older plans can't have ended in the time looked at.
+    db().rescuePlan.findMany({
+      where: { product: { shopId }, verdict: { in: ["improved", "no_change", "worse", "not_enough_data"] }, startedAt: { gte: new Date(asDate(earliest).getTime() - 70 * DAY_MS) } },
+      select: { productId: true, verdict: true, result: true, product: { select: { title: true, price: true } } },
+    }),
+    // Plans start at the store's midnight (a local date); only ones that went live count.
+    db().markdownPlan.findMany({ where: { product: { shopId }, startedAt: { gte: start, lt: end }, currentStep: { gte: 0 } }, select: { id: true, productId: true, product: { select: { title: true } } } }),
+    // `endedAt` is a moment: a day either side, then each one's day in the store's calendar.
+    db().markdownPlan.findMany({
+      where: { product: { shopId }, endedAt: { gte: new Date(start.getTime() - DAY_MS), lt: new Date(end.getTime() + DAY_MS) }, currentStep: { gte: 0 }, status: { not: "failed" } },
+      select: { id: true, productId: true, endReason: true, endedAt: true, product: { select: { title: true } } },
+    }),
+    // Verdicts the earlier plans already reported.
+    db().notification.findMany({ where: { shopId, type: "weekly_plan" }, orderBy: { createdAt: "desc" }, take: 4, select: { data: true } }),
+  ]);
+  const reported = new Set(earlier.flatMap((n) => (n.data?.week !== week ? (n.data?.lastWeek?.verdicts ?? []).map((v) => `${v.productId}:${v.windowTo}`) : [])));
+  const inWeek = (key) => key >= from && key <= to;
+  // Last week's verdicts, and earlier ones no plan has reported yet (decided after their week's plan).
+  return recapOf({
+    verdicts: plans
+      .filter((p) => verdictCounts(p.productId, p.result?.window?.to, { from, to, earliest, reported }))
+      .map((p) => ({ productId: p.productId, title: p.product.title, price: Number(p.product.price), verdict: p.verdict, result: p.result })),
+    started: started.map((m) => ({ id: m.id, productId: m.productId, title: m.product.title })),
+    ended: ended.filter((m) => inWeek(localDateKey(m.endedAt, timezone))).map((m) => ({ id: m.id, productId: m.productId, title: m.product.title, endReason: m.endReason })),
+  });
+}
+
+const shiftKey = (key, days) => new Date(asDate(key).getTime() + days * DAY_MS).toISOString().slice(0, 10);
+
+/**
+ * Job "weekly-plan" (nightly; acts on Mondays in the store's timezone): this week's plan, with last
+ * week's results, in the inbox, once per week, when there's something to do or to report.
  */
 export async function sendWeeklyPlan(shopId, now = new Date()) {
   const shop = await db().shop.findUnique({ where: { id: shopId }, select: { timezone: true, currency: true, uninstalledAt: true } });
@@ -66,9 +112,9 @@ export async function sendWeeklyPlan(shopId, now = new Date()) {
   if (weekOf(today) !== today) return; // not Monday
   const sent = await db().notification.findFirst({ where: { shopId, type: "weekly_plan", data: { path: ["week"], equals: today } }, select: { id: true } });
   if (sent) return;
-  const actions = await buildWeeklyPlan(shopId);
-  if (!actions.length) return;
-  await notify({ shopId, type: "weekly_plan", data: { week: today, actions, currency: shop.currency } });
+  const [actions, lastWeek] = await Promise.all([buildWeeklyPlan(shopId), lastWeekRecap(shopId, today)]);
+  if (!actions.length && !lastWeek) return;
+  await notify({ shopId, type: "weekly_plan", data: { week: today, actions, lastWeek, currency: shop.currency } });
 }
 
 /** A week's plan (`week`: its Monday), or the latest one; with the weeks there are plans for. */
