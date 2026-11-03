@@ -42,6 +42,7 @@ export async function upsertProducts(
       product_type: p.productType,
       vendor: p.vendor,
       collections: p.collections,
+      tags: p.tags ?? [],
       image_count: p.imageCount,
       description_words: p.descriptionWords,
       description: p.description,
@@ -53,20 +54,20 @@ export async function upsertProducts(
       created_at: p.createdAt?.toISOString() ?? null,
     }));
     await db().$executeRaw`
-      INSERT INTO "products" ("id", "shop_id", "shopify_gid", "title", "handle", "product_type", "vendor", "collections",
+      INSERT INTO "products" ("id", "shop_id", "shopify_gid", "title", "handle", "product_type", "vendor", "collections", "tags",
         "image_count", "description_words", "description", "seo_title", "seo_description",
         "price", "compare_at_price", "status", "shopify_created_at", "updated_at")
       SELECT gen_random_uuid()::text, ${shopId}, t.gid, t.title, t.handle, t.product_type, t.vendor,
-        ARRAY(SELECT jsonb_array_elements_text(t.collections)), t.image_count, t.description_words,
+        ARRAY(SELECT jsonb_array_elements_text(t.collections)), ARRAY(SELECT jsonb_array_elements_text(t.tags)), t.image_count, t.description_words,
         t.description, t.seo_title, t.seo_description, t.price, t.compare_at,
         t.status, t.created_at, (now() AT TIME ZONE 'UTC')
       FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS t(
-        gid text, title text, handle text, product_type text, vendor text, collections jsonb, image_count int,
+        gid text, title text, handle text, product_type text, vendor text, collections jsonb, tags jsonb, image_count int,
         description_words int, description text, seo_title text, seo_description text,
         price numeric, compare_at numeric, status text, created_at timestamp)
       ON CONFLICT ("shop_id", "shopify_gid") DO UPDATE SET
         "title" = EXCLUDED."title", "handle" = EXCLUDED."handle", "product_type" = EXCLUDED."product_type",
-        "vendor" = EXCLUDED."vendor", "collections" = EXCLUDED."collections", "image_count" = EXCLUDED."image_count",
+        "vendor" = EXCLUDED."vendor", "collections" = EXCLUDED."collections", "tags" = EXCLUDED."tags", "image_count" = EXCLUDED."image_count",
         "description_words" = EXCLUDED."description_words", "description" = EXCLUDED."description",
         "seo_title" = EXCLUDED."seo_title", "seo_description" = EXCLUDED."seo_description", "price" = EXCLUDED."price",
         "compare_at_price" = EXCLUDED."compare_at_price", "status" = EXCLUDED."status",

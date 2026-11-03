@@ -18,7 +18,7 @@ const CATCHUP_MARGIN_DAYS = 1;
 const PRODUCTS_QUERY = `{
   products {
     edges { node {
-      id title handle productType vendor status createdAt description seo { title description }
+      id title handle productType vendor status createdAt description seo { title description } tags
       mediaCount { count }
       collections { edges { node { id } } }
       variants { edges { node {

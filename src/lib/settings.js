@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS = {
   excludedCollectionIds: [],
   excludedProductIds: [],
   markdownEndAction: "restore",
+  seasonalCollections: [],
 };
 
 const THRESHOLD_RULES = {
@@ -21,6 +22,24 @@ const THRESHOLD_RULES = {
   minViews: { min: 1, max: 10_000, integer: true },
   marketAbove: { min: 0.01, max: 1 },
 };
+
+const MAX_SEASONAL = 100;
+
+/** `[{ collectionId, from, to }]` with real collection IDs and months 1–12, one season per collection; null if invalid. */
+function seasonalList(value) {
+  if (!Array.isArray(value) || value.length > MAX_SEASONAL) return null;
+  const month = (n) => Number.isInteger(n) && n >= 1 && n <= 12;
+  const clean = [];
+  for (const s of value) {
+    if (!s || typeof s !== "object" || typeof s.collectionId !== "string" || !GID.collection.test(s.collectionId) || !month(s.from) || !month(s.to)) return null;
+    if (clean.some((c) => c.collectionId === s.collectionId)) return null;
+    clean.push({ collectionId: s.collectionId, from: s.from, to: s.to });
+  }
+  return clean;
+}
+
+/** Stored seasonal collections, read back safely (anything malformed counts as none). */
+export const seasonalCollectionsOf = (raw) => seasonalList(raw) ?? [];
 
 const GID = { collection: /^gid:\/\/shopify\/Collection\/\d+$/, product: /^gid:\/\/shopify\/Product\/\d+$/ };
 const MAX_EXCLUDED = 250;
@@ -73,6 +92,9 @@ export function validateSettings(raw) {
   const excludedProductIds = gidList(input.excludedProductIds ?? [], GID.product);
   if (!excludedProductIds) errors.push({ field: "excludedProductIds", max: MAX_EXCLUDED });
 
+  const seasonalCollections = seasonalList(input.seasonalCollections ?? []);
+  if (!seasonalCollections) errors.push({ field: "seasonalCollections", max: MAX_SEASONAL });
+
   const endAction = input.markdownEndAction ?? "restore";
   if (endAction !== "restore" && endAction !== "hold") errors.push({ field: "markdownEndAction" });
 
@@ -87,6 +109,7 @@ export function validateSettings(raw) {
       excludedCollectionIds: excludedCollectionIds,
       excludedProductIds: excludedProductIds,
       markdownEndAction: endAction,
+      seasonalCollections,
     },
   };
 }

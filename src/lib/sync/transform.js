@@ -35,6 +35,8 @@ export function assembleProducts(rows) {
         seoTitle: str((row.seo)?.title),
         seoDescription: str((row.seo)?.description),
         imageCount: num((row.mediaCount)?.count) ?? 0,
+        // Shopify allows 250 tags of up to 255 characters.
+        tags: Array.isArray(row.tags) ? row.tags.filter((t) => typeof t === "string").slice(0, 250).map((t) => t.slice(0, 255)) : [],
         price: 0,
         compareAtPrice: null,
         collections: [],

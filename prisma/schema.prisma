@@ -61,6 +61,8 @@ model Settings {
   /// When a markdown ends: "restore" the original price or "hold" the last discount.
   markdownEndAction     String   @default("restore") @map("markdown_end_action")
   digestDay             Int      @default(1) @map("digest_day") // 0 = Sunday … 6 = Saturday
+  /// Collections whose products sell in a season: `[{ collectionId, from, to }]` (months 1–12).
+  seasonalCollections   Json     @default("[]") @map("seasonal_collections")
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
@@ -76,6 +78,8 @@ model Product {
   productType      String?   @map("product_type")
   vendor           String?
   collections      String[]  @default([])
+  /// Shopify tags (a `season:` tag marks a seasonal product).
+  tags             String[]  @default([])
   imageCount       Int       @default(0) @map("image_count")
   descriptionWords Int       @default(0) @map("description_words")
   /// Plain-text description (first 5,000 characters), for page diagnosis.

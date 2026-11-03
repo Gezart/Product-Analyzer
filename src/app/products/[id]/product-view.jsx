@@ -89,6 +89,7 @@ export function ProductView() {
               <Stat label="Price" value={money2.format(data.product.price)} />
               <Stat label="Product type" value={data.product.productType ?? "—"} />
               <Stat label="Collections" value={String(data.product.collections)} />
+              {data.product.season && <Stat label="Season" value={data.product.season.label} note={seasonNote(data.product.season)} />}
             </div>
           </s-stack>
         </s-section>
@@ -186,6 +187,13 @@ export function ProductView() {
       </s-stack>
     </s-page>
   );
+}
+
+/** "In season since 1 Nov" or "Starts 1 Nov (in 114 days)", and where the season comes from. */
+function seasonNote(season) {
+  const date = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+  const when = season.inSeason ? `In season since ${date(season.start)}` : `Starts ${date(season.nextStart)} (in ${season.daysToStart} days)`;
+  return `${when} · from ${season.source === "tag" ? "its tag" : "a seasonal collection"}`;
 }
 
 function Stat({ label, value, note }) {

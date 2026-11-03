@@ -65,3 +65,19 @@ test("shares are stored rounded, so a percentage typed in the form is exact", ()
   const r = validateSettings({ ...DEFAULT_SETTINGS, thresholds: { ...DEFAULT_SETTINGS.thresholds, marketAbove: 11.2 / 100 } });
   assert.equal(r.value.thresholds.marketAbove, 0.112);
 });
+
+test("seasonal collections: real collection IDs, months 1–12, one season each", () => {
+  const ok = validateSettings({ ...DEFAULT_SETTINGS, seasonalCollections: [{ collectionId: "gid://shopify/Collection/1", from: 11, to: 2, extra: "x" }] });
+  assert.deepEqual(ok.value.seasonalCollections, [{ collectionId: "gid://shopify/Collection/1", from: 11, to: 2 }]);
+  assert.deepEqual(validateSettings({ ...DEFAULT_SETTINGS, seasonalCollections: undefined }).value.seasonalCollections, []);
+  for (const bad of [
+    [{ collectionId: "123", from: 1, to: 2 }],
+    [{ collectionId: "gid://shopify/Collection/1", from: 0, to: 2 }],
+    [{ collectionId: "gid://shopify/Collection/1", from: 1, to: 13 }],
+    [{ collectionId: "gid://shopify/Collection/1", from: "1", to: 2 }],
+    [{ collectionId: "gid://shopify/Collection/1", from: 1, to: 2 }, { collectionId: "gid://shopify/Collection/1", from: 6, to: 8 }],
+    "nope",
+  ]) {
+    assert.deepEqual(validateSettings({ ...DEFAULT_SETTINGS, seasonalCollections: bad }).errors, [{ field: "seasonalCollections", max: 100 }], JSON.stringify(bad));
+  }
+});
