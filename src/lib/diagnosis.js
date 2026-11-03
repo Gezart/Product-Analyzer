@@ -49,27 +49,31 @@ export const MIN_RETURNED = 5;
 const RETURNS_FACTOR = 2;
 const RETURNS_HIGH_FACTOR = 3;
 
-/** A return rate for people: whole percents from 10%, one decimal below ("0.3%", "4.5%"). */
+/** A return rate for people: whole percents from 10%, one decimal below ("0.3%", "4.5%"), "under 0.1%" for tiny ones. */
 export function returnPct(rate) {
   const p = rate * 100;
+  if (p > 0 && p < 0.05) return "under 0.1%";
   return p >= 10 ? `${Math.round(p)}%` : `${Math.round(p * 10) / 10}%`;
 }
 
-/** Hints the page can't act on (supplier, fulfillment, carrier) aren't shown under a page editor. */
-export function returnHintType(handle) {
-  return /damage|defect|quality|broken|wrong|late|delay/.test(String(handle ?? "").toLowerCase()) ? "other" : "description";
-}
+/**
+ * What to change for the most common return reason (Shopify's reason handle), first match wins:
+ * `type` "description" for what the page can fix, "other" for what it can't (supplier, fulfillment, carrier).
+ */
+const RETURN_HINTS = [
+  [/small|big|large|tight|loose|fit|size|long|short|comfort/, "description", "Add a size chart and fit notes (runs small or large, model's size) to the description."],
+  [/colou?r|style|described|looks|different|picture|photo/, "description", "Show it as it really is: true-color photos and an exact description of material and finish."],
+  [/damage|defect|quality|broken/, "other", "Check quality and packaging with your supplier: the page can't fix these returns."],
+  [/wrong/, "other", "Check picking and labels in fulfillment: customers got the wrong item."],
+  [/late|delay/, "other", "Check the delivery times the page promises and your carrier."],
+];
+const hintOf = (handle) => RETURN_HINTS.find(([re]) => re.test(String(handle ?? "").toLowerCase()));
 
-/** What to change for the most common return reason (Shopify's reason handle), or null for a general hint. */
-export function returnHint(handle) {
-  const h = String(handle ?? "").toLowerCase();
-  if (/small|big|large|tight|loose|fit|size|long|short|comfort/.test(h)) return "Add a size chart and fit notes (runs small or large, model's size) to the description.";
-  if (/colou?r|style|described|looks|different|picture|photo/.test(h)) return "Show it as it really is: true-color photos and an exact description of material and finish.";
-  if (/damage|defect|quality|broken/.test(h)) return "Check quality and packaging with your supplier: the page can't fix these returns.";
-  if (/wrong/.test(h)) return "Check picking and labels in fulfillment: customers got the wrong item.";
-  if (/late|delay/.test(h)) return "Check the delivery times the page promises and your carrier.";
-  return null;
-}
+/** The hint's text for a return reason, or null for a general hint. */
+export const returnHint = (handle) => hintOf(handle)?.[2] ?? null;
+
+/** Where the hint shows: under the description editor, or with the general hints ("other"). */
+export const returnHintType = (handle) => hintOf(handle)?.[1] ?? "description";
 
 /** Peer median excluding the product itself, so one expensive product can't hide behind its own price. */
 function peerMedian(prices, own, ownIsListed) {

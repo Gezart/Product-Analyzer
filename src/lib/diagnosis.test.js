@@ -286,4 +286,9 @@ test("hints the page can't act on go to the general hints", () => {
   assert.equal(returnHintType("damaged"), "other");
   assert.equal(returnHintType("wrong-item"), "other");
   assert.equal(returnHintType("arrived-late"), "other");
+  // Text and place come from the same rule: a wrong size is a size hint, under the description.
+  assert.match(returnHint("wrong-size"), /size chart/);
+  assert.equal(returnHintType("wrong-size"), "description");
+  assert.equal(returnPct(0.0004), "under 0.1%");
+  assert.equal(returnPct(0), "0%");
 });
