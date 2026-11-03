@@ -243,7 +243,11 @@ export async function chooseAccount(shop, accountId) {
   }
   const account = accounts.find((a) => a.accountId === String(accountId ?? ""));
   if (!account) throw new HttpError("Choose one of the listed accounts.", 400);
-  await db().googleConnection.update({ where: { shopId: shop.id }, data: { accountId: account.accountId, accountName: account.accountName, status: "connected", error: null, syncedAt: null } });
+  const { count } = await db().googleConnection.updateMany({
+    where: { shopId: shop.id },
+    data: { accountId: account.accountId, accountName: account.accountName, status: "connected", error: null, syncedAt: null },
+  });
+  if (count === 0) throw new HttpError("Connect Google Merchant Center first.", 409);
   await db().googleBenchmark.deleteMany({ where: { shopId: shop.id } });
   await queueSync(shop.id);
 }
@@ -267,8 +271,9 @@ export async function disconnect(shop, { wait = true } = {}) {
     const revoking = revoke(decrypt(c.refreshToken));
     if (wait) await revoking;
   }
-  await db().googleBenchmark.deleteMany({ where: { shopId: shop.id } });
+  // The connection first: a read still running then stores nothing (it checks the connection).
   await db().googleConnection.deleteMany({ where: { shopId: shop.id } });
+  await db().googleBenchmark.deleteMany({ where: { shopId: shop.id } });
 }
 
 /**
@@ -298,7 +303,8 @@ export async function syncBenchmarks(shopId, signal) {
   } catch (error) {
     if (signal?.aborted) throw error;
     if (!(error instanceof GoogleError)) throw error;
-    await db().googleConnection.updateMany({ where: { shopId }, data: { error: error.message, ...(error.reconnect ? { status: "failed" } : {}) } });
+    // Only onto the connection that was read (not one the merchant switched or reconnected meanwhile).
+    await db().googleConnection.updateMany({ where: { shopId, accountId: c.accountId, status: "connected" }, data: { error: error.message, ...(error.reconnect ? { status: "failed" } : {}) } });
     return 0;
   }
   if (signal?.aborted) return 0;
@@ -315,17 +321,27 @@ export async function syncBenchmarks(shopId, signal) {
   const data = parsed
     .filter((r) => productOf.has(r.ids.variantGid) && r.price < MAX_AMOUNT && r.benchmark < MAX_AMOUNT)
     .map((r) => ({ shopId, productId: productOf.get(r.ids.variantGid), offerId: r.offerId, country: r.country ?? r.ids.country, price: r.price, benchmark: r.benchmark, currency: r.currency }));
-  // Stored only if the merchant didn't switch accounts or disconnect while the report was read.
-  return db().$transaction(async (tx) => {
-    const { count } = await tx.googleConnection.updateMany({
-      where: { shopId, accountId: c.accountId, status: "connected" },
-      data: { syncedAt: new Date(), error: pageToken ? `Only the first ${MAX_REPORT_PAGES * 1000} Google offers were read.` : null },
-    });
-    if (count === 0) return 0;
-    await tx.googleBenchmark.deleteMany({ where: { shopId } });
-    await tx.googleBenchmark.createMany({ data, skipDuplicates: true });
-    return data.length;
-  });
+  // Stored only if the merchant didn't switch accounts or disconnect while the report was read. Up to
+  // 50,000 rows: the transaction gets the time a large catalog needs, like the other bulk writes.
+  try {
+    return await db().$transaction(
+      async (tx) => {
+        const { count } = await tx.googleConnection.updateMany({
+          where: { shopId, accountId: c.accountId, status: "connected" },
+          data: { syncedAt: new Date(), error: pageToken ? `Only the first ${MAX_REPORT_PAGES * 1000} Google offers were read.` : null },
+        });
+        if (count === 0) return 0;
+        await tx.googleBenchmark.deleteMany({ where: { shopId } });
+        await tx.googleBenchmark.createMany({ data, skipDuplicates: true });
+        return data.length;
+      },
+      { maxWait: 10_000, timeout: 120_000 },
+    );
+  } catch (error) {
+    // Retried by the job; meanwhile Settings says what happened instead of "being read".
+    await db().googleConnection.updateMany({ where: { shopId, accountId: c.accountId }, data: { error: "Google's prices couldn't be saved. They will be read again shortly." } });
+    throw error;
+  }
 }
 
 /** The shop's benchmarks are used only while connected and read in the last 3 days: the read date, or null. */

@@ -31,8 +31,8 @@ async function overview(shop, productId, links) {
     competitors,
     gap: gapToMarket(price, competitors.median),
     google: google && { benchmark: google.median, country: google.country, gap: gapToMarket(price, google.median), syncedAt: google.syncedAt },
-    // Whether to suggest connecting Google: the app has it set up and this shop hasn't connected yet.
-    googleSuggested: googleConfigured() && (!connection || connection.status === "pending"),
+    // Whether to suggest connecting Google: the app has it set up and this shop has no working connection.
+    googleSuggested: googleConfigured() && !["connected", "choose_account"].includes(connection?.status),
     marketAbove,
   };
 }
