@@ -12,8 +12,10 @@ export const POST = appRoute(async ({ request, shop, params }) => {
   const product = await db().product.findFirst({ where: { id: params.id, shopId: shop.id } });
   if (!product) throw new HttpError("Product not found.", 404);
   await requireWithinLimit(shop, product.id);
-  // Refused before reading the body (form overhead allowed for).
-  if (Number(request.headers.get("content-length") ?? 0) > MAX_PHOTO_BYTES + 64 * 1024) throw new HttpError("This photo is too large (over 20 MB).", 413);
+  // The size is checked before the body is read (browsers always send it with a form; form overhead allowed for).
+  const length = Number(request.headers.get("content-length"));
+  if (!length) throw new HttpError("The upload's size is missing.", 411);
+  if (length > MAX_PHOTO_BYTES + 64 * 1024) throw new HttpError("This photo is too large (over 20 MB).", 413);
   const form = await request.formData().catch(() => null);
   if (!form) throw new HttpError("Choose a photo to upload.", 400);
   return Response.json(await uploadOwnPhoto(shop, product, form.get("file")));

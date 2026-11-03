@@ -13,6 +13,25 @@ import { HttpError } from "@/lib/http-error";
 
 export const NO_PHOTO_MESSAGE = "This product has no photo yet. Add one first: the AI starts from a real photo of the product.";
 
+/** A response body up to `max` bytes (read as it arrives, stopped beyond it), or null when larger. */
+export async function readLimited(res, max) {
+  if (Number(res.headers.get("content-length") ?? 0) > max) return null;
+  const reader = res.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return Buffer.concat(chunks);
+    size += value.length;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+}
+
 /** Reads a product photo from Shopify's CDN (only there), at most 20 MB, as jpeg, png or webp. */
 async function readSourcePhoto(previewUrl) {
   const url = sourcePhotoUrl(previewUrl);
@@ -24,17 +43,16 @@ async function readSourcePhoto(previewUrl) {
     throw new HttpError("The photo couldn't be read from Shopify. Try again.", 502);
   }
   if (!res.ok) throw new HttpError("The photo couldn't be read from Shopify. Try again.", 502);
-  if (Number(res.headers.get("content-length") ?? 0) > MAX_PHOTO_BYTES) throw new HttpError("This photo is too large (over 20 MB).", 422);
-  const bytes = Buffer.from(await res.arrayBuffer());
-  if (bytes.length > MAX_PHOTO_BYTES) throw new HttpError("This photo is too large (over 20 MB).", 422);
+  const bytes = await readLimited(res, MAX_PHOTO_BYTES);
+  if (!bytes) throw new HttpError("This photo is too large (over 20 MB).", 422);
   const mimeType = imageTypeOf(bytes);
   if (!mimeType) throw new HttpError("This photo's format can't be used (JPEG, PNG or WebP only).", 422);
   return { bytes, mimeType };
 }
 
-/** Drafts not added within a day are removed (with their image). */
-async function pruneDrafts(shopId) {
-  await db().aiPhotoDraft.deleteMany({ where: { shopId, status: { in: ["draft", "discarded"] }, createdAt: { lt: new Date(Date.now() - DRAFT_TTL_MS) } } });
+/** Drafts not added within a day are removed with their image (also nightly, job "ai-photo-drafts"). */
+export async function pruneDrafts(shopId) {
+  await db().aiPhotoDraft.deleteMany({ where: { shopId, status: { not: "added" }, createdAt: { lt: new Date(Date.now() - DRAFT_TTL_MS) } } });
 }
 
 const toDataUrl = (bytes, mimeType) => `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`;
@@ -79,12 +97,33 @@ async function findDraft(shopId, draftId) {
   return draft;
 }
 
+const markAdded = (draftId, fix) =>
+  db().aiPhotoDraft.update({ where: { id: draftId }, data: { status: "added", mediaId: fix.after?.added?.[0] ?? fix.mediaId ?? null, fixId: fix.id, image: null } });
+
+/**
+ * A draft left "adding" (the request that added it ended early): its fix says how it went. Added →
+ * the draft is marked so; failed → it's a draft again. Otherwise it's still being added (409).
+ */
+async function settleAdding(draft) {
+  const fix = await db().fix.findFirst({ where: { productId: draft.productId, type: "photo", after: { path: ["draftId"], equals: draft.id } }, orderBy: { createdAt: "desc" } });
+  if (fix?.status === "applied" || fix?.status === "undone") {
+    await markAdded(draft.id, fix);
+    draft.status = "added";
+  } else if (fix?.status === "failed") {
+    await db().aiPhotoDraft.updateMany({ where: { id: draft.id, status: "adding" }, data: { status: "draft" } });
+    draft.status = "draft";
+  } else {
+    throw new HttpError("This photo is already being added.", 409);
+  }
+}
+
 /**
  * Adds an approved draft to the product in Shopify, as an undoable fix. The draft is claimed first,
  * so a double click can't add it twice; if adding fails it goes back to a draft to try again.
  */
 export async function addPhotoDraft(shop, draftId, { diagnosisId } = {}) {
   const draft = await findDraft(shop.id, draftId);
+  if (draft.status === "adding") await settleAdding(draft);
   if (draft.status === "added") throw new HttpError("This photo is already on the product.", 409);
   if (draft.status !== "draft" || !draft.image || draft.createdAt < new Date(Date.now() - DRAFT_TTL_MS)) {
     throw new HttpError("This AI photo isn't available any more. Make a new one.", 410);
@@ -97,14 +136,14 @@ export async function addPhotoDraft(shop, draftId, { diagnosisId } = {}) {
       shop.id,
       draft.productId,
       { bytes: draft.image, mimeType: draft.mimeType, alt: aiPhotoAlt(draft.product.title, draft.style) },
-      { ai: true, diagnosisId },
+      { ai: true, diagnosisId, draftId: draft.id },
     );
   } catch (error) {
     await db().aiPhotoDraft.update({ where: { id: draft.id }, data: { status: "draft" } });
     throw error;
   }
   // The image now lives in Shopify; only the link to it is kept.
-  await db().aiPhotoDraft.update({ where: { id: draft.id }, data: { status: "added", mediaId: fix.mediaId, fixId: fix.id, image: null } });
+  await markAdded(draft.id, fix);
   return fix;
 }
 

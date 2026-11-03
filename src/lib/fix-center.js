@@ -115,7 +115,7 @@ export async function applyFix(
  * `after` lists the media then and the one `added`). `photo` is `{ bytes, mimeType, alt }`; `ai` marks
  * a photo made with AI. Resolves the fix with the new photo's `mediaId`.
  */
-export async function addPhotoFix(shopId, productId, photo, { ai = false, diagnosisId } = {}) {
+export async function addPhotoFix(shopId, productId, photo, { ai = false, diagnosisId, draftId = null } = {}) {
   const { product, session } = await productContext(shopId, productId);
   const live = await readLiveProduct(session, product.shopifyGid);
   if (!live) throw new FixError("Product no longer exists in Shopify", 404);
@@ -126,28 +126,29 @@ export async function addPhotoFix(shopId, productId, photo, { ai = false, diagno
   if (busy) throw new FixError("Another change to this product is still being applied.", 409);
 
   const diagnosis = diagnosisId ? await db().diagnosis.findFirst({ where: { id: diagnosisId, productId } }) : null;
+  // `alt` and `draftId` let an attempt that crashed still be found and undone (the photo carries its alt).
   const fix = await db().fix.create({
-    data: { productId, diagnosisId: diagnosis?.id ?? null, type: "photo", before, after: { ...before, added: [], ai }, status: "approved" },
+    data: { productId, diagnosisId: diagnosis?.id ?? null, type: "photo", before, after: { ...before, added: [], ai, alt: photo.alt, draftId }, status: "approved" },
   });
   let mediaId;
+  let error = null;
   try {
     mediaId = await addProductPhoto(session, product.shopifyGid, { ...photo, beforeIds: before.mediaIds });
-  } catch (error) {
-    // The photo may have been added even so (e.g. its id wasn't returned): any new media is kept undoable.
-    const saved = await readState(session, product.shopifyGid, "photo");
-    const extra = saved ? saved.mediaIds.filter((id) => !before.mediaIds.includes(id)) : [];
-    await db().fix.update({
-      where: { id: fix.id },
-      data: extra.length
-        ? { status: "applied", appliedAt: new Date(), after: { mediaIds: saved.mediaIds, added: extra, ai }, error: `Outcome unclear: ${errorMessage(error)}` }
-        : { status: "failed", error: errorMessage(error) },
-    });
-    await refreshProduct(shopId, product.shopifyGid);
-    throw new FixError(errorMessage(error), 502);
+  } catch (failure) {
+    // The photo may be on the product even so (e.g. Shopify's answer was lost): a new photo with this
+    // alt counts as added, so it isn't added twice and Undo removes it. Otherwise the fix failed.
+    const now = await readLiveProduct(session, product.shopifyGid).catch(() => null);
+    mediaId = (now?.media ?? []).filter((m) => !before.mediaIds.includes(m.id) && m.alt === photo.alt).at(-1)?.id;
+    if (!mediaId) {
+      await db().fix.update({ where: { id: fix.id }, data: { status: "failed", error: errorMessage(failure) } });
+      await refreshProduct(shopId, product.shopifyGid);
+      throw new FixError(errorMessage(failure), 502);
+    }
+    error = `Added, but Shopify's answer was incomplete: ${errorMessage(failure)}`;
   }
   const result = await db().fix.update({
     where: { id: fix.id },
-    data: { status: "applied", appliedAt: new Date(), after: { mediaIds: [...before.mediaIds, mediaId], added: [mediaId], ai } },
+    data: { status: "applied", appliedAt: new Date(), error, after: { mediaIds: [...before.mediaIds, mediaId], added: [mediaId], ai, alt: photo.alt, draftId } },
   });
   await refreshProduct(shopId, product.shopifyGid);
   await track(startRescuePlan(shopId, productId, fix.id));
@@ -177,7 +178,13 @@ export async function undoFix(shopId, fixId, { force = false } = {}) {
   if (!live) throw new FixError("Product no longer exists in Shopify", 404);
   const current = stateOf(live, type);
   // An added photo is undone by removing just that photo, whatever changed since; others restore `before`.
-  const added = type === "photo" ? (fix.after?.added ?? []) : [];
+  // A photo fix that crashed before recording its photo: the photo is a new one with its alt text.
+  const added =
+    type !== "photo"
+      ? []
+      : fix.after?.added?.length
+        ? fix.after.added
+        : live.media.filter((m) => !(fix.before?.mediaIds ?? []).includes(m.id) && fix.after?.alt && m.alt === fix.after.alt).map((m) => m.id);
   const target = type === "photo" ? { mediaIds: current.mediaIds.filter((id) => !added.includes(id)) } : fix.before;
   if (type !== "photo" && !force && !sameState(type, current, fix.after)) {
     throw new FixError("The product changed since this fix was applied. Undo anyway to overwrite that change.", 409);

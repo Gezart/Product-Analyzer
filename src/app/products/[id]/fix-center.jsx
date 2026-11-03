@@ -101,7 +101,8 @@ export function FixCenter({ productId, onChanged }) {
       return setMessage({ tone: "critical", text: body.error, forceFix: fixId });
     }
     const undone = data?.fixes.find((f) => f.id === fixId)?.type;
-    await load(res.ok && undone ? [undone] : []);
+    // Undoing an added photo changes the photo list.
+    await load(res.ok && undone ? [undone === "photo" ? "images" : undone] : []);
     if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
     const note = body.pending ? " Shopify is still finishing it; it can take a minute to show." : "";
     setMessage({ tone: "success", text: `Undone: the product is back to how it was before the fix.${note}` });
