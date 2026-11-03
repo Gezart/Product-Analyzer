@@ -98,6 +98,7 @@ export function ProductView() {
               <Stat label="Collections" value={String(data.product.collections)} />
               {data.product.season && <Stat label="Season" value={data.product.season.label} note={seasonNote(data.product.season)} />}
             </div>
+            {data.returns?.returned > 0 && <Returns returns={data.returns} money={money} />}
           </s-stack>
         </s-section>
 
@@ -193,6 +194,22 @@ export function ProductView() {
         </s-section>
       </s-stack>
     </s-page>
+  );
+}
+
+/** How often the product comes back, against the store, and why. */
+function Returns({ returns, money }) {
+  const pctOf = (n) => (n == null ? "—" : `${Math.round(n * 100)}%`);
+  return (
+    <div id="returns" className="rounded-lg bg-zinc-50 p-3 text-sm">
+      <div className="font-medium">
+        Returns ({returns.days} days): {pctOf(returns.rate)} · {returns.returned} of {returns.sold} units came back
+      </div>
+      <div className="text-zinc-600">
+        Store average {pctOf(returns.storeRate)} · {money.format(returns.refunded)} refunded
+        {returns.reasons.length > 0 && ` · ${returns.reasons.map((r) => `${r.name} (${r.count})`).join(", ")}`}
+      </div>
+    </div>
   );
 }
 

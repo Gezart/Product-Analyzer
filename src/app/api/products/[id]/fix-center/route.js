@@ -40,6 +40,7 @@ export const GET = appRoute(async ({ shop, session, params }) => {
   ]);
   if (!live && !liveError) return Response.json({ error: "Product no longer exists in Shopify" }, { status: 404 });
   const reasons = diagnosis?.reasons ?? [];
-  const hints = reasons.flatMap((r) => (FIX_HINTS[r.code] ? [{ code: r.code, ...FIX_HINTS[r.code] }] : []));
+  // A reason can carry its own hint (e.g. returns: what fits the most common return reason).
+  const hints = reasons.flatMap((r) => (FIX_HINTS[r.code] ? [{ code: r.code, ...FIX_HINTS[r.code], ...(r.data?.hint ? { hint: r.data.hint } : {}) }] : []));
   return Response.json({ live, liveError, manualCollections: collections, fixes, hints, diagnosisId: diagnosis?.id ?? null, upgrade });
 });

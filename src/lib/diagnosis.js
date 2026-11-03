@@ -44,6 +44,22 @@ function money(n, currency) {
 }
 const SEVERITY_RANK = { high: 0, medium: 1, low: 2 };
 
+/** Returned often: at least this many units came back, at twice the store's return rate (three times: high). */
+export const MIN_RETURNED = 5;
+const RETURNS_FACTOR = 2;
+const RETURNS_HIGH_FACTOR = 3;
+
+/** What to change for the most common return reason (Shopify's reason handle), or null for a general hint. */
+export function returnHint(handle) {
+  const h = String(handle ?? "").toLowerCase();
+  if (/small|big|large|tight|loose|fit|size|long|short|comfort/.test(h)) return "Add a size chart and fit notes (runs small or large, model's size) to the description.";
+  if (/colou?r|style|described|looks|different|picture|photo/.test(h)) return "Show it as it really is: true-color photos and an exact description of material and finish.";
+  if (/damage|defect|quality|broken/.test(h)) return "Check quality and packaging with your supplier: the page can't fix these returns.";
+  if (/wrong/.test(h)) return "Check picking and labels in fulfillment: customers got the wrong item.";
+  if (/late|delay/.test(h)) return "Check the delivery times the page promises and your carrier.";
+  return null;
+}
+
 /** Peer median excluding the product itself, so one expensive product can't hide behind its own price. */
 function peerMedian(prices, own, ownIsListed) {
   if (!prices) return null;
@@ -210,6 +226,22 @@ export function diagnose(p, ctx) {
     }
   }
 
+  // 8. Returned often: at least 5 units came back and the return rate is at least twice the store's
+  //    (`p.returns` and `ctx.storeReturnRate` over the same recent days, built by the caller).
+  const ret = p.returns;
+  if (ret && ret.returned >= MIN_RETURNED && ctx.storeReturnRate > 0 && ret.rate >= ctx.storeReturnRate * RETURNS_FACTOR) {
+    const top = ret.topReason;
+    reasons.push({
+      code: "returned_often",
+      severity: ret.rate >= ctx.storeReturnRate * RETURNS_HIGH_FACTOR ? "high" : "medium",
+      evidence:
+        `${pct(ret.rate)} of the units sold in the last ${ret.days} days came back (${ret.returned} of ${ret.sold}); the store's average is ${pct(ctx.storeReturnRate)}.` +
+        (top ? ` Most common reason: ${top.name} (${top.count}).` : ""),
+      data: { returned: ret.returned, sold: ret.sold, rate: ret.rate, storeRate: ctx.storeReturnRate, topReason: top?.handle ?? null, hint: returnHint(top?.handle) },
+      link: "#returns",
+    });
+  }
+
   // 7. Many add to cart but few buy → likely store-level (shipping cost, checkout), not this product.
   if (p.views30 >= ctx.minViews && p.carts30 >= MIN_CARTS && ctx.medianViewToCart != null && ctx.medianCartToPurchase != null) {
     const viewToCart = p.carts30 / p.views30;
@@ -235,7 +267,7 @@ export function diagnose(p, ctx) {
 export function reasonSignature(reasons) {
   return reasons
     .map((r) => {
-      const items = ["outOfStock", "missing", "sameAs", "group", "source"]
+      const items = ["outOfStock", "missing", "sameAs", "group", "source", "topReason"]
         .map((k) => r.data[k])
         .filter((v) => v != null)
         .map((v) => (Array.isArray(v) ? [...v].sort().join("|") : String(v)));

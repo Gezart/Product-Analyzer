@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { dailySeries, lastSaleDate, trend30, windowTotals } from "@/lib/product-metrics";
 import { appRoute } from "@/lib/route";
+import { returnRate, returnWindow, topReturnReasons } from "@/lib/returns";
 import { formatSeason, seasonOf, seasonState } from "@/lib/season";
 import { seasonalCollectionsOf } from "@/lib/settings";
 import { stockFromVariants } from "@/lib/scoring";
@@ -30,6 +31,14 @@ export const GET = appRoute(async ({ shop, params }) => {
     db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "webhooks" } } }),
     db().settings.findUnique({ where: { shopId: shop.id }, select: { seasonalCollections: true } }),
   ]);
+  // Returns over the recent days: the product's rate, the store's, and the most common reasons.
+  const recent = await returnWindow(shop.id, shop.timezone);
+  const [productReturns, storeReturns, returnReasons] = await Promise.all([
+    returnRate(shop.id, recent.from, product.shopifyGid),
+    returnRate(shop.id, recent.from),
+    topReturnReasons(shop.id, recent.from, product.shopifyGid),
+  ]);
+  const returns = { days: recent.days, ...productReturns, storeRate: storeReturns.rate, reasons: returnReasons };
   // The product's season (its `season:` tag, or a collection marked seasonal) and where today falls in it.
   const seasonFound = seasonOf(product, seasonalCollectionsOf(settings?.seasonalCollections));
   const season = seasonFound && { label: formatSeason(seasonFound.ranges), source: seasonFound.source, ...seasonState(seasonFound.ranges, today) };
@@ -71,6 +80,7 @@ export const GET = appRoute(async ({ shop, params }) => {
       descriptionPreview: product.description?.slice(0, 400) ?? null,
       season,
     },
+    returns,
     score: score
       ? {
           status: score.status,
