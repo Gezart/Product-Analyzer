@@ -86,7 +86,7 @@ From the features workspace (Returns). Decisions: a product's return rate is hig
 | --- | --- | --- | --- |
 | `returns-sync` | `read_returns` scope; refunded units per order line (not cancellations before shipping) and money refunded, from the nightly read and order webhooks; return reasons from Shopify returns | Refunds and reasons of the last 60 days are stored per product | done (request costs to confirm on the dev store) |
 | `returns-diagnosis` | Diagnosis reason "returned often": return rate vs the store's average (2×, min. 5 units), the most common reason, a fix hint by reason; returns on the product page | A product returned twice as often as the store shows the reason with its numbers | done |
-| `returns-report` | Monthly report: money refunded for returns and the top return reasons | The report shows what returns cost that month | doing |
+| `returns-report` | Monthly report: money refunded for returns and the top return reasons | The report shows what returns cost that month | done |
 | — | Owner: deploy the new scope (`shopify app deploy`) so merchants are asked to approve `read_returns` | Scope approved on the dev store | todo (owner) |
 
 ## v2 (not in v1)

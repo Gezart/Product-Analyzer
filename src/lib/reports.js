@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { hasFeature } from "@/lib/plans";
 import { averageCost, dailyBaseline, markdownPeriod, monthlyReport, monthRange, previousMonth } from "@/lib/report";
+import { monthReturns } from "@/lib/returns";
 import { isLocalDate, ORDER_DAYS } from "@/lib/sync/constants";
 
 /** Builds a shop's report for `period` ("YYYY-MM") from its plans, fixes and daily metrics. */
@@ -11,6 +12,9 @@ export async function buildReport(shopId, period, now = new Date()) {
   const shop = await db().shop.findUniqueOrThrow({ where: { id: shopId }, select: { timezone: true, currency: true } });
   const tz = shop.timezone;
   const today = localDateKey(now, tz);
+  // What returns cost: orders placed this month that came back (up to today in the current month).
+  const returnsPending = monthReturns(shopId, month.from, month.to < today ? month.to : today);
+  returnsPending.catch(() => {}); // awaited below; this only keeps an early failure elsewhere from leaving it unhandled
   const [rescues, markdowns, fixes, orders] = await Promise.all([
     // endsAt = the day after the window: windows that end before this month don't matter.
     db().rescuePlan.findMany({ where: { product: { shopId }, verdict: "improved", endsAt: { gte: asDate(month.from) } }, include: { product: { select: { title: true, shopifyCreatedAt: true } } } }),
@@ -93,7 +97,7 @@ export async function buildReport(shopId, period, now = new Date()) {
       effect: effect.get(f.id) ?? null,
     })),
   });
-  return { ...report, currency: shop.currency };
+  return { ...report, returns: await returnsPending, currency: shop.currency };
 }
 
 /**
