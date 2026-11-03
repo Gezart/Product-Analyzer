@@ -2,6 +2,8 @@ import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { dailySeries, lastSaleDate, trend30, windowTotals } from "@/lib/product-metrics";
 import { appRoute } from "@/lib/route";
+import { formatSeason, seasonOf, seasonState } from "@/lib/season";
+import { seasonalCollectionsOf } from "@/lib/settings";
 import { stockFromVariants } from "@/lib/scoring";
 import { knownOrderDays } from "@/lib/sync/constants";
 
@@ -21,12 +23,16 @@ export const GET = appRoute(async ({ shop, params }) => {
 
   const today = localDateKey(new Date(), shop.timezone);
   const since = new Date(Date.parse(`${today}T00:00:00Z`) - 120 * 86_400_000);
-  const [metrics, lastSale, ordersSync, webhooks] = await Promise.all([
+  const [metrics, lastSale, ordersSync, webhooks, settings] = await Promise.all([
     db().productDailyMetric.findMany({ where: { productId: id, date: { gte: since } }, orderBy: { date: "asc" } }),
     db().productDailyMetric.findFirst({ where: { productId: id, units: { gt: 0 } }, orderBy: { date: "desc" }, select: { date: true } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "orders" } } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "webhooks" } } }),
+    db().settings.findUnique({ where: { shopId: shop.id }, select: { seasonalCollections: true } }),
   ]);
+  // The product's season (its `season:` tag, or a collection marked seasonal) and where today falls in it.
+  const seasonFound = seasonOf(product, seasonalCollectionsOf(settings?.seasonalCollections));
+  const season = seasonFound && { label: formatSeason(seasonFound.ranges), source: seasonFound.source, ...seasonState(seasonFound.ranges, today) };
   // Windows longer than the known order history would undercount: they are flagged as partial.
   const knownDays = knownOrderDays({
     windowStart: ordersSync?.status === "done" ? ordersSync.lastCursor : null,
@@ -63,6 +69,7 @@ export const GET = appRoute(async ({ shop, params }) => {
       seoTitle: product.seoTitle,
       seoDescription: product.seoDescription,
       descriptionPreview: product.description?.slice(0, 400) ?? null,
+      season,
     },
     score: score
       ? {

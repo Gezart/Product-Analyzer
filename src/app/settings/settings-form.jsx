@@ -24,10 +24,30 @@ const DISCOUNT_FIELDS = [
 ];
 const ALL_FIELDS = [...STATUS_FIELDS, ...DIAGNOSIS_FIELDS, ...DISCOUNT_FIELDS];
 const LIST_LABELS = {
+  seasonalCollections: "Seasonal collections",
   excludedCollectionIds: "Excluded collections",
   excludedProductIds: "Excluded products",
   body: "Request",
 };
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const selectClass = "rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm";
+
+/** A month picker (1–12). */
+function MonthSelect({ label, value, onChange }) {
+  return (
+    <label className="flex flex-col gap-1 text-sm">
+      {label}
+      <select className={selectClass} value={value} onChange={(e) => onChange(Number(e.target.value))}>
+        {MONTHS.map((m, i) => (
+          <option key={m} value={i + 1}>
+            {m}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 function getValue(s, field) {
   return field.startsWith("thresholds.")
@@ -53,6 +73,7 @@ export function SettingsForm() {
   const [collections, setCollections] = useState(null);
   const [collectionsError, setCollectionsError] = useState(false);
   const [collectionsTruncated, setCollectionsTruncated] = useState(false);
+  const [newSeason, setNewSeason] = useState({ collectionId: "", from: 11, to: 2 });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const banner = useRef(null);
@@ -103,6 +124,7 @@ export function SettingsForm() {
     if (collections && !collectionsTruncated) {
       const known = new Set(collections.map((c) => c.id));
       payload.excludedCollectionIds = s.excludedCollectionIds.filter((id) => known.has(id));
+      payload.seasonalCollections = s.seasonalCollections.filter((c) => known.has(c.collectionId));
     }
     return { payload, errors };
   }
@@ -158,6 +180,16 @@ export function SettingsForm() {
     });
   }
 
+  const setSeasons = (seasonalCollections) => setSettings({ ...settings, seasonalCollections });
+  function addSeason() {
+    if (!newSeason.collectionId) return;
+    setSeasons([...settings.seasonalCollections.filter((c) => c.collectionId !== newSeason.collectionId), newSeason]);
+    setNewSeason({ ...newSeason, collectionId: "" });
+  }
+  // Beyond a cut-off list a collection may still exist: show its number, not "no longer in Shopify".
+  const collectionTitle = (id) =>
+    collections?.find((c) => c.id === id)?.title ?? (collections && !collectionsTruncated ? "Collection no longer in Shopify" : `Collection ${id.split("/").pop()}`);
+
   function toggleCollection(id, excluded) {
     if (!settings) return;
     const rest = settings.excludedCollectionIds.filter((c) => c !== id);
@@ -193,6 +225,54 @@ export function SettingsForm() {
 
       <s-section heading="Diagnosis">
         <div className="grid gap-4 sm:grid-cols-2">{DIAGNOSIS_FIELDS.map(numberField)}</div>
+      </s-section>
+
+      <s-section heading="Seasonal products">
+        <s-stack gap="base">
+          <s-text tone="neutral">
+            Products that sell in a season aren&apos;t called dead stock out of season. In Shopify, tag a product with its months, like{" "}
+            <code>season:nov-feb</code> or <code>season:jun-aug</code> (or <code>season:winter</code>: Dec–Feb, northern hemisphere). Or mark whole
+            collections here; a product&apos;s own tag wins.
+          </s-text>
+          {settings.seasonalCollections.length > 0 && (
+            <ul className="m-0 list-none divide-y divide-zinc-200 p-0">
+              {settings.seasonalCollections.map((c) => (
+                <li key={c.collectionId} className="flex flex-wrap items-end gap-3 py-2">
+                  <span className="min-w-0 flex-1 text-sm font-medium">{collectionTitle(c.collectionId)}</span>
+                  <MonthSelect label="From" value={c.from} onChange={(from) => setSeasons(settings.seasonalCollections.map((x) => (x === c ? { ...x, from } : x)))} />
+                  <MonthSelect label="To" value={c.to} onChange={(to) => setSeasons(settings.seasonalCollections.map((x) => (x === c ? { ...x, to } : x)))} />
+                  <s-button variant="tertiary" ref={listen("click", () => setSeasons(settings.seasonalCollections.filter((x) => x !== c)))}>
+                    Remove
+                  </s-button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {collectionsError && <s-banner tone="critical">Could not load collections from Shopify.</s-banner>}
+          {collections && (
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex min-w-0 flex-col gap-1 text-sm">
+                Seasonal collection
+                <select className={selectClass} value={newSeason.collectionId} onChange={(e) => setNewSeason({ ...newSeason, collectionId: e.target.value })}>
+                  <option value="">Choose…</option>
+                  {collections
+                    .filter((c) => !settings.seasonalCollections.some((s) => s.collectionId === c.id))
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <MonthSelect label="From" value={newSeason.from} onChange={(from) => setNewSeason({ ...newSeason, from })} />
+              <MonthSelect label="To" value={newSeason.to} onChange={(to) => setNewSeason({ ...newSeason, to })} />
+              <s-button disabled={!newSeason.collectionId || undefined} ref={listen("click", addSeason)}>
+                Add
+              </s-button>
+            </div>
+          )}
+          <s-text tone="neutral">Saved with the button at the bottom of the page.</s-text>
+        </s-stack>
       </s-section>
 
       <s-section heading="Discounts">

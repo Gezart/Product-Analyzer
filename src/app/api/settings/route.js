@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { enqueue } from "@/lib/jobs/queue";
 import { appRoute } from "@/lib/route";
 import { sanitizeThresholds } from "@/lib/scoring";
-import { DEFAULT_SETTINGS, validateSettings } from "@/lib/settings";
+import { DEFAULT_SETTINGS, seasonalCollectionsOf, validateSettings } from "@/lib/settings";
 
 /** Settings plus titles of excluded products (from synced products; unknown IDs show the ID). */
 async function withProductTitles(shopId, settings) {
@@ -29,6 +29,7 @@ export const GET = appRoute(async ({ shop }) => {
         excludedCollectionIds: row.excludedCollectionIds,
         excludedProductIds: row.excludedProductIds,
         markdownEndAction: row.markdownEndAction === "hold" ? "hold" : "restore",
+        seasonalCollections: seasonalCollectionsOf(row.seasonalCollections),
       }
     : DEFAULT_SETTINGS;
   return Response.json(await withProductTitles(shop.id, settings));

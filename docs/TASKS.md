@@ -67,6 +67,17 @@ From the features workspace (Diagnosis). Decision: market price from **A** Googl
 | — | Owner: Google verification of the `content` scope before the App Store | Verified | todo (owner, before App Store) |
 | — | Open questions: diagnosis every night with the main reason in the top 10; keywords beyond English; monthly diagnosis limit | Owner decides | waits on owner |
 
+## Phase 2c · Seasonal products
+
+From the features workspace (Seasonal products). Decision: the merchant marks seasons with a tag now; detection from sales history later (needs `read_all_orders`). All plans (it corrects statuses).
+
+| Branch | Task | Done when | Status |
+| --- | --- | --- | --- |
+| `seasonal-tags` | Product tags in the sync; season from a product tag (`season:nov-feb`, `season:11-2`, `season:winter`) or from a collection marked seasonal in Settings; season shown on the product page | A tagged product shows its season and whether it's in season | done |
+| `seasonal-status` | New status "Seasonal": out of season (and the first 30 days of the season) a product isn't dead stock or a slow mover and gets no markdown; days without a sale count from the season's start | A jacket unsold since spring shows "Seasonal · season starts in November", not dead stock | todo |
+| `seasonal-reminders` | Inbox reminder 30 days before a season starts; when a season ends with stock left, an inbox note and an end-of-season markdown proposal for 30 days | The reminder and the end-of-season markdown appear once per season | todo |
+| — | Seasons from sales history (12 months of orders) | After Shopify approves `read_all_orders` | waits on owner |
+
 ## v2 (not in v1)
 
 AI diagnosis and AI drafts (Claude), weekly email digest.
