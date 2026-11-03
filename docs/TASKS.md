@@ -124,7 +124,7 @@ From the features workspace (Rising stars), picked by the owner as the next feat
 
 | Branch | Task | Done when | Status |
 | --- | --- | --- | --- |
-| `rising-stars` | The rule (nightly with the scores): at least 5 units in the last 30 days, 20%+ over the 30 days before (which had sales), converting at least as well as the store's median when visits are known; never dead stock, a slow mover or waiting for its season. A "Rising stars" card on the dashboard, a filter and mark in the product list, and on the product page the growth with suggested actions (stock when it runs out within 45 days at this pace, move it up in its collections, feature it on the home page) | A rising product shows on the dashboard, in the list and on its page with its actions | doing |
+| `rising-stars` | The rule (nightly with the scores): at least 5 units in the last 30 days, 20%+ over the 30 days before (which had sales), converting at least as well as the store's median when visits are known; never dead stock, a slow mover or waiting for its season. A "Rising stars" card on the dashboard, a filter and mark in the product list, and on the product page the growth with suggested actions (stock when it runs out within 45 days at this pace, move it up in its collections, feature it on the home page) | A rising product shows on the dashboard, in the list and on its page with its actions | done |
 | `rising-effect` | Measure sales after an action (e.g. moved up in a collection, featured) vs the period before | An action on a rising star shows its measurement | todo |
 
 ## v2 (not in v1)
