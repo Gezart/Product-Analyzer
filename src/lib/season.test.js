@@ -112,3 +112,14 @@ test("inbox notices: seasons starting within 30 days, and seasons just ended wit
   assert.equal(justEnded(state("2026-10-01", summer)), false);
   assert.equal(justEnded(state("2026-07-01", summer)), false);
 });
+
+test("the reminder comes 30 days before, not 31; no end note when the next season is close", () => {
+  const winter = [{ from: 11, to: 2 }];
+  assert.equal(seasonNotices([{ id: "a", stock: 1, stockValue: 1, state: seasonState(winter, "2026-09-30") }]).soon.length, 0, "32 days");
+  assert.equal(seasonNotices([{ id: "a", stock: 1, stockValue: 1, state: seasonState(winter, "2026-10-01") }]).soon.length, 0, "31 days");
+  assert.equal(seasonNotices([{ id: "a", stock: 1, stockValue: 1, state: seasonState(winter, "2026-10-02") }]).soon.length, 1, "30 days");
+  const twoSeasons = [{ from: 6, to: 8 }, { from: 10, to: 12 }];
+  const n = seasonNotices([{ id: "a", stock: 5, stockValue: 50, state: seasonState(twoSeasons, "2026-09-30") }]);
+  assert.deepEqual(n.ended, [], "October starts tomorrow: no end-of-season markdown");
+  assert.equal(n.soon.length, 1);
+});

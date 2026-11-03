@@ -24,13 +24,13 @@ function stockColumns(p) {
  * Inbox notes about seasons, each once: a season starting within 30 days ("check stock and pages"), and
  * a season that just ended with stock left ("an end-of-season markdown clears it").
  */
-async function notifySeasons(shopId, items, currency) {
+async function notifySeasons(shopId, items, currency, now) {
   const { soon, ended } = seasonNotices(items);
   if (!soon.length && !ended.length) return;
   const sent = new Set(
     (
       await db().notification.findMany({
-        where: { shopId, type: { in: ["season_soon", "season_ended"] }, createdAt: { gte: new Date(Date.now() - 400 * DAY_MS) } },
+        where: { shopId, type: { in: ["season_soon", "season_ended"] }, createdAt: { gte: new Date(now.getTime() - 400 * DAY_MS) } },
         select: { data: true },
       })
     ).map((n) => n.data?.key),
@@ -218,7 +218,7 @@ export async function scoreShop(shopId, now = new Date()) {
       ...overLimit.map((p) => ({ productId: p.id, computedAt: now, status: "over_limit", moneyAtStake: "0.00", ...stockColumns(p) })),
     ],
   });
-  await notifySeasons(shopId, inputs.map((p) => ({ id: p.id, stock: p.stock, stockValue: p.stockValue, state: seasons.get(p.id) })), shopRow?.currency ?? null);
+  await notifySeasons(shopId, inputs.map((p) => ({ id: p.id, stock: p.stock, stockValue: p.stockValue, state: seasons.get(p.id) })), shopRow?.currency ?? null, now);
 
   const summary = attentionSummary(previous, results);
   // The first analysis is the first run that scored a product (none yet, or all excluded: nothing to report).

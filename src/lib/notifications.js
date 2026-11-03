@@ -98,7 +98,7 @@ export function describe(n) {
       const what = d.count === 1 ? title : plural(d.count ?? 0, "product");
       return {
         title: `Season ended with stock left: ${what}`,
-        body: `${formatMoney(d.stockValue ?? 0, d.currency)} in stock. An end-of-season markdown clears it before it waits a whole year; start it on the product page.`,
+        body: `${formatMoney(d.stockValue ?? 0, d.currency)} in stock. An end-of-season markdown clears it before the next season; start it on the product page.`,
         href: d.count === 1 && n.productId ? product : "/products?status=seasonal",
       };
     }

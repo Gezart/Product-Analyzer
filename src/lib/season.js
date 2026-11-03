@@ -126,9 +126,15 @@ export function unitsSinceStart(rows, starts) {
 export const REMINDER_DAYS = 30;
 /** After a season ends with stock left, an end-of-season markdown is proposed for this many days. */
 export const END_MARKDOWN_DAYS = 30;
+/** ...but only when the next season is further away than a whole markdown (3 steps of 14 days) and then some. */
+export const NEXT_SEASON_GAP_DAYS = 60;
 
-/** The season ended in the last 30 days: an end-of-season markdown may clear what's left. */
-export const justEnded = (state) => Boolean(state) && !state.inSeason && state.daysSinceEnd <= END_MARKDOWN_DAYS;
+/**
+ * The season ended in the last 30 days and the next one is more than 60 days away: an end-of-season
+ * markdown may clear what's left without running into the next season.
+ */
+export const justEnded = (state) =>
+  Boolean(state) && !state.inSeason && state.daysSinceEnd <= END_MARKDOWN_DAYS && state.daysToStart > NEXT_SEASON_GAP_DAYS;
 
 /**
  * What the inbox should say about seasons, from `items` `{ id, stock, stockValue, state }` (`state` from

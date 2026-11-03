@@ -55,6 +55,6 @@ test("season notes: one product opens it, several open the seasonal list", () =>
   assert.equal(one.href, "/products/p1");
   const ended = describe({ type: "season_ended", productId: null, data: { date: "2026-08-31", count: 4, stockValue: 1250.5, currency: "EUR" } });
   assert.equal(ended.title, "Season ended with stock left: 4 products");
-  assert.match(ended.body, /^€1,251 in stock\. An end-of-season markdown/);
+  assert.match(ended.body, /^€1,251 in stock\. An end-of-season markdown clears it before the next season/);
   assert.equal(ended.href, "/products?status=seasonal");
 });

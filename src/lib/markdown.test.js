@@ -207,3 +207,35 @@ test("applied after outcomes: markdowns recorded, restores removed, failed and u
   const settled = withOutcomes({ v: { price: 70, compareAt: 100 } }, [guard], settleWrites([guard], [lp(77)]));
   assert.deepEqual(restoreWrites([plan], [lp(77)], settled), [{ id: "v", price: 100, compareAtPrice: null, floor: null, reason: "restore" }]);
 });
+
+// --- why a product qualifies for a markdown ---
+
+import { markdownReason } from "./markdown.js";
+import { seasonState } from "./season.js";
+
+test("markdown reasons: dead stock, a rescue that changed nothing; never for products not analyzed", () => {
+  const base = { active: true, status: "dead_stock", rescueVerdict: null, stock: 10, season: null };
+  assert.equal(markdownReason(base).kind, "dead_stock");
+  assert.equal(markdownReason({ ...base, status: "slow_mover", rescueVerdict: "no_change" }).kind, "rescue");
+  assert.equal(markdownReason({ ...base, status: "healthy" }), null);
+  assert.equal(markdownReason({ ...base, active: false }), null, "draft");
+  assert.equal(markdownReason({ ...base, status: "excluded", rescueVerdict: "no_change" }), null);
+  assert.equal(markdownReason({ ...base, status: "over_limit" }), null);
+});
+
+test("markdown reasons for seasonal products: only right after the season, with stock, well before the next", () => {
+  const summer = [{ from: 6, to: 8 }];
+  const base = { active: true, status: "seasonal", rescueVerdict: "no_change", stock: 12 };
+  const end = markdownReason({ ...base, season: seasonState(summer, "2026-09-05") });
+  assert.equal(end.kind, "end_of_season");
+  assert.equal(end.reason, "Its season ended 5 days ago: an end-of-season markdown clears the stock before its next season.");
+  assert.equal(markdownReason({ ...base, stock: 0, season: seasonState(summer, "2026-09-05") }), null, "sold out");
+  assert.equal(markdownReason({ ...base, season: seasonState(summer, "2026-10-01") }), null, "31 days after the season: waiting for the next");
+  assert.equal(markdownReason({ ...base, status: "dead_stock", season: seasonState(summer, "2026-06-20") }), null, "early in the season");
+  assert.equal(markdownReason({ ...base, rescueVerdict: null, status: "dead_stock", season: seasonState(summer, "2026-08-20") }).kind, "dead_stock", "late in the season");
+  // The next season starts in under 60 days: a markdown would run into it.
+  const twoSeasons = [{ from: 6, to: 8 }, { from: 10, to: 12 }];
+  assert.equal(markdownReason({ ...base, season: seasonState(twoSeasons, "2026-09-05") }), null);
+  assert.equal(markdownReason({ ...base, active: false, season: seasonState(summer, "2026-09-05") }), null, "draft");
+  assert.equal(markdownReason({ ...base, status: "excluded", season: seasonState(summer, "2026-09-05") }), null, "excluded");
+});
