@@ -14,7 +14,7 @@ export const WEBHOOK_TOPICS = [
   "INVENTORY_LEVELS_UPDATE",
 ];
 
-const ORDER_FIELDS = ["id", "admin_graphql_api_id", "created_at", "updated_at", "cancelled_at", "line_items"];
+const ORDER_FIELDS = ["id", "admin_graphql_api_id", "created_at", "updated_at", "cancelled_at", "line_items", "refunds"];
 
 let handlersAdded = false;
 

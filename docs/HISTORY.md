@@ -1,5 +1,12 @@
 # History
 
+## 2026-11-03 · returns-sync
+- New scope `read_returns` (shopify.app.toml, `.env.example`, PLAN); merchants approve it once after the app update, and until then refunds are still read and reasons are skipped with a note
+- `line_refunds`: units refunded per order line after shipping (cancellations of unshipped items aren't returns) and the money refunded, counted against the order's date; `return_reasons`: why each returned item came back (Shopify's reason, or its older reason list); both RLS on (migration applied to Supabase)
+- Nightly `returns-sync` (and after the first import): only orders with refunds or returns in the 60-day window, found with Shopify's order search and read a few per request (bulk exports can't read refund or return lines); waits and retries when Shopify throttles; drops rows older than the window
+- Order webhooks now include refunds and update them right away; an older version of an order never overwrites a newer one
+- Verified on a local Postgres with Shopify stubbed: two pages of refunded orders, a cancellation left out, reasons with and without definitions, a throttled request retried, a night without `read_returns`, webhooks new/stale/without refunds, old rows pruned
+
 ## 2026-11-03 · seasonal-reminders
 - Inbox, once per season: 30 days before a season starts ("check stock and product pages"), and when a season ends with stock left (stock value, "an end-of-season markdown clears it"); one product opens its page, several open the seasonal list
 - For 30 days after its season ends, a product with stock left can get an end-of-season markdown, only when its next season is more than 60 days away (a markdown runs 6 weeks); never for sold-out, draft or excluded products; the product page says so

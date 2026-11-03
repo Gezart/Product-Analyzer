@@ -5,8 +5,8 @@ import { PermanentJobError } from "@/lib/jobs/errors";
 import { enqueue } from "@/lib/jobs/queue";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { orderWindowStart } from "@/lib/sync/initial-sync";
-import { applyOrderLines, markProductDeleted, rebuildProductSales, upsertProducts } from "@/lib/sync/store";
-import { assembleProducts, orderLinesFromWebhook, rowsFromProductNode } from "@/lib/sync/transform";
+import { applyOrderLines, markProductDeleted, rebuildProductSales, replaceOrderRefunds, upsertProducts } from "@/lib/sync/store";
+import { assembleProducts, lineRefundsFromWebhook, orderLinesFromWebhook, rowsFromProductNode } from "@/lib/sync/transform";
 
 // Pages of 100 keep each request well under Shopify's 1,000-point query cost limit.
 const PRODUCT_QUERY = `#graphql
@@ -59,6 +59,8 @@ export async function handleOrderWebhook(domain, payload) {
   if (localDateKey(new Date(payload.created_at), shop.timezone) < windowStart) return;
   const updatedAt = new Date(payload.updated_at ?? payload.created_at);
   await applyOrderLines(shop.id, orderGid, updatedAt, orderLinesFromWebhook(payload, shop.timezone));
+  // Refunds come with the order (subscriptions made before they were added send none: keep what's stored).
+  if (Array.isArray(payload.refunds)) await replaceOrderRefunds(shop.id, orderGid, updatedAt, lineRefundsFromWebhook(payload, shop.timezone));
 }
 
 /** Queues a product re-sync unless one is already waiting (product updates come in bursts). */
