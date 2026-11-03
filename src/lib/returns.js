@@ -3,6 +3,7 @@
 import { DAY_MS } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
+import { summarizeReturns } from "@/lib/return-stats";
 import { orderWindowStart } from "@/lib/sync/initial-sync";
 
 /** Return rates look back this far (or to the start of the known order history, if later). */
@@ -89,24 +90,14 @@ export async function monthReturns(shopId, from, to, { top = 5 } = {}) {
         })
       : [],
   ]);
-  const keptOf = new Map(keptByProduct.map((r) => [r.productGid, r._sum.quantity ?? 0]));
-  const productOf = new Map(products.map((p) => [p.shopifyGid, p]));
-  const nameOf = new Map(names.map((n) => [n.reason, n.reasonName]));
-  const returned = back._sum.returnedQty ?? 0;
-  const sold = (kept._sum.quantity ?? 0) + returned;
-  return {
+  return summarizeReturns({
+    kept: kept._sum.quantity ?? 0,
+    returned: back._sum.returnedQty ?? 0,
     refunded: Number(back._sum.refundedAmount ?? 0),
-    returned,
-    sold,
-    rate: sold > 0 ? returned / sold : null,
-    reasons: reasonRows.map((r) => ({ handle: r.reason, name: nameOf.get(r.reason) ?? r.reason, count: r._sum.quantity ?? 0 })).filter((r) => r.count > 0),
-    products: byProduct
-      .map((r) => {
-        const units = r._sum.returnedQty ?? 0;
-        const soldUnits = (keptOf.get(r.productGid) ?? 0) + units;
-        const p = productOf.get(r.productGid);
-        return { productId: p?.id ?? null, title: p?.title ?? "Deleted product", returned: units, sold: soldUnits, rate: soldUnits > 0 ? units / soldUnits : null, refunded: Number(r._sum.refundedAmount ?? 0) };
-      })
-      .filter((p) => p.returned > 0),
-  };
+    byProduct: byProduct.map((r) => ({ productGid: r.productGid, returned: r._sum.returnedQty ?? 0, refunded: Number(r._sum.refundedAmount ?? 0) })),
+    keptByProduct: new Map(keptByProduct.map((r) => [r.productGid, r._sum.quantity ?? 0])),
+    products: new Map(products.map((p) => [p.shopifyGid, { id: p.id, title: p.title }])),
+    reasons: reasonRows.map((r) => ({ handle: r.reason, count: r._sum.quantity ?? 0 })),
+    names: new Map(names.map((n) => [n.reason, n.reasonName])),
+  });
 }

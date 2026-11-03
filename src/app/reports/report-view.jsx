@@ -163,7 +163,7 @@ export function ReportView() {
               )}
             </s-section>
 
-            {report.returns && <ReturnsSection returns={report.returns} money={money} />}
+            {report.returns && <ReturnsSection returns={report.returns} money={money2} />}
 
             <s-section heading="Fixes applied">
               {report.fixes.length === 0 ? (
@@ -196,7 +196,12 @@ function ReturnsSection({ returns, money }) {
   return (
     <s-section heading="Returns">
       {returns.returned === 0 ? (
-        <s-paragraph>Nothing from this month&apos;s orders came back.</s-paragraph>
+        <s-stack gap="small">
+          <s-paragraph>Nothing from this month&apos;s orders was refunded as a return.</s-paragraph>
+          {returns.reasons.length > 0 && (
+            <s-text tone="neutral">Return requests so far: {returns.reasons.map((r) => `${r.name} (${r.count})`).join(", ")}</s-text>
+          )}
+        </s-stack>
       ) : (
         <s-stack gap="base">
           <s-paragraph>
@@ -217,7 +222,7 @@ function ReturnsSection({ returns, money }) {
                 </thead>
                 <tbody>
                   {returns.products.map((p) => (
-                    <tr key={p.productId ?? p.title} className="border-t border-zinc-200">
+                    <tr key={p.productGid} className="border-t border-zinc-200">
                       <td className="py-2 pr-4">
                         {p.productId ? (
                           <Link href={`/products/${p.productId}`} className="hover:underline">
@@ -237,7 +242,9 @@ function ReturnsSection({ returns, money }) {
               </table>
             </div>
           )}
-          <s-text tone="neutral">Orders placed this month that were refunded after shipping (cancellations aren&apos;t counted). Reasons come from Shopify returns.</s-text>
+          <s-text tone="neutral">
+            Orders placed this month whose items were refunded as returns (cancellations aren&apos;t counted); amounts are the items&apos; prices, without tax or shipping. Reasons come from Shopify returns, including requests not refunded yet.
+          </s-text>
         </s-stack>
       )}
     </s-section>
