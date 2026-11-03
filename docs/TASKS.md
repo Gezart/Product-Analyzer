@@ -74,7 +74,7 @@ From the features workspace (Seasonal products). Decision: the merchant marks se
 | Branch | Task | Done when | Status |
 | --- | --- | --- | --- |
 | `seasonal-tags` | Product tags in the sync; season from a product tag (`season:nov-feb`, `season:11-2`, `season:winter`) or from a collection marked seasonal in Settings; season shown on the product page | A tagged product shows its season and whether it's in season | done |
-| `seasonal-status` | New status "Seasonal": out of season (and the first 30 days of the season) a product isn't dead stock or a slow mover and gets no markdown; days without a sale count from the season's start | A jacket unsold since spring shows "Seasonal · season starts in November", not dead stock | todo |
+| `seasonal-status` | New status "Seasonal": out of season (and the first 30 days of the season) a product isn't dead stock or a slow mover and gets no markdown; days without a sale count from the season's start | A jacket unsold since spring shows "Seasonal · season starts in November", not dead stock | done |
 | `seasonal-reminders` | Inbox reminder 30 days before a season starts; when a season ends with stock left, an inbox note and an end-of-season markdown proposal for 30 days | The reminder and the end-of-season markdown appear once per season | todo |
 | — | Seasons from sales history (12 months of orders) | After Shopify approves `read_all_orders` | waits on owner |
 

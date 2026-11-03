@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { seasonGraceDays, seasonWaiting } from "@/lib/scoring";
 import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 import { Diagnosis } from "./diagnosis";
 import { FixCenter } from "./fix-center";
@@ -39,15 +40,18 @@ export function ProductView() {
   const info = data.score ? STATUS_INFO[data.score.status] : null;
   // A running markdown or a rescue plan decides what comes next, before the status's general advice.
   const rescue = data.rescuePlan;
+  const season = data.product.season;
   const next = data.markdownRunning
     ? "A markdown is running (see below)."
     : rescue && !rescue.verdict
       ? "Wait for the rescue plan's result (below)."
       : rescue?.verdict === "worse" && rescue.fixIds.length > 0
         ? "Undo the fixes (see the rescue plan below)."
-        : rescue?.verdict === "no_change"
+        : rescue?.verdict === "no_change" && !seasonWaiting(season)
           ? "Start the markdown (see below)."
-          : info?.action;
+          : data.score?.status === "seasonal" && season
+            ? seasonalNext(season)
+            : info?.action;
 
   return (
     <s-page heading={data.product.title}>
@@ -84,7 +88,7 @@ export function ProductView() {
                 label="Money at stake"
                 value={data.score && !["over_limit", "excluded"].includes(data.score.status) ? money.format(data.score.moneyAtStake) : "—"}
               />
-              <Stat label="Sell-through (60 days)" value={pct(data.score?.sellThrough ?? null)} />
+              <Stat label={season?.inSeason && season.daysIntoSeason < 60 ? "Sell-through (season so far)" : "Sell-through (60 days)"} value={pct(data.score?.sellThrough ?? null)} />
               <Stat label="Trend (30 vs previous 30)" value={data.trend == null ? "—" : `${data.trend.toFixed(2)}×`} />
               <Stat label="Price" value={money2.format(data.product.price)} />
               <Stat label="Product type" value={data.product.productType ?? "—"} />
@@ -187,6 +191,14 @@ export function ProductView() {
       </s-stack>
     </s-page>
   );
+}
+
+/** What a seasonal product needs now: nothing until its season, or a little time early in it. */
+function seasonalNext(season) {
+  if (!season.inSeason) return `Nothing until its season (${season.label}) starts in ${season.daysToStart} day${season.daysToStart === 1 ? "" : "s"}; it isn't dead stock.`;
+  const left = seasonGraceDays(season.seasonDays) - season.daysIntoSeason;
+  if (left <= 0) return `Its season (${season.label}) is underway; it's judged at the next nightly analysis.`;
+  return `Its season (${season.label}) has just started; it's judged in ${left} day${left === 1 ? "" : "s"}.`;
 }
 
 /** "In season since 1 Nov" or "Starts 1 Nov (in 114 days)", and where the season comes from. */

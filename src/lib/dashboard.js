@@ -2,7 +2,7 @@
 
 import { round2 } from "./dates.js";
 
-export const STATUS_ORDER = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "stockout_risk", "healthy", "new"];
+export const STATUS_ORDER = ["dead_stock", "slow_mover", "page_problem", "hidden_gem", "stockout_risk", "healthy", "new", "seasonal"];
 
 /** Statuses whose stock counts as "money stuck in stock". */
 const STUCK = new Set(["dead_stock", "slow_mover"]);
@@ -30,8 +30,8 @@ export function summarize(rows, topN = 10) {
     moneyStuck: round2(stuck.reduce((sum, r) => sum + r.stockValue, 0)),
     moneyStuckIsEstimate: stuck.some((r) => r.costIsEstimate),
     productCount: scored.length,
-    /** Every status except healthy and new asks the merchant to do something. */
-    needsAttention: scored.filter((r) => r.status !== "healthy" && r.status !== "new").length,
+    /** Every status except healthy, new and seasonal (waiting for its season) asks the merchant to do something. */
+    needsAttention: scored.filter((r) => !["healthy", "new", "seasonal"].includes(r.status)).length,
     moneyAtStakeTotal: round2(scored.reduce((sum, r) => sum + r.moneyAtStake, 0)),
     overLimit: rows.filter((r) => r.status === "over_limit").length,
     byStatus,

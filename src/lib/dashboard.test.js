@@ -57,7 +57,7 @@ test("top list is capped", () => {
   assert.equal(s.top[0].productId, "p14");
 });
 
-test("needs attention counts every analyzed status except healthy and new; money at stake is the total", () => {
+test("needs attention counts every analyzed status except healthy, new and seasonal; money at stake is the total", () => {
   const s = summarize([
     row({ productId: "a", status: "dead_stock", stockValue: 1000, moneyAtStake: 1000 }),
     row({ productId: "b", status: "page_problem", moneyAtStake: 0 }),
@@ -65,6 +65,7 @@ test("needs attention counts every analyzed status except healthy and new; money
     row({ productId: "d", status: "hidden_gem", stockValue: 100, moneyAtStake: 40.25 }),
     row({ productId: "e", status: "healthy", stockValue: 9000 }),
     row({ productId: "n", status: "new", stockValue: 300 }),
+    row({ productId: "s", status: "seasonal", stockValue: 500 }),
     row({ productId: "f", status: "excluded" }),
     row({ productId: "g", status: "over_limit" }),
   ]);

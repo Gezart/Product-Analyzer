@@ -1,5 +1,12 @@
 # History
 
+## 2026-11-03 · seasonal-status
+- New status "Seasonal" (no money at stake, not "needs attention"): a seasonal product waiting for its season (out of it, or in its first 30 days; half the season if shorter) is never dead stock, a slow mover or "new"; other statuses (page problem, stock-out risk, hidden gem, healthy) still apply
+- In season, days without a sale count from the season's start; a season shorter than 90 days makes an unsold product dead stock on its last day; in the first 60 days sell-through counts only the season so far
+- No markdown while a product waits for its season, whatever its status or rescue result; the product page says when its season starts or when it's judged
+- Shown in the product list filters, the dashboard mix (teal) and the product page
+- Verified on a local Postgres: nightly scoring on four dates of a Nov–Feb season and a Jun–Aug collection; markdown eligibility for in-season, out-of-season and unseasonal products
+
 ## 2026-11-03 · seasonal-tags
 - Product tags are synced (initial import, nightly refresh, live webhooks); existing products get them at the next nightly refresh (migration applied to Supabase)
 - A product's season: a `season:` tag (`season:nov-feb`, `season:11-2`, `season:dec`, `season:winter` = Dec–Feb, northern hemisphere) or a collection marked seasonal in Settings with its months; the product's own tag wins; seasons that overlap or touch are one season, a whole year is none

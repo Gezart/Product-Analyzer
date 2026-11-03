@@ -6,6 +6,9 @@ import { localDateKey } from "@/lib/jobs/schedule";
 import { dueStep, guardWrites, LADDER, liveStock, proposeLadder, restoreWrites, safeToWrite, settleWrites, stepWrites, stockCleared, withOutcomes } from "@/lib/markdown";
 import { readLiveVariants, writeVariantPrices } from "@/lib/markdown-shopify";
 import { notify } from "@/lib/notify";
+import { seasonOf, seasonState } from "@/lib/season";
+import { seasonWaiting } from "@/lib/scoring";
+import { seasonalCollectionsOf } from "@/lib/settings";
 import { shopifyFailure } from "@/lib/shopify-errors";
 
 export class MarkdownError extends HttpError {}
@@ -208,12 +211,24 @@ async function endPlan(planId, reason, restore) {
   });
 }
 
-/** Why a product qualifies for a markdown now, or null. */
-async function eligibility(productId) {
-  const [rescue, score] = await Promise.all([
+/** Where today falls in the product's season (from its tag or a seasonal collection), or null. */
+async function productSeason(product) {
+  const settings = await db().settings.findUnique({ where: { shopId: product.shopId }, select: { seasonalCollections: true } });
+  const season = seasonOf(product, seasonalCollectionsOf(settings?.seasonalCollections));
+  return season && seasonState(season.ranges, localDateKey(new Date(), product.shop.timezone));
+}
+
+/** Why a product qualifies for a markdown now, or null. `product` comes with its shop. */
+async function eligibility(product) {
+  const productId = product.id;
+  const [rescue, score, season] = await Promise.all([
     db().rescuePlan.findFirst({ where: { productId }, orderBy: { startedAt: "desc" } }),
     db().productScore.findFirst({ where: { productId }, orderBy: { computedAt: "desc" }, select: { status: true } }),
+    productSeason(product),
   ]);
+  // Out of season (or early in it) a seasonal product is waiting for its season, not failing: no
+  // markdown, whatever its status or rescue result.
+  if (seasonWaiting(season)) return null;
   if (rescue?.verdict === "no_change") return { reason: "The rescue plan ended with no change.", rescueId: rescue.id };
   if (score?.status === "dead_stock") return { reason: "Dead stock: no sale for a long time.", rescueId: null };
   return null;
@@ -241,7 +256,7 @@ export async function markdownOverview(shopId, productId, { preview: withPreview
   const { product, session, settings } = await context(shopId, productId);
   const [plan, eligible, priceChanges] = await Promise.all([
     latestPlan(productId),
-    eligibility(productId),
+    eligibility(product),
     db().priceChange.findMany({ where: { productId }, orderBy: { changedAt: "desc" }, take: 30 }),
   ]);
   const running = plan && ["active", "paused"].includes(plan.status);
@@ -268,7 +283,7 @@ const isProposal = (v) =>
 export async function approveMarkdown(shopId, productId, expected) {
   if (!isProposal(expected)) throw new MarkdownError("Approve the previewed schedule", 400);
   const { product, settings, session } = await context(shopId, productId);
-  const eligible = await eligibility(productId);
+  const eligible = await eligibility(product);
   if (!eligible) throw new MarkdownError("This product doesn't qualify for a markdown right now.", 400);
   const live = await readLiveVariants(session, product.shopifyGid);
   if (!live) throw new MarkdownError("Product no longer exists in Shopify", 404);

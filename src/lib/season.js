@@ -87,7 +87,8 @@ const iso = (d) => d.toISOString().slice(0, 10);
  * Dates are `YYYY-MM-DD`.
  */
 export function seasonState(seasonRanges, dayKey) {
-  const ranges = mergeRanges(seasonRanges);
+  const ranges = mergeRanges(seasonRanges ?? []);
+  if (!ranges.length) return null; // no season, or all year
   const day = new Date(`${dayKey}T00:00:00Z`);
   const y = day.getUTCFullYear();
   const m = day.getUTCMonth() + 1;
@@ -98,7 +99,7 @@ export function seasonState(seasonRanges, dayKey) {
     const endYear = current.from <= current.to ? startYear : startYear + 1;
     const start = utc(startYear, current.from, 1);
     const end = utc(endYear, current.to, lastDay(endYear, current.to));
-    return { inSeason: true, start: iso(start), end: iso(end), daysIntoSeason: daysBetween(start, day) };
+    return { inSeason: true, start: iso(start), end: iso(end), daysIntoSeason: daysBetween(start, day), seasonDays: daysBetween(start, end) + 1 };
   }
   const starts = ranges.map((r) => utc(r.from > m ? y : y + 1, r.from, 1));
   const nextStart = starts.reduce((a, b) => (b < a ? b : a));
@@ -108,6 +109,17 @@ export function seasonState(seasonRanges, dayKey) {
   });
   const lastEnd = ends.reduce((a, b) => (b > a ? b : a));
   return { inSeason: false, nextStart: iso(nextStart), daysToStart: daysBetween(day, nextStart), lastEnd: iso(lastEnd), daysSinceEnd: daysBetween(lastEnd, day) };
+}
+
+/** Units sold per product on or after its season's start: `rows` `{ productId, date, units }`, `starts` productId → `YYYY-MM-DD`. */
+export function unitsSinceStart(rows, starts) {
+  const units = new Map();
+  for (const r of rows) {
+    const start = starts.get(r.productId);
+    const day = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date);
+    if (start && day >= start) units.set(r.productId, (units.get(r.productId) ?? 0) + r.units);
+  }
+  return units;
 }
 
 /** "Nov–Feb", "Dec", "Jun–Aug, Dec" for people. */

@@ -4,7 +4,9 @@ import { localDateKey } from "@/lib/jobs/schedule";
 import { attentionSummary } from "@/lib/notifications";
 import { notify } from "@/lib/notify";
 import { productLimit, withinLimit } from "@/lib/plans";
+import { seasonOf, seasonState, unitsSinceStart } from "@/lib/season";
 import { scoreProducts, stockFromVariants } from "@/lib/scoring";
+import { seasonalCollectionsOf } from "@/lib/settings";
 import { knownOrderDays } from "@/lib/sync/constants";
 
 /** Stock and its value from the product's variants. */
@@ -43,6 +45,7 @@ export async function scoreShop(shopId, now = new Date()) {
         shopifyGid: true,
         status: true,
         collections: true,
+        tags: true,
         shopifyCreatedAt: true,
         variants: { select: { inventoryQty: true, price: true, cost: true, sellsWhenOut: true } },
       },
@@ -102,6 +105,25 @@ export async function scoreShop(shopId, now = new Date()) {
       ])
     : [[], [], [], []];
 
+  // Seasonal products: where today falls in each one's season. Early in a season (under 60 days) its
+  // sell-through counts only the season so far, not the empty weeks before it.
+  const seasonalCollections = seasonalCollectionsOf(settings?.seasonalCollections);
+  const seasons = new Map();
+  for (const p of scored) {
+    const season = seasonOf(p, seasonalCollections);
+    const state = season && seasonState(season.ranges, todayKey);
+    if (state) seasons.set(p.id, state);
+  }
+  const early = [...seasons].filter(([, s]) => s.inSeason && s.daysIntoSeason < 60);
+  const seasonUnits = new Map();
+  if (early.length) {
+    const rows = await db().productDailyMetric.findMany({
+      where: { productId: { in: early.map(([id]) => id) }, date: { gte: d60, lt: today }, units: { gt: 0 } },
+      select: { productId: true, date: true, units: true },
+    });
+    for (const [id, units] of unitsSinceStart(rows, new Map(early.map(([pid, s]) => [pid, s.start])))) seasonUnits.set(id, units);
+  }
+
   const byId = (rows) => new Map(rows.map((r) => [r.productId, r]));
   const cur = byId(last30);
   const prev = byId(prev30);
@@ -122,6 +144,8 @@ export async function scoreShop(shopId, now = new Date()) {
     const created = p.shopifyCreatedAt ?? first.get(p.id)?._min.date ?? null;
     const units30 = c?.units ?? 0;
     const unitsPrev30 = pr?.units ?? 0;
+    const season = seasons.get(p.id) ?? null;
+    const seasonSoFar = season?.inSeason && season.daysIntoSeason < 60;
     return {
       id: p.id,
       ...stockFromVariants(
@@ -133,12 +157,13 @@ export async function scoreShop(shopId, now = new Date()) {
       ),
       units30,
       unitsPrev30,
-      units60: units30 + unitsPrev30,
+      units60: seasonSoFar ? (seasonUnits.get(p.id) ?? 0) : units30 + unitsPrev30,
       views30: c?.viewSessions ?? 0,
       purchases30: c?.purchaseSessions ?? 0,
       daysSinceLastSale: saleDate ? daysBefore(saleDate) : null,
       ageDays: created ? daysBefore(created) : null,
       sellsWhenOut: p.variants.length > 0 && p.variants.every((v) => v.sellsWhenOut),
+      season: season && { inSeason: season.inSeason, daysIntoSeason: season.daysIntoSeason ?? null, seasonDays: season.seasonDays ?? null },
     };
   });
 

@@ -196,7 +196,7 @@ function StatusMix({ byStatus, money }) {
           ))}
         </div>
       )}
-      <ul className="m-0 mt-4 grid list-none grid-cols-2 gap-2 p-0 @lg:grid-cols-4 @4xl:grid-cols-7">
+      <ul className="m-0 mt-4 grid list-none grid-cols-2 gap-2 p-0 @lg:grid-cols-4 @4xl:grid-cols-8">
         {byStatus.map((s) => {
           const info = STATUS_INFO[s.status];
           const empty = s.count === 0;

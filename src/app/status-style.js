@@ -7,6 +7,7 @@ export const STATUS_STYLE = {
   hidden_gem: { bar: "bg-sky-500", soft: "bg-sky-50", text: "text-sky-700" },
   stockout_risk: { bar: "bg-violet-500", soft: "bg-violet-50", text: "text-violet-700" },
   healthy: { bar: "bg-emerald-500", soft: "bg-emerald-50", text: "text-emerald-700" },
+  seasonal: { bar: "bg-teal-400", soft: "bg-teal-50", text: "text-teal-700" },
 };
 
 const NEUTRAL = { bar: "bg-zinc-400", soft: "bg-zinc-100", text: "text-zinc-600" };
