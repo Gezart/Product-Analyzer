@@ -7,22 +7,29 @@ import { FETCH_TIMEOUT_MS, PageFetchError } from "./public-fetch.js";
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
+/** Currencies written with three decimals ("12.500 KWD" is twelve and a half). */
+const THREE_DECIMALS = new Set(["BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND"]);
+
 /**
- * A price as a number, or null. `machine` values (JSON-LD) use a dot for decimals ("1299.00", "1.299");
- * other text may be written for people: "1.299,00", "$1,299.00", "Rs. 1,299", "1 299,00 €", "₹1,29,900".
- * A single separator followed by exactly three digits groups thousands ("1,299", "€1.299").
+ * A price as a number, or null. `machine` values (JSON-LD, microdata `content`) use a dot for decimals
+ * ("1299.00", "1.299"); other text may be written for people: "1.299,00", "$1,299.00", "Rs. 1,299",
+ * "1 299,00 €", "₹1,29,900". A single separator followed by exactly three digits groups thousands
+ * ("1,299", "€1.299"), except in a three-decimal `currency`.
  */
-export function parseAmount(value, { machine = false } = {}) {
+export function parseAmount(value, { machine = false, currency = null } = {}) {
   if (typeof value === "number") return Number.isFinite(value) && value > 0 ? round2(value) : null;
   if (typeof value !== "string" || /[-\u2212]\s*[\d.,]/.test(value)) return null;
   if (machine && /^\s*\d+(\.\d+)?\s*$/.test(value)) {
     const n = Number(value);
     return n > 0 ? round2(n) : null;
   }
-  // The number itself, without a currency code or sign around it ("Rs.", "Dhs.", "€", "USD").
-  const core = value.match(/\d[\d.,'\s\u00a0\u202f]*\d|\d/)?.[0];
-  if (!core) return null;
-  let s = core.replace(/['\s\u00a0\u202f]/g, "");
+  // The first number, without a currency code or sign around it ("Rs.", "Dhs.", "€", "USD"). A space
+  // only groups digits when three follow ("1 299,00"), so "49.90 59.90" is two numbers.
+  const match = value.match(/\d(?:[\d.,']|[\s\u00a0\u202f](?=\d{3}(?!\d)))*/);
+  if (!match) return null;
+  let s = match[0].replace(/['\s\u00a0\u202f]/g, "").replace(/[.,]+$/, "");
+  // ".99" or "$.99" is a decimal; "Rs.99" is ninety-nine rupees.
+  if (/(^|[^\p{L}\d])[.,]$/u.test(value.slice(0, match.index)) && /^\d+$/.test(s)) s = `0.${s}`;
   const dots = (s.match(/\./g) ?? []).length;
   const commas = (s.match(/,/g) ?? []).length;
   if (dots && commas) {
@@ -34,7 +41,8 @@ export function parseAmount(value, { machine = false } = {}) {
     s = s.replace(/[.,]/g, ""); // "1,299,000", "1.299.000", "1,29,900": grouping only
   } else if (dots + commas === 1) {
     const [int, frac] = s.split(/[.,]/);
-    s = frac.length === 3 && int && int !== "0" ? int + frac : `${int || "0"}.${frac}`;
+    const grouping = frac.length === 3 && int && int !== "0" && !THREE_DECIMALS.has(currency);
+    s = grouping ? int + frac : `${int || "0"}.${frac}`;
   }
   if (!/^\d+(\.\d+)?$/.test(s)) return null;
   const n = Number(s);
@@ -52,35 +60,31 @@ function decodeEntities(s) {
     .replace(/&amp;/g, "&");
 }
 
-const isProduct = (node) => [].concat(node["@type"] ?? []).some((t) => ["product", "productgroup"].includes(String(t).toLowerCase()));
+const typeName = (t) => String(t).toLowerCase().replace(/^https?:\/\/schema\.org\//, "");
+const isProduct = (node) => [].concat(node["@type"] ?? []).some((t) => ["product", "productgroup"].includes(typeName(t)));
 
 /**
- * The page's main product in its JSON-LD blocks (the first Product, inside @graph and arrays too) with
- * its variants. Other products on the page (related, recommended) are ignored.
+ * Product objects in the page's JSON-LD blocks, in page order (inside @graph, arrays and a page's
+ * mainEntity too), without descending into a product (its variants are read with it).
  */
-function mainJsonLdProduct(html) {
+function jsonLdProducts(html) {
+  const products = [];
   const blocks = html.matchAll(/<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
-  const find = (node) => {
-    if (!node || typeof node !== "object") return null;
-    if (Array.isArray(node)) {
-      for (const item of node) {
-        const found = find(item);
-        if (found) return found;
-      }
-      return null;
-    }
-    if (isProduct(node)) return node;
-    return node["@graph"] ? find(node["@graph"]) : null;
+  const walk = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (isProduct(node)) return products.push(node);
+    walk(node["@graph"]);
+    walk(node.mainEntity);
   };
   for (const [, body] of blocks) {
     try {
-      const found = find(JSON.parse(body.trim()));
-      if (found) return found;
+      walk(JSON.parse(body.trim()));
     } catch {
       // Broken JSON-LD is common; other blocks and sources are tried.
     }
   }
-  return null;
+  return products;
 }
 
 /** Offers of a product and its variants as `{ price, currency }`, skipping out-of-stock offers when others exist. */
@@ -93,7 +97,7 @@ function offerPrices(product) {
     const inStock = !String(offer.availability ?? "").toLowerCase().includes("outofstock");
     const specs = [].concat(offer.priceSpecification ?? []);
     for (const value of [offer.price, offer.lowPrice, ...specs.map((p) => p?.price)]) {
-      const price = parseAmount(value, { machine: true });
+      const price = parseAmount(value, { machine: true, currency });
       if (price != null) found.push({ price, currency, inStock });
     }
     if (offer.offers) readOffer(offer.offers, currency); // AggregateOffer listing its offers
@@ -135,22 +139,24 @@ export function currencyFromHtml(html) {
  */
 export function priceFromHtml(html, preferred = null) {
   if (typeof html !== "string" || !html) return null;
-  const product = mainJsonLdProduct(html);
-  const offers = product ? offerPrices(product) : [];
+  // The page's product is the first one with a price: review widgets add a Product with only ratings,
+  // and related products come after it.
+  const offers = jsonLdProducts(html).map(offerPrices).find((list) => list.length) ?? [];
+  const pageCurrency = currencyOf(metaContent(html, ["product:price:currency", "og:price:currency"]));
   if (offers.length) {
-    const fallback = offers.find((p) => p.currency)?.currency ?? currencyOf(metaContent(html, ["product:price:currency", "og:price:currency"]));
+    const fallback = pageCurrency ?? offers.find((p) => p.currency)?.currency ?? null;
     const withCurrency = offers.map((o) => ({ ...o, currency: o.currency ?? fallback }));
     const same = preferred ? withCurrency.filter((o) => o.currency === preferred) : [];
     const best = (same.length ? same : withCurrency).reduce((a, b) => (b.price < a.price ? b : a));
     return { price: best.price, currency: best.currency, source: "json-ld" };
   }
-  const metaPrice = parseAmount(metaContent(html, ["product:price:amount", "og:price:amount"]) ?? "");
-  if (metaPrice != null) {
-    return { price: metaPrice, currency: currencyOf(metaContent(html, ["product:price:currency", "og:price:currency"])), source: "meta" };
-  }
+  // Price tags are often written for people (Shopify themes print "1.299,00"), so they are read as text.
+  const metaPrice = parseAmount(metaContent(html, ["product:price:amount", "og:price:amount"]) ?? "", { currency: pageCurrency });
+  if (metaPrice != null) return { price: metaPrice, currency: pageCurrency, source: "meta" };
   const itemprop = html.match(/itemprop\s*=\s*["']price["'][^>]*content\s*=\s*["']([^"']+)["']|content\s*=\s*["']([^"']+)["'][^>]*itemprop\s*=\s*["']price["']/i);
-  const microPrice = parseAmount(itemprop?.[1] ?? itemprop?.[2] ?? "");
-  if (microPrice != null) return { price: microPrice, currency: currencyOf(metaContent(html, ["priceCurrency"])), source: "microdata" };
+  const microCurrency = currencyOf(metaContent(html, ["priceCurrency"]));
+  const microPrice = parseAmount(itemprop?.[1] ?? itemprop?.[2] ?? "", { machine: true, currency: microCurrency });
+  if (microPrice != null) return { price: microPrice, currency: microCurrency, source: "microdata" };
   return null;
 }
 

@@ -41,7 +41,7 @@ function decoder(encoding) {
   return null;
 }
 
-function getOnce(url, { accept, deadline, signal, lookup }) {
+function getOnce(url, { accept, deadline, signal, lookup, send }) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(stopped());
     const remaining = deadline - Date.now();
@@ -54,16 +54,16 @@ function getOnce(url, { accept, deadline, signal, lookup }) {
       settled = true;
       clearTimeout(timer);
       signal?.removeEventListener("abort", onAbort);
-      if (error) {
-        req?.destroy();
-        reject(error);
-      } else resolve(value);
+      // The connection is always closed: after a redirect or an error, a site could otherwise keep it open.
+      req?.destroy();
+      if (error) reject(error);
+      else resolve(value);
     };
     const timer = setTimeout(() => finish(tooSlow()), remaining);
     const onAbort = () => finish(stopped());
     signal?.addEventListener("abort", onAbort, { once: true });
 
-    req = request(
+    req = send(
       url,
       {
         method: "GET",
@@ -72,11 +72,9 @@ function getOnce(url, { accept, deadline, signal, lookup }) {
       },
       (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          res.resume();
           return finish(null, { redirect: res.headers.location });
         }
         if (res.statusCode !== 200) {
-          res.resume();
           return finish(new PageFetchError(res.statusCode === 404 ? "The page wasn't found (404)." : `The site answered with an error (${res.statusCode}).`));
         }
         if (Number(res.headers["content-length"] ?? 0) > MAX_BYTES) return finish(new PageFetchError("The page is too large to read."));
@@ -87,8 +85,8 @@ function getOnce(url, { accept, deadline, signal, lookup }) {
         body.on("data", (chunk) => {
           size += chunk.length;
           if (size > MAX_BYTES) {
-            body.destroy();
-            return finish(new PageFetchError("The page is too large to read."));
+            finish(new PageFetchError("The page is too large to read."));
+            return body.destroy();
           }
           chunks.push(chunk);
         });
@@ -107,10 +105,10 @@ function getOnce(url, { accept, deadline, signal, lookup }) {
 }
 
 /**
- * A page fetcher. `resolve` (a `dns.lookup`-style function) is replaceable for tests; every address it
- * returns is still checked.
+ * A page fetcher. `resolve` (a `dns.lookup`-style function) and `send` (an `https.request`-style
+ * function) are replaceable for tests; every address `resolve` returns is still checked.
  */
-export function createPageFetcher({ resolve = dnsLookup } = {}) {
+export function createPageFetcher({ resolve = dnsLookup, send = request } = {}) {
   const lookup = safeLookup(resolve);
   /**
    * GET a public https page. Follows up to 3 redirects, each one checked like the original link.
@@ -122,7 +120,7 @@ export function createPageFetcher({ resolve = dnsLookup } = {}) {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
       const checked = normalizeLink(current);
       if (checked.error) throw new PageFetchError(checked.error);
-      const answer = await getOnce(checked.url, { accept, deadline, signal, lookup });
+      const answer = await getOnce(checked.url, { accept, deadline, signal, lookup, send });
       if (!answer.redirect) return { url: checked.url, body: answer.body, type: answer.type };
       current = new URL(answer.redirect, checked.url).toString();
     }

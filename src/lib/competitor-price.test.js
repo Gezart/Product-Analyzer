@@ -26,6 +26,12 @@ test("amounts with a currency abbreviation, grouping and spaces", () => {
   assert.equal(parseAmount("CHF 1'299.50"), 1299.5);
   assert.equal(parseAmount("0,999"), 1);
   assert.equal(parseAmount("USD 49.90"), 49.9);
+  assert.equal(parseAmount(".99"), 0.99);
+  assert.equal(parseAmount("$.99"), 0.99);
+  assert.equal(parseAmount("Rs.99"), 99);
+  assert.equal(parseAmount("49.90 59.90"), 49.9);
+  assert.equal(parseAmount("12 500"), 12500);
+  assert.equal(parseAmount("12.500", { currency: "KWD" }), 12.5);
 });
 
 test("machine amounts (JSON-LD) always use a dot for decimals", () => {
@@ -64,6 +70,29 @@ test("JSON-LD: only the page's main product, never related products", () => {
   assert.equal(priceFromHtml(page(`<script type="application/ld+json">${JSON.stringify([main, related])}</script>`)).price, 100);
   const twoBlocks = page(`<script type="application/ld+json">${JSON.stringify(main)}</script><script type="application/ld+json">${JSON.stringify(related)}</script>`);
   assert.equal(priceFromHtml(twoBlocks).price, 100);
+});
+
+test("JSON-LD: a review widget's Product without offers doesn't hide the price", () => {
+  const reviews = { "@type": "Product", name: "Linen shirt", aggregateRating: { ratingValue: 4.8, reviewCount: 12 } };
+  const theme = { "@type": "Product", name: "Linen shirt", offers: { price: "59.00", priceCurrency: "EUR" } };
+  const html = page(`<script type="application/ld+json">${JSON.stringify(reviews)}</script><script type="application/ld+json">${JSON.stringify(theme)}</script>`);
+  assert.deepEqual(priceFromHtml(html), { price: 59, currency: "EUR", source: "json-ld" });
+});
+
+test("JSON-LD: a product as a page's mainEntity, with its type as a full schema.org URL", () => {
+  const ld = { "@type": "ItemPage", mainEntity: { "@type": "https://schema.org/Product", offers: { price: "33.00", priceCurrency: "EUR" } } };
+  assert.deepEqual(priceFromHtml(page(`<script type="application/ld+json">${JSON.stringify(ld)}</script>`)), { price: 33, currency: "EUR", source: "json-ld" });
+});
+
+test("JSON-LD: an offer without a currency takes the page's currency", () => {
+  const ld = { "@type": "Product", offers: [{ price: "100", priceCurrency: "USD" }, { price: "80" }] };
+  const html = page(`<meta property="og:price:currency" content="EUR"><script type="application/ld+json">${JSON.stringify(ld)}</script>`);
+  assert.deepEqual(priceFromHtml(html, "EUR"), { price: 80, currency: "EUR", source: "json-ld" });
+});
+
+test("price tags in a three-decimal currency; microdata content as a machine value", () => {
+  assert.deepEqual(priceFromHtml(page(`<meta property="og:price:amount" content="12.500"><meta property="og:price:currency" content="KWD">`)), { price: 12.5, currency: "KWD", source: "meta" });
+  assert.equal(priceFromHtml(`<span itemprop="price" content="1.299">1,299 €</span>`).price, 1.3);
 });
 
 test("JSON-LD: offers in several currencies prefer the shop's currency", () => {
