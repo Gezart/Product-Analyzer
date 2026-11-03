@@ -32,6 +32,11 @@ test("amounts with a currency abbreviation, grouping and spaces", () => {
   assert.equal(parseAmount("49.90 59.90"), 49.9);
   assert.equal(parseAmount("12 500"), 12500);
   assert.equal(parseAmount("12.500", { currency: "KWD" }), 12.5);
+  assert.equal(parseAmount("49.90 199.00"), 49.9);
+  assert.equal(parseAmount("S/.99"), 99);
+  assert.equal(parseAmount("0.001"), null);
+  assert.equal(parseAmount("0.001", { machine: true }), null);
+  assert.equal(parseAmount(0.001), null);
 });
 
 test("machine amounts (JSON-LD) always use a dot for decimals", () => {
@@ -77,6 +82,17 @@ test("JSON-LD: a review widget's Product without offers doesn't hide the price",
   const theme = { "@type": "Product", name: "Linen shirt", offers: { price: "59.00", priceCurrency: "EUR" } };
   const html = page(`<script type="application/ld+json">${JSON.stringify(reviews)}</script><script type="application/ld+json">${JSON.stringify(theme)}</script>`);
   assert.deepEqual(priceFromHtml(html), { price: 59, currency: "EUR", source: "json-ld" });
+});
+
+test("JSON-LD: a related product is never used when the page's product has no readable price", () => {
+  const main = { "@type": "Product", name: "Linen shirt", offers: { "@type": "Offer", priceCurrency: "EUR" } };
+  const related = { "@type": "Product", name: "Socks", offers: { price: "5.00", priceCurrency: "EUR" } };
+  const tags = `<meta property="og:price:amount" content="59.00"><meta property="og:price:currency" content="EUR">`;
+  const blocks = page(`${tags}<script type="application/ld+json">${JSON.stringify(main)}</script><script type="application/ld+json">${JSON.stringify(related)}</script>`);
+  assert.deepEqual(priceFromHtml(blocks), { price: 59, currency: "EUR", source: "meta" });
+  const graph = page(`${tags}<script type="application/ld+json">${JSON.stringify({ "@graph": [main, related] })}</script>`);
+  assert.deepEqual(priceFromHtml(graph), { price: 59, currency: "EUR", source: "meta" });
+  assert.equal(priceFromHtml(page(`<script type="application/ld+json">${JSON.stringify([main, related])}</script>`)), null);
 });
 
 test("JSON-LD: a product as a page's mainEntity, with its type as a full schema.org URL", () => {

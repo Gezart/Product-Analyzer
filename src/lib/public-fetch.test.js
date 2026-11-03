@@ -71,7 +71,11 @@ async function withSite(routes, run) {
   }
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 100));
+/** Waits up to 3 s for every connection to the local site to close. */
+async function allClosed(sockets) {
+  for (let waited = 0; sockets.size > 0 && waited < 3000; waited += 25) await new Promise((resolve) => setTimeout(resolve, 25));
+  return sockets.size === 0;
+}
 
 test("a site that sends its page slowly is cut off at the deadline", async () => {
   const drip = (req, res) => {
@@ -122,8 +126,7 @@ test("redirects are followed and checked again; the connection never stays open"
     await assert.rejects(fetchPage("https://shop.example/loop"), { message: "The link redirects too many times." });
     await assert.rejects(fetchPage("https://shop.example/insecure"), { message: "Only secure links (https://) can be read." });
     await assert.rejects(fetchPage("https://shop.example/inside"), /IP address or a local name/);
-    await settle();
-    assert.equal(sockets.size, 0, "every connection is closed");
+    assert.ok(await allClosed(sockets), "every connection is closed");
   });
 });
 

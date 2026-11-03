@@ -17,19 +17,18 @@ const THREE_DECIMALS = new Set(["BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND"]
  * ("1,299", "€1.299"), except in a three-decimal `currency`.
  */
 export function parseAmount(value, { machine = false, currency = null } = {}) {
-  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? round2(value) : null;
+  if (typeof value === "number") return Number.isFinite(value) && round2(value) > 0 ? round2(value) : null;
   if (typeof value !== "string" || /[-\u2212]\s*[\d.,]/.test(value)) return null;
   if (machine && /^\s*\d+(\.\d+)?\s*$/.test(value)) {
-    const n = Number(value);
-    return n > 0 ? round2(n) : null;
+    const n = round2(Number(value));
+    return n > 0 ? n : null;
   }
-  // The first number, without a currency code or sign around it ("Rs.", "Dhs.", "€", "USD"). A space
-  // only groups digits when three follow ("1 299,00"), so "49.90 59.90" is two numbers.
-  const match = value.match(/\d(?:[\d.,']|[\s\u00a0\u202f](?=\d{3}(?!\d)))*/);
-  if (!match) return null;
-  let s = match[0].replace(/['\s\u00a0\u202f]/g, "").replace(/[.,]+$/, "");
-  // ".99" or "$.99" is a decimal; "Rs.99" is ninety-nine rupees.
-  if (/(^|[^\p{L}\d])[.,]$/u.test(value.slice(0, match.index)) && /^\d+$/.test(s)) s = `0.${s}`;
+  // The first number, without a currency code or sign around it ("Rs.", "Dhs.", "€", "USD").
+  const start = value.search(/\d/);
+  if (start < 0) return null;
+  let s = firstNumber(value, start);
+  // ".99" or "$.99" is a decimal; "Rs.99" or "S/.99" is ninety-nine.
+  if (/(^|\p{Sc})\s*[.,]$/u.test(value.slice(0, start)) && /^\d+$/.test(s)) s = `0.${s}`;
   const dots = (s.match(/\./g) ?? []).length;
   const commas = (s.match(/,/g) ?? []).length;
   if (dots && commas) {
@@ -45,8 +44,28 @@ export function parseAmount(value, { machine = false, currency = null } = {}) {
     s = grouping ? int + frac : `${int || "0"}.${frac}`;
   }
   if (!/^\d+(\.\d+)?$/.test(s)) return null;
-  const n = Number(s);
-  return n > 0 ? round2(n) : null;
+  const n = round2(Number(s));
+  return n > 0 ? n : null;
+}
+
+/**
+ * The digits and separators of the number starting at `start`. A space or apostrophe only groups digits
+ * before any decimal separator and when exactly three digits follow ("1 299,00", "CHF 1'299.50"), so
+ * "49.90 59.90" and "49.90 199.00" are two numbers.
+ */
+function firstNumber(value, start) {
+  let out = "";
+  let separator = false;
+  for (let i = start; i < value.length; i++) {
+    const c = value[i];
+    if (/\d/.test(c)) out += c;
+    else if (c === "." || c === ",") {
+      out += c;
+      separator = true;
+    } else if (/['\s\u00a0\u202f]/.test(c) && !separator && /^\d{3}(?!\d)/.test(value.slice(i + 1))) continue;
+    else break;
+  }
+  return out.replace(/[.,]+$/, "");
 }
 
 const currencyOf = (v) => (typeof v === "string" && /^[A-Za-z]{3}$/.test(v.trim()) ? v.trim().toUpperCase() : null);
@@ -85,6 +104,13 @@ function jsonLdProducts(html) {
     }
   }
   return products;
+}
+
+const norm = (v) => (typeof v === "string" ? v.trim().toLowerCase() : "");
+
+/** Two JSON-LD products describe the same item: same @id, url or name. */
+function sameProduct(a, b) {
+  return ["@id", "url", "name"].some((key) => norm(a[key]) !== "" && norm(a[key]) === norm(b[key]));
 }
 
 /** Offers of a product and its variants as `{ price, currency }`, skipping out-of-stock offers when others exist. */
@@ -139,9 +165,10 @@ export function currencyFromHtml(html) {
  */
 export function priceFromHtml(html, preferred = null) {
   if (typeof html !== "string" || !html) return null;
-  // The page's product is the first one with a price: review widgets add a Product with only ratings,
-  // and related products come after it.
-  const offers = jsonLdProducts(html).map(offerPrices).find((list) => list.length) ?? [];
+  // The page's product is the first one. A later block is only read for the same product (review widgets
+  // add one with ratings only); related products are never used, the price tags are read instead.
+  const products = jsonLdProducts(html);
+  const offers = products.filter((p) => p === products[0] || sameProduct(p, products[0])).map(offerPrices).find((list) => list.length) ?? [];
   const pageCurrency = currencyOf(metaContent(html, ["product:price:currency", "og:price:currency"]));
   if (offers.length) {
     const fallback = pageCurrency ?? offers.find((p) => p.currency)?.currency ?? null;
