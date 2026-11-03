@@ -143,8 +143,11 @@ export async function proposeCollectionOrder(shop, session, gid) {
 
 // Saving an order: only after the merchant confirms it on the Collections page, with Undo.
 
-/** A save or undo running longer than this has crashed (each request waits at most ~20 s per job). */
-const IN_PROGRESS_MS = 2 * 60_000;
+/** A save or undo running longer than this has crashed (the slowest real one takes under 2 minutes). */
+const IN_PROGRESS_MS = 5 * 60_000;
+/** After a save Shopify was still finishing, Undo waits this long (it would find nothing to move yet). */
+const SETTLE_MS = 60_000;
+const STILL_FINISHING = "Shopify was still finishing it when saved.";
 /** Shopify takes up to 250 moves per request. */
 const MOVES_PER_REQUEST = 250;
 const BUSY = "This collection's order is already being changed.";
@@ -194,7 +197,7 @@ async function writeOrder(session, gid, current, target) {
 }
 
 /**
- * A save or undo that crashed (still running after 2 min) is closed: it's kept as applied, so Undo can
+ * A save or undo that crashed (still running after 5 min) is closed: it's kept as applied, so Undo can
  * still restore the order from before it (Shopify may have the new order, part of it, or the old one).
  */
 async function closeCrashed(shopId, gid) {
@@ -275,7 +278,11 @@ export async function saveCollectionOrder(shop, session, gid, { order, expected 
     if (!(error instanceof StillApplying && error.last)) await failSave(session, gid, save, live, order, error);
     pending = true;
   }
-  const done = await db().collectionReorder.update({ where: { id: save.id }, data: { status: "applied", appliedAt: new Date() }, select: SAVE_FIELDS });
+  const done = await db().collectionReorder.update({
+    where: { id: save.id },
+    data: { status: "applied", appliedAt: new Date(), error: pending ? STILL_FINISHING : null },
+    select: SAVE_FIELDS,
+  });
   return { ...done, moved: movedCount(done.before, done.after), pending };
 }
 
@@ -291,6 +298,9 @@ export async function undoCollectionOrder(shop, session, saveId, { force = false
   const save = await db().collectionReorder.findUnique({ where: { id: found.id } });
   if (save.status !== "applied") {
     throw new HttpError(save.status === "undone" ? "This order was already undone." : save.status === "failed" ? "This save failed; there's nothing to undo." : BUSY, 409);
+  }
+  if (save.error === STILL_FINISHING && save.appliedAt > new Date(Date.now() - SETTLE_MS)) {
+    throw new HttpError("Shopify is still finishing this order. Try Undo again in a minute.", 409);
   }
   const live = await readCollectionOrder(session, save.collectionGid);
   if (!force && !sameList(live.productIds, save.after)) {
