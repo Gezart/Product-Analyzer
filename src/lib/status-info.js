@@ -21,6 +21,13 @@ export function formatDays(days) {
   return Math.round(days).toLocaleString();
 }
 
+/** Days of stock as a phrase: "1 day", "12 days", "over a year"; "—" when unknown. */
+export function daysPhrase(days) {
+  const n = formatDays(days);
+  if (n === "—" || n === "over a year") return n;
+  return `${n} ${n === "1" ? "day" : "days"}`;
+}
+
 /** Store-currency formatter; a missing or unknown currency code falls back to plain numbers. */
 export function moneyFormatter(currency, maximumFractionDigits = 0) {
   try {

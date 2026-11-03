@@ -6,7 +6,7 @@ import { CARD, EYEBROW, PRIMARY_LINK, statusStyle } from "@/app/status-style";
 import { UpgradeBanner } from "@/app/upgrade-banner";
 import { stuckSplit } from "@/lib/dashboard";
 import { hasFeature, PLANS } from "@/lib/plans";
-import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
+import { daysPhrase, formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
 const percent = new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 0 });
 const count = new Intl.NumberFormat();
@@ -76,7 +76,13 @@ export function DashboardView({ data }) {
 
         <div className="grid grid-cols-1 gap-4 @4xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
           <Hero data={data} money={money} attention={attention} atStake={atStake} />
-          <NextMove item={data.top[0]} upNext={data.top.slice(1, 4)} attention={attention} money={money} />
+          <NextMove
+            item={data.top[0]}
+            upNext={data.top.slice(1, 4)}
+            attention={attention}
+            newCount={data.byStatus.find((s) => s.status === "new")?.count ?? 0}
+            money={money}
+          />
         </div>
 
         {showStarter && (
@@ -221,7 +227,7 @@ function StatusMix({ byStatus, money }) {
 }
 
 /** The single product to start with: the first of the top 10. */
-function NextMove({ item, upNext, attention, money }) {
+function NextMove({ item, upNext, attention, newCount, money }) {
   if (!item) {
     return (
       <section className={`${CARD} flex flex-col items-start justify-center gap-3 p-6`}>
@@ -231,7 +237,12 @@ function NextMove({ item, upNext, attention, money }) {
         {attention === 0 ? (
           <>
             <p className="m-0 text-base font-semibold text-zinc-900">Nothing needs attention</p>
-            <p className="m-0 text-sm text-zinc-600">Every analyzed product is healthy. New problems show up here and in your inbox.</p>
+            <p className="m-0 text-sm text-zinc-600">
+              {newCount > 0
+                ? `Every analyzed product is healthy, apart from ${count.format(newCount)} too new to judge.`
+                : "Every analyzed product is healthy."}{" "}
+              New problems show up here and in your inbox.
+            </p>
           </>
         ) : (
           <>
@@ -273,7 +284,7 @@ function NextMove({ item, upNext, attention, money }) {
         </div>
       ) : item.daysOfCover != null ? (
         <div>
-          <p className="m-0 text-3xl font-bold tracking-tight text-zinc-900 tabular-nums">{item.daysOfCover > 365 ? "Over a year" : `${formatDays(item.daysOfCover)} days`}</p>
+          <p className="m-0 text-3xl font-bold tracking-tight text-zinc-900 tabular-nums first-letter:uppercase">{daysPhrase(item.daysOfCover)}</p>
           <p className="m-0 text-sm text-zinc-500">of stock left</p>
         </div>
       ) : null}
@@ -364,7 +375,7 @@ function TopTable({ top, money }) {
                       <span className="mt-0.5 block text-xs text-zinc-500 @3xl:hidden">
                         <span aria-hidden="true" className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${statusStyle(r.status).bar}`} />
                         {info?.label ?? r.status}
-                        {r.daysOfCover != null && <span className="@lg:hidden"> · {r.daysOfCover > 365 ? "over a year" : `${formatDays(r.daysOfCover)} days`} of stock</span>}
+                        {r.daysOfCover != null && <span className="@lg:hidden"> · {daysPhrase(r.daysOfCover)} of stock</span>}
                       </span>
                     </td>
                     <td className="hidden py-3 pr-4 whitespace-nowrap @3xl:table-cell">

@@ -82,3 +82,14 @@ test("stuck split: dead stock share of the stuck value, and products with no sto
   assert.deepEqual(split([row({ productId: "a", status: "dead_stock", stockValue: 0 })]), { products: 1, value: 0, deadShare: 0 });
   assert.deepEqual(split([row({ productId: "a", status: "healthy", stockValue: 900 })]), { products: 0, value: 0, deadShare: 0 });
 });
+
+test("new products get their own status tile with count and stock value", () => {
+  const s = summarize([
+    row({ productId: "a", status: "new", stockValue: 120.5 }),
+    row({ productId: "b", status: "new", stockValue: 79.5 }),
+    row({ productId: "c", status: "healthy", stockValue: 900 }),
+  ]);
+  assert.deepEqual(s.byStatus.find((b) => b.status === "new"), { status: "new", count: 2, stockValue: 200, moneyAtStake: 0 });
+  assert.equal(s.productCount, 3);
+  assert.equal(s.moneyStuck, 0);
+});
