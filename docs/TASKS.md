@@ -99,6 +99,16 @@ From the features workspace (Fix center). Decisions: descriptions and SEO with C
 | `ai-photos` | "Create photo with AI" in the Fix center when the diagnosis finds few photos: from an existing photo (clean background, new scene); the merchant previews and approves before it goes to Shopify (with Undo); a product with no photo asks for one first; photos marked as AI-made; monthly limit per plan | An approved AI photo is on the product in Shopify and can be undone | done |
 | — | Owner: `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in `.env` | Keys in `.env` | todo (owner) |
 
+## Phase 2f · Collection Optimizer
+
+From the features workspace (Collection Optimizer). Decision: the app proposes the order and asks for confirmation; once confirmed, it saves it in Shopify itself. Only collections sorted "Manually" in Shopify. On the plan as the fix center (Starter and up).
+
+| Branch | Task | Done when | Status |
+| --- | --- | --- | --- |
+| `collection-order` | Ordering rule by status: bestsellers first (in stock; about-to-run-out ones after them), then hidden gems, then products that need sales (slow movers, dead stock with stock); the rest keep their order; page problems (fix the page first), out-of-season and sold-out products last. A Collections page lists the manually sorted collections and shows each one's proposed order with the reason per product | The proposed order shows for a manual collection, with a reason for each product | doing |
+| `collection-reorder` | Move products by hand in the proposal, then save it to Shopify (only after the merchant confirms), with Undo; a collection changed in Shopify since needs a reload (or Undo anyway) | A saved order is in Shopify and can be undone | todo |
+| `collection-effect` | Products moved up get a rescue plan measuring sales after the move vs before; the product page and the monthly report show it | A moved product shows its measurement and verdict | todo |
+
 ## v2 (not in v1)
 
 AI diagnosis and AI drafts (Claude), weekly email digest.
