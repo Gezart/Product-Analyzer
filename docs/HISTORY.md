@@ -1,5 +1,14 @@
 # History
 
+## 2026-11-03 · collection-reorder
+- Collections page: the proposed order can be changed by hand (↑ ↓, "placed by you", back to the proposal), then saved to Shopify only after the merchant confirms ("Save this order to Shopify? … You can undo it.")
+- Saving reads the collection again first: if its order changed in Shopify since the page was opened, nothing is written (reload); the order must list each product once (pure, tested)
+- Written with `collectionReorderProducts`, only the products not already in place (swapping two of 1,000 is one move; pure, tested), 250 moves per request, each after Shopify's job for the previous one is done; a job not confirmed in time on the last request is saved as "still finishing", on an earlier one the save stops and is kept as partly saved (undoable, also when Shopify applies those moves later)
+- Each save is kept with the order before it (new table `collection_reorders`, RLS on, migrations applied to Supabase) and listed under "Saved orders" with Undo; Undo asks first when the order changed since ("Undo anyway") and keeps products added since (after the restored ones)
+- One save or undo per collection at a time, enforced by the database (partial unique index); one that crashed is closed after 5 minutes and stays undoable; Undo waits a minute after a save Shopify was still finishing
+- On a plan without the optimizer, collections with saved orders are still listed and their saves can be undone
+- Verified on a local Postgres with Shopify stubbed (moves applied like Shopify's): save, a stale page, bad orders, history, undo and undo again, changed since then undo anyway with a product added, Shopify refusing, 600 products in 3 requests and back, a slow job on the last and on the first request (also with Shopify applying the moves later), two saves at once, two undos at once and a save during an undo of an old save, a crashed save, another shop's save, the Free plan (saved orders listed and undoable)
+
 ## 2026-11-03 · collection-order
 - New "Collections" page (nav): lists the collections sorted "Manually" in Shopify (others are counted, with how to switch one to manual; collections over 1,000 products are marked too large) and shows the order the app proposes for the one picked, with each product's new and current place, status, sales in the last 30 days and the reason
 - The ordering rule (pure, tested): bestsellers first (the top third by 30-day revenue of the products that can be bestsellers: analyzed, on sale, in stock, selling, and not dead stock, slow movers, page problems or out of season; ones about to run out right after, so they don't sell out sooner), then hidden gems, then products that need sales (slow movers, dead stock; most money waiting first), then the rest in their current order, then page problems ("fix its page first"), out-of-season, sold-out and not-on-sale products

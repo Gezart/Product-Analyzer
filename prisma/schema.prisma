@@ -36,20 +36,21 @@ model Shop {
   installedAt    DateTime  @default(now()) @map("installed_at")
   uninstalledAt  DateTime? @map("uninstalled_at")
 
-  settings         Settings?
-  products         Product[]
-  reports          Report[]
-  notifications    Notification[]
-  syncStates       SyncState[]
-  aiUsage          AiUsage[]
-  jobs             Job[]
-  orderLines       OrderLine[]
-  competitorLinks  CompetitorLink[]
-  googleConnection GoogleConnection?
-  googleBenchmarks GoogleBenchmark[]
-  lineRefunds      LineRefund[]
-  returnReasons    ReturnReason[]
-  aiPhotoDrafts    AiPhotoDraft[]
+  settings           Settings?
+  products           Product[]
+  reports            Report[]
+  notifications      Notification[]
+  syncStates         SyncState[]
+  aiUsage            AiUsage[]
+  jobs               Job[]
+  orderLines         OrderLine[]
+  competitorLinks    CompetitorLink[]
+  googleConnection   GoogleConnection?
+  googleBenchmarks   GoogleBenchmark[]
+  lineRefunds        LineRefund[]
+  returnReasons      ReturnReason[]
+  aiPhotoDrafts      AiPhotoDraft[]
+  collectionReorders CollectionReorder[]
 
   @@map("shops")
 }
@@ -519,4 +520,28 @@ model ReturnReason {
   @@index([shopId, orderGid])
   @@index([shopId, productGid, date])
   @@map("return_reasons")
+}
+
+/// A collection order saved to Shopify by the Collection Optimizer (products as Shopify GIDs, in order).
+/// Undo writes `before` back.
+model CollectionReorder {
+  id              String    @id @default(cuid())
+  shopId          String    @map("shop_id")
+  collectionGid   String    @map("collection_gid")
+  collectionTitle String    @map("collection_title")
+  before          String[]
+  after           String[]
+  status          String    @default("applying") // applying | applied | undoing | undone | failed
+  error           String?
+  /// When the running save or undo started; one running longer than 2 min has crashed. At most one
+  /// change per collection runs at a time (partial unique index in the migration).
+  claimedAt       DateTime  @default(now()) @map("claimed_at")
+  appliedAt       DateTime? @map("applied_at")
+  undoneAt        DateTime? @map("undone_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, collectionGid, createdAt])
+  @@map("collection_reorders")
 }

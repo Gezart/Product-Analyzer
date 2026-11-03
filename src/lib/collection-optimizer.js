@@ -2,10 +2,10 @@
 // from the app's statuses and the last 30 days of sales.
 
 import { adminGraphql } from "@/lib/admin";
-import { proposeOrder, REASONS } from "@/lib/collection-order";
+import { movedCount, orderError, proposeOrder, REASONS, sequentialMoves } from "@/lib/collection-order";
 import { asDate, DAY_MS } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { HttpError } from "@/lib/http-error";
+import { errorMessage, HttpError } from "@/lib/http-error";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { latestScores } from "@/lib/scores";
 
@@ -139,4 +139,191 @@ export async function proposeCollectionOrder(shop, session, gid) {
     };
   });
   return { collection: { id: collection.id, title: collection.title, count: collection.productIds.length }, current: collection.productIds, proposal };
+}
+
+// Saving an order: only after the merchant confirms it on the Collections page, with Undo.
+
+/** A save or undo running longer than this has crashed (the slowest real one takes under 2 minutes). */
+const IN_PROGRESS_MS = 5 * 60_000;
+/** After a save Shopify was still finishing, Undo waits this long (it would find nothing to move yet). */
+const SETTLE_MS = 60_000;
+const STILL_FINISHING = "Shopify was still finishing it when saved.";
+/** Shopify takes up to 250 moves per request. */
+const MOVES_PER_REQUEST = 250;
+const BUSY = "This collection's order is already being changed.";
+
+const REORDER = `#graphql
+  mutation ReorderCollection($id: ID!, $moves: [MoveInput!]!) {
+    collectionReorderProducts(id: $id, moves: $moves) { job { id done } userErrors { field message } }
+  }`;
+const JOB = `#graphql
+  query ReorderJob($id: ID!) { job(id: $id) { done } }`;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sameList = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
+/** The database refused a second running change for the collection (partial unique index). */
+const isBusyConflict = (error) => error?.code === "P2002";
+
+/** Shopify accepted moves but hadn't finished them in time: they may still be applied. */
+class StillApplying extends Error {}
+
+/** Waits for Shopify's reorder job (up to ~20 s); false when it isn't confirmed done in time. */
+async function jobDone(session, job) {
+  if (!job || job.done) return true;
+  for (let i = 0; i < 20; i++) {
+    await wait(1000);
+    if ((await adminGraphql(session, JOB, { id: job.id })).job?.done) return true;
+  }
+  return false;
+}
+
+/**
+ * Moves a collection's products from `current` to `target` order in Shopify (only the products not
+ * already in place), 250 moves per request, each request after Shopify's job for the previous one is
+ * done (a move's position depends on the moves before it). Throws `StillApplying` when a job isn't
+ * confirmed in time (on the last request the order is on its way; on an earlier one the rest wasn't sent).
+ */
+async function writeOrder(session, gid, current, target) {
+  const moves = sequentialMoves(current, target);
+  for (let i = 0; i < moves.length; i += MOVES_PER_REQUEST) {
+    const r = await adminGraphql(session, REORDER, { id: gid, moves: moves.slice(i, i + MOVES_PER_REQUEST) });
+    const errors = r.collectionReorderProducts.userErrors;
+    if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
+    if (!(await jobDone(session, r.collectionReorderProducts.job))) {
+      const last = i + MOVES_PER_REQUEST >= moves.length;
+      throw Object.assign(new StillApplying(last ? "Shopify is still applying the new order." : "Shopify was slow applying the new order, so only part of it was sent."), { last });
+    }
+  }
+}
+
+/**
+ * A save or undo that crashed (still running after 5 min) is closed: it's kept as applied, so Undo can
+ * still restore the order from before it (Shopify may have the new order, part of it, or the old one).
+ */
+async function closeCrashed(shopId, gid) {
+  const stale = new Date(Date.now() - IN_PROGRESS_MS);
+  await db().collectionReorder.updateMany({
+    where: { shopId, collectionGid: gid, status: "applying", claimedAt: { lt: stale } },
+    data: { status: "applied", appliedAt: new Date(), error: "Interrupted: the new order may be only partly saved." },
+  });
+  await db().collectionReorder.updateMany({
+    where: { shopId, collectionGid: gid, status: "undoing", claimedAt: { lt: stale } },
+    data: { status: "applied", error: "Undo was interrupted: try again." },
+  });
+}
+
+const SAVE_FIELDS = { id: true, status: true, error: true, before: true, after: true, appliedAt: true, undoneAt: true, createdAt: true };
+
+/** The last 10 saves of a collection, newest first, with how many products each moved. */
+export async function reorderHistory(shopId, gid) {
+  await closeCrashed(shopId, gid);
+  const rows = await db().collectionReorder.findMany({ where: { shopId, collectionGid: gid }, orderBy: { createdAt: "desc" }, take: 10, select: SAVE_FIELDS });
+  return rows.map(({ before, after, ...r }) => ({ ...r, moved: movedCount(before, after) }));
+}
+
+/** Collections with saved orders (for a plan without the optimizer: their saves can still be undone). */
+export async function savedCollections(shopId) {
+  const rows = await db().collectionReorder.findMany({
+    where: { shopId },
+    distinct: ["collectionGid"],
+    orderBy: [{ collectionGid: "asc" }, { createdAt: "desc" }],
+    select: { collectionGid: true, collectionTitle: true },
+  });
+  return rows.map((r) => ({ id: r.collectionGid, title: r.collectionTitle, manual: true, count: null, tooLarge: false }));
+}
+
+/**
+ * A failed save (always throws). Unchanged in Shopify and not possibly still applying → failed.
+ * Otherwise (changed, unknown, or Shopify still has moves to apply) it's kept as applied with what
+ * Shopify has now, so Undo can restore the old order.
+ */
+async function failSave(session, gid, save, live, ids, error) {
+  const now = await readCollectionOrder(session, gid).catch(() => null);
+  const unchanged = now != null && sameList(now.productIds, live.productIds) && !(error instanceof StillApplying);
+  await db().collectionReorder.update({
+    where: { id: save.id },
+    data: unchanged
+      ? { status: "failed", error: errorMessage(error) }
+      : { status: "applied", appliedAt: new Date(), after: now && !sameList(now.productIds, live.productIds) ? now.productIds : ids, error: errorMessage(error) },
+  });
+  throw new HttpError(unchanged ? errorMessage(error) : `Partly saved: ${errorMessage(error)} Reload to see the order, or undo it.`, 502);
+}
+
+/**
+ * Saves a collection order the merchant confirmed (`order`: the collection's product GIDs, each once).
+ * `expected` is the order the page showed: if Shopify's changed since, nothing is written (409). The
+ * order Shopify had is kept for Undo. One change per collection at a time (the database enforces it).
+ */
+export async function saveCollectionOrder(shop, session, gid, { order, expected }) {
+  const live = await readCollectionOrder(session, gid);
+  if (!Array.isArray(expected) || !sameList(expected, live.productIds)) {
+    throw new HttpError("This collection changed in Shopify since the page was opened. Reload and try again.", 409);
+  }
+  const invalid = orderError(order, live.productIds);
+  if (invalid) throw new HttpError(invalid, 400);
+  await closeCrashed(shop.id, gid);
+  let save;
+  try {
+    save = await db().collectionReorder.create({
+      data: { shopId: shop.id, collectionGid: gid, collectionTitle: live.title, before: live.productIds, after: order },
+    });
+  } catch (error) {
+    if (isBusyConflict(error)) throw new HttpError(BUSY, 409);
+    throw error;
+  }
+  let pending = false;
+  try {
+    await writeOrder(session, gid, live.productIds, order);
+  } catch (error) {
+    if (!(error instanceof StillApplying && error.last)) await failSave(session, gid, save, live, order, error);
+    pending = true;
+  }
+  const done = await db().collectionReorder.update({
+    where: { id: save.id },
+    data: { status: "applied", appliedAt: new Date(), error: pending ? STILL_FINISHING : null },
+    select: SAVE_FIELDS,
+  });
+  return { ...done, moved: movedCount(done.before, done.after), pending };
+}
+
+/**
+ * Puts a collection back in the order it had before a save. If the order changed since (in Shopify or
+ * by another save), Undo would overwrite that, so it needs `force`. Products added since stay in the
+ * collection (after the restored ones). The save is claimed first, so two undos can't both run.
+ */
+export async function undoCollectionOrder(shop, session, saveId, { force = false } = {}) {
+  const found = await db().collectionReorder.findFirst({ where: { id: String(saveId ?? ""), shopId: shop.id }, select: { id: true, collectionGid: true } });
+  if (!found) throw new HttpError("Saved order not found.", 404);
+  await closeCrashed(shop.id, found.collectionGid);
+  const save = await db().collectionReorder.findUnique({ where: { id: found.id } });
+  if (save.status !== "applied") {
+    throw new HttpError(save.status === "undone" ? "This order was already undone." : save.status === "failed" ? "This save failed; there's nothing to undo." : BUSY, 409);
+  }
+  if (save.error === STILL_FINISHING && save.appliedAt > new Date(Date.now() - SETTLE_MS)) {
+    throw new HttpError("Shopify is still finishing this order. Try Undo again in a minute.", 409);
+  }
+  const live = await readCollectionOrder(session, save.collectionGid);
+  if (!force && !sameList(live.productIds, save.after)) {
+    throw new HttpError("The collection's order changed since this save. Undo anyway to overwrite that change.", 409);
+  }
+  try {
+    const claimed = await db().collectionReorder.updateMany({ where: { id: save.id, status: "applied" }, data: { status: "undoing", claimedAt: new Date(), error: null } });
+    if (claimed.count === 0) throw new HttpError("This order is already being undone.", 409);
+  } catch (error) {
+    if (isBusyConflict(error)) throw new HttpError(BUSY, 409);
+    throw error;
+  }
+  let pending = false;
+  try {
+    await writeOrder(session, save.collectionGid, live.productIds, save.before);
+  } catch (error) {
+    if (!(error instanceof StillApplying && error.last)) {
+      // Back to applied so it can be tried again; the order may be partly restored.
+      await db().collectionReorder.update({ where: { id: save.id }, data: { status: "applied", error: `Undo failed: ${errorMessage(error)}` } });
+      throw new HttpError(`Undo failed: ${errorMessage(error)} Reload, then try again.`, 502);
+    }
+    pending = true;
+  }
+  const done = await db().collectionReorder.update({ where: { id: save.id }, data: { status: "undone", undoneAt: new Date() }, select: SAVE_FIELDS });
+  return { ...done, moved: movedCount(done.before, done.after), pending };
 }
