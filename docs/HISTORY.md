@@ -1,11 +1,11 @@
 # History
 
 ## 2026-11-03 · seasonal-status
-- New status "Seasonal" (no money at stake): a seasonal product out of season, or in the first 30 days of its season, is never dead stock, a slow mover or "new"; other statuses (healthy, stock-out risk, page problem, hidden gem) still apply
-- In season, days without a sale count from the season's start (dead stock needs 90 days of the season without a sale), and in the first 60 days sell-through counts only the season so far
-- No markdown is proposed for a seasonal product while it's "Seasonal" (also not after a rescue plan with no change); the product page says when its season starts or when it's judged
-- Status shown in the product list filters, the dashboard mix (teal) and the product page
-- Verified on a local Postgres with the nightly scoring on four dates (summer, 10, 49 and 96 days into a Nov–Feb season, plus a Jun–Aug collection)
+- New status "Seasonal" (no money at stake, not "needs attention"): a seasonal product waiting for its season (out of it, or in its first 30 days; half the season if shorter) is never dead stock, a slow mover or "new"; other statuses (page problem, stock-out risk, hidden gem, healthy) still apply
+- In season, days without a sale count from the season's start; a season shorter than 90 days makes an unsold product dead stock on its last day; in the first 60 days sell-through counts only the season so far
+- No markdown while a product waits for its season, whatever its status or rescue result; the product page says when its season starts or when it's judged
+- Shown in the product list filters, the dashboard mix (teal) and the product page
+- Verified on a local Postgres: nightly scoring on four dates of a Nov–Feb season and a Jun–Aug collection; markdown eligibility for in-season, out-of-season and unseasonal products
 
 ## 2026-11-03 · seasonal-tags
 - Product tags are synced (initial import, nightly refresh, live webhooks); existing products get them at the next nightly refresh (migration applied to Supabase)

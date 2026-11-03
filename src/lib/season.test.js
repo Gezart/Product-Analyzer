@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatSeason, mergeRanges, parseSeasonTag, seasonOf, seasonState } from "./season.js";
+import { formatSeason, mergeRanges, parseSeasonTag, seasonOf, seasonState, unitsSinceStart } from "./season.js";
 
 test("season tags: month ranges, single months, numbers and named seasons", () => {
   assert.deepEqual(parseSeasonTag("season:nov-feb"), { from: 11, to: 2 });
@@ -32,10 +32,10 @@ test("a product's season: its tags first, else a seasonal collection; never the 
 
 test("in season: this occurrence's first and last day, also across the new year", () => {
   const winter = [{ from: 11, to: 2 }];
-  assert.deepEqual(seasonState(winter, "2026-11-20"), { inSeason: true, start: "2026-11-01", end: "2027-02-28", daysIntoSeason: 19 });
-  assert.deepEqual(seasonState(winter, "2027-01-15"), { inSeason: true, start: "2026-11-01", end: "2027-02-28", daysIntoSeason: 75 });
-  assert.deepEqual(seasonState(winter, "2028-02-29"), { inSeason: true, start: "2027-11-01", end: "2028-02-29", daysIntoSeason: 120 });
-  assert.deepEqual(seasonState([{ from: 6, to: 8 }], "2026-06-01"), { inSeason: true, start: "2026-06-01", end: "2026-08-31", daysIntoSeason: 0 });
+  assert.deepEqual(seasonState(winter, "2026-11-20"), { inSeason: true, start: "2026-11-01", end: "2027-02-28", daysIntoSeason: 19, seasonDays: 120 });
+  assert.deepEqual(seasonState(winter, "2027-01-15"), { inSeason: true, start: "2026-11-01", end: "2027-02-28", daysIntoSeason: 75, seasonDays: 120 });
+  assert.deepEqual(seasonState(winter, "2028-02-29"), { inSeason: true, start: "2027-11-01", end: "2028-02-29", daysIntoSeason: 120, seasonDays: 121 });
+  assert.deepEqual(seasonState([{ from: 6, to: 8 }], "2026-06-01"), { inSeason: true, start: "2026-06-01", end: "2026-08-31", daysIntoSeason: 0, seasonDays: 92 });
 });
 
 test("out of season: the next start and the last end", () => {
@@ -58,8 +58,8 @@ test("seasons that overlap or touch are one season", () => {
   assert.deepEqual(mergeRanges([{ from: 1, to: 6 }, { from: 7, to: 12 }]), []);
   assert.deepEqual(mergeRanges([]), []);
   // The season's real start and end, not the second tag's.
-  assert.deepEqual(seasonState(seasonOf({ tags: ["season:jun-aug", "season:sep-oct"] }).ranges, "2026-09-05"), { inSeason: true, start: "2026-06-01", end: "2026-10-31", daysIntoSeason: 96 });
-  assert.deepEqual(seasonState(seasonOf({ tags: ["season:winter", "season:nov-jan"] }).ranges, "2026-12-15"), { inSeason: true, start: "2026-11-01", end: "2027-02-28", daysIntoSeason: 44 });
+  assert.deepEqual(seasonState(seasonOf({ tags: ["season:jun-aug", "season:sep-oct"] }).ranges, "2026-09-05"), { inSeason: true, start: "2026-06-01", end: "2026-10-31", daysIntoSeason: 96, seasonDays: 153 });
+  assert.deepEqual(seasonState(seasonOf({ tags: ["season:winter", "season:nov-jan"] }).ranges, "2026-12-15"), { inSeason: true, start: "2026-11-01", end: "2027-02-28", daysIntoSeason: 44, seasonDays: 120 });
   const twoCollections = [{ collectionId: "gid://shopify/Collection/1", from: 6, to: 8 }, { collectionId: "gid://shopify/Collection/2", from: 9, to: 11 }];
   assert.deepEqual(seasonOf({ tags: [], collections: ["gid://shopify/Collection/1", "gid://shopify/Collection/2"] }, twoCollections).ranges, [{ from: 6, to: 11 }]);
 });
@@ -67,4 +67,23 @@ test("seasons that overlap or touch are one season", () => {
 test("a tag that isn't a season never breaks the product's season", () => {
   assert.deepEqual(seasonOf({ tags: ["season:constructor", "season:nov-feb"] }), { ranges: [{ from: 11, to: 2 }], source: "tag" });
   assert.equal(seasonOf({ tags: ["season:__proto__"] }), null);
+});
+
+test("no season or a whole year has no state", () => {
+  assert.equal(seasonState([], "2026-07-01"), null);
+  assert.equal(seasonState([{ from: 1, to: 12 }], "2026-07-01"), null);
+});
+
+test("sales since each product's season started", () => {
+  const rows = [
+    { productId: "a", date: new Date("2026-10-31T00:00:00Z"), units: 5 },
+    { productId: "a", date: new Date("2026-11-01T00:00:00Z"), units: 2 },
+    { productId: "a", date: "2026-11-20", units: 3 },
+    { productId: "b", date: "2026-11-20", units: 4 },
+    { productId: "c", date: "2026-11-20", units: 9 },
+  ];
+  const units = unitsSinceStart(rows, new Map([["a", "2026-11-01"], ["b", "2026-12-01"]]));
+  assert.equal(units.get("a"), 5);
+  assert.equal(units.get("b"), undefined);
+  assert.equal(units.get("c"), undefined);
 });

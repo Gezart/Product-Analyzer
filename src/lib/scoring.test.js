@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_THRESHOLDS, STATUS_WEIGHTS, computeMetrics, quantile, sanitizeThresholds, scoreProducts, stockFromVariants } from "./scoring.js";
+import { DEFAULT_THRESHOLDS, STATUS_WEIGHTS, computeMetrics, quantile, sanitizeThresholds, scoreProducts, seasonGraceDays, seasonWaiting, stockFromVariants } from "./scoring.js";
 
 function product(overrides) {
   const stock = overrides.stock ?? 50;
@@ -259,8 +259,8 @@ test("products sold without stock have no days of stock", () => {
 
 // --- seasonal products ---
 
-const offSeason = { inSeason: false, daysIntoSeason: null };
-const inSeason = (days) => ({ inSeason: true, daysIntoSeason: days });
+const offSeason = { inSeason: false, daysIntoSeason: null, seasonDays: null };
+const inSeason = (days, seasonDays = 120) => ({ inSeason: true, daysIntoSeason: days, seasonDays });
 
 test("out of season: a seasonal product unsold for months is seasonal, not dead stock or a slow mover", () => {
   const jacket = product({ id: "j", daysSinceLastSale: 200, ...noSales, season: offSeason });
@@ -291,4 +291,43 @@ test("in season: judged only after 30 days, and days without a sale count from t
   assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(95) }))), "a").status, "dead_stock");
   // Selling in season: healthy as usual.
   assert.equal(find(scoreProducts(store(product({ id: "a", season: inSeason(45) }))), "a").status, "healthy");
+});
+
+test("out of season, a page problem is still a page problem, however long it hasn't sold", () => {
+  const busyNoBuy = (daysSinceLastSale) => product({ id: "p", views30: 500, purchases30: 0, ...noSales, daysSinceLastSale, season: offSeason });
+  const long = find(scoreProducts(store(busyNoBuy(200))), "p");
+  const short = find(scoreProducts(store(busyNoBuy(60))), "p");
+  assert.equal(long.status, "page_problem");
+  assert.equal(short.status, "page_problem");
+  assert.equal(long.moneyAtStake, short.moneyAtStake);
+  assert.ok(long.moneyAtStake > 0);
+});
+
+test("a new product waiting for its season is seasonal, not new", () => {
+  const fresh = product({ id: "n", ageDays: 10, stock: 200, units30: 1, unitsPrev30: 0, units60: 1, daysSinceLastSale: 5 });
+  assert.equal(find(scoreProducts(store(fresh)), "n").status, "new");
+  assert.equal(find(scoreProducts(store({ ...fresh, season: offSeason })), "n").status, "seasonal");
+});
+
+test("judged from day 30 of a season; a shorter season after half of it", () => {
+  const unsold = { ...noSales, daysSinceLastSale: 300 };
+  assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(29) }))), "a").status, "seasonal");
+  assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(30) }))), "a").status, "slow_mover");
+  // February only (28 days): judged from day 14, dead stock on its last day if never sold.
+  assert.equal(seasonGraceDays(28), 14);
+  assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(13, 28) }))), "a").status, "seasonal");
+  assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(14, 28) }))), "a").status, "slow_mover");
+  assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(27, 28) }))), "a").status, "dead_stock");
+  // Winter (Dec–Feb, 90 days): an unsold product is dead stock on the season's last day, not never.
+  assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(88, 90) }))), "a").status, "slow_mover");
+  assert.equal(find(scoreProducts(store(product({ id: "a", ...unsold, season: inSeason(89, 90) }))), "a").status, "dead_stock");
+});
+
+test("waiting for the season: out of it, or before its grace days are over", () => {
+  assert.equal(seasonWaiting(null), false);
+  assert.equal(seasonWaiting(offSeason), true);
+  assert.equal(seasonWaiting(inSeason(10)), true);
+  assert.equal(seasonWaiting(inSeason(30)), false);
+  assert.equal(seasonWaiting(inSeason(13, 28)), true);
+  assert.equal(seasonWaiting(inSeason(14, 28)), false);
 });

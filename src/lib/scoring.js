@@ -107,34 +107,39 @@ export function computeBenchmarks(products, t) {
 
 /** Products younger than this aren't judged as slow movers. */
 const NEW_PRODUCT_DAYS = 30;
-/** A seasonal product is judged only after this many days into its season. */
+/** A seasonal product is judged only after this many days into its season (half a shorter season). */
 export const SEASON_GRACE_DAYS = 30;
-/** Statuses a seasonal product can't have out of season (or early in it): it's "seasonal" instead. */
-const NOT_YET = new Set(["dead_stock", "slow_mover", "new"]);
+export const seasonGraceDays = (seasonDays) => Math.min(SEASON_GRACE_DAYS, Math.floor((seasonDays ?? 2 * SEASON_GRACE_DAYS) / 2));
+
+/** Out of season, or still in its grace days: the product waits for its season and isn't judged on sales. */
+export function seasonWaiting(season) {
+  return Boolean(season) && !(season.inSeason && season.daysIntoSeason >= seasonGraceDays(season.seasonDays));
+}
 
 /**
  * First matching status wins: dead stock, stock-out risk, page problem, slow mover (or new, under 30
  * days old), hidden gem, healthy.
  * `historyDays` is how many days of orders are synced; dead stock needs proof of `deadDays` without a sale,
  * capped at the product's age so new products are never dead.
- * A seasonal product (`p.season`: `{ inSeason, daysIntoSeason }`) is "seasonal" instead of dead stock, a
- * slow mover or new while out of season and in the first 30 days of its season; in season, days without
- * a sale count from the season's start.
+ * A seasonal product (`p.season`: `{ inSeason, daysIntoSeason, seasonDays }`) waiting for its season (out
+ * of it, or in its first 30 days) is never dead stock, a slow mover or new: it's "seasonal"; every other
+ * status still applies. In season, days without a sale count from the season's start, and a season
+ * shorter than `deadDays` makes it dead stock when unsold through all of it but its last day.
  */
 export function classify(p, m, b, t, historyDays) {
-  const status = baseStatus(p, m, b, t, historyDays);
-  const judged = p.season?.inSeason && p.season.daysIntoSeason >= SEASON_GRACE_DAYS;
-  return p.season && !judged && NOT_YET.has(status) ? "seasonal" : status;
-}
-
-function baseStatus(p, m, b, t, historyDays) {
-  if (p.stock > 0) {
+  const waiting = seasonWaiting(p.season);
+  if (p.stock > 0 && !waiting) {
     const known = p.daysSinceLastSale ?? historyDays;
     const sinceSeason = p.season?.inSeason ? p.season.daysIntoSeason : Infinity;
     const noSaleDays = Math.min(known, p.ageDays ?? Infinity, sinceSeason);
-    if (noSaleDays >= t.deadDays) return "dead_stock";
+    const deadDays = p.season?.seasonDays ? Math.min(t.deadDays, p.season.seasonDays - 1) : t.deadDays;
+    if (noSaleDays >= deadDays) return "dead_stock";
   }
+  const status = afterDeadStock(p, m, b, t);
+  return waiting && (status === "slow_mover" || status === "new") ? "seasonal" : status;
+}
 
+function afterDeadStock(p, m, b, t) {
   const growing = m.trend == null ? p.units30 > 0 : m.trend >= 1;
   // (Products sold without stock have no days of stock, so they never run out.)
   if (m.daysOfCover != null && m.daysOfCover < t.stockoutCoverDays && growing) return "stockout_risk";

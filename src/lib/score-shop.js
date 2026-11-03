@@ -4,7 +4,7 @@ import { localDateKey } from "@/lib/jobs/schedule";
 import { attentionSummary } from "@/lib/notifications";
 import { notify } from "@/lib/notify";
 import { productLimit, withinLimit } from "@/lib/plans";
-import { seasonOf, seasonState } from "@/lib/season";
+import { seasonOf, seasonState, unitsSinceStart } from "@/lib/season";
 import { scoreProducts, stockFromVariants } from "@/lib/scoring";
 import { seasonalCollectionsOf } from "@/lib/settings";
 import { knownOrderDays } from "@/lib/sync/constants";
@@ -121,10 +121,7 @@ export async function scoreShop(shopId, now = new Date()) {
       where: { productId: { in: early.map(([id]) => id) }, date: { gte: d60, lt: today }, units: { gt: 0 } },
       select: { productId: true, date: true, units: true },
     });
-    const starts = new Map(early.map(([id, s]) => [id, s.start]));
-    for (const r of rows) {
-      if (r.date.toISOString().slice(0, 10) >= starts.get(r.productId)) seasonUnits.set(r.productId, (seasonUnits.get(r.productId) ?? 0) + r.units);
-    }
+    for (const [id, units] of unitsSinceStart(rows, new Map(early.map(([pid, s]) => [pid, s.start])))) seasonUnits.set(id, units);
   }
 
   const byId = (rows) => new Map(rows.map((r) => [r.productId, r]));
@@ -166,7 +163,7 @@ export async function scoreShop(shopId, now = new Date()) {
       daysSinceLastSale: saleDate ? daysBefore(saleDate) : null,
       ageDays: created ? daysBefore(created) : null,
       sellsWhenOut: p.variants.length > 0 && p.variants.every((v) => v.sellsWhenOut),
-      season: season && { inSeason: season.inSeason, daysIntoSeason: season.daysIntoSeason ?? null },
+      season: season && { inSeason: season.inSeason, daysIntoSeason: season.daysIntoSeason ?? null, seasonDays: season.seasonDays ?? null },
     };
   });
 
