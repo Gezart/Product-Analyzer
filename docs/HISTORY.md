@@ -3,7 +3,7 @@
 ## 2026-11-04 · rising-stars
 - New rule with the nightly scores (pure, tested): a rising star sold at least 5 units in the last 30 days, 20% or more above the 30 days before (which had sales), and converts at least as well as the store's median when its visits are known; never dead stock, a slow mover or a product waiting for its season (a stock-out risk can be one: then it needs stock); stored on the score (`product_scores.rising`, migration applied to Supabase)
 - Dashboard: a "Rising stars" card with the fastest-growing five (+X%) and "See all"; product list: a "↑ Rising stars" filter and an "↑ Rising" mark on each one
-- Product page: "Rising star: sales +X% over the 30 days before" with suggested actions (pure, tested): reorder first when it would run out within 45 days at this pace, move it up in its collections (Collections page), feature it on the home page (theme editor)
+- Product page: "Rising star: sales +X% over the 30 days before" with suggested actions (pure, tested): reorder first when it would run out within 45 days at this pace (not for products sold without stock), move it up in its collections (Collections page), feature it on the home page (theme editor)
 - Verified on a local Postgres through the nightly scoring: two rising products (+87%, +38%), a steady one and a small slow mover not; the dashboard, the list and the product page
 
 ## 2026-11-03 · weekly-recap

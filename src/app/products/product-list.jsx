@@ -84,7 +84,7 @@ export function ProductList() {
                 </button>
               ))}
             </div>
-            {risingCount > 0 && (
+            {(risingCount > 0 || risingOnly) && (
               <div>
                 <s-button variant={risingOnly ? "secondary" : "tertiary"} ref={listen("click", () => go({ status: "", rising: !risingOnly }))}>
                   ↑ Rising stars ({risingCount})

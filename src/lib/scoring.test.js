@@ -362,3 +362,17 @@ test("a rising star is never dead stock, a slow mover or waiting for its season"
   assert.equal(isRisingStar(p, m, b, "stockout_risk"), true); // rising and running out: reorder
   for (const status of ["dead_stock", "slow_mover", "seasonal", "excluded", "over_limit"]) assert.equal(isRisingStar(p, m, b, status), false);
 });
+
+test("rising stars at the edges: exactly 5 units, exactly +20%, the store's median, few visits", () => {
+  const b = { medianConversion: 0.05 };
+  const t = DEFAULT_THRESHOLDS;
+  assert.equal(isRisingStar({ units30: 5, unitsPrev30: 4, views30: 0 }, { conversion: null }, b, "healthy", t), true); // 5 = 4 × 1.25
+  assert.equal(isRisingStar({ units30: 6, unitsPrev30: 5, views30: 0 }, { conversion: null }, b, "healthy", t), true); // exactly +20%
+  assert.equal(isRisingStar({ units30: 4, unitsPrev30: 1, views30: 0 }, { conversion: null }, b, "healthy", t), false); // under 5 units
+  assert.equal(isRisingStar({ units30: 12, unitsPrev30: 10, views30: 200 }, { conversion: 0.05 }, b, "healthy", t), true); // equal to the median
+  assert.equal(isRisingStar({ units30: 12, unitsPrev30: 10, views30: 200 }, { conversion: 0.049 }, b, "healthy", t), false);
+  // Under 20 visits the conversion isn't judged.
+  assert.equal(isRisingStar({ units30: 12, unitsPrev30: 10, views30: 19 }, { conversion: 0.01 }, b, "healthy", t), true);
+  // No store median (no visit data): sales decide.
+  assert.equal(isRisingStar({ units30: 12, unitsPrev30: 10, views30: 200 }, { conversion: 0.01 }, { medianConversion: null }, "healthy", t), true);
+});

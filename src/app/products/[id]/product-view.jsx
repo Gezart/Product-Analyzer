@@ -94,7 +94,8 @@ export function ProductView() {
               {data.product.status !== "ACTIVE" && <s-badge>{data.product.status.toLowerCase()}</s-badge>}
             </s-stack>
             {next && <s-text>Next: {next}</s-text>}
-            {data.score?.rising && <RisingStar trend={data.score.trend} daysOfCover={data.daysOfCover} />}
+            {/* Sold without stock (e.g. gift cards): days of stock don't apply, so no reorder advice. */}
+            {data.score?.rising && <RisingStar trend={data.score.trend} daysOfCover={data.untracked ? null : data.daysOfCover} />}
             <div className="grid gap-4 sm:grid-cols-4">
               <Stat label="In stock" value={data.untracked ? "Sells without stock" : data.stock.toLocaleString()} />
               <Stat
@@ -266,7 +267,11 @@ function RisingStar({ trend, daysOfCover }) {
       <ul className="m-0 mt-1 list-disc space-y-0.5 pl-5 text-emerald-900">
         {risingActions({ daysOfCover }).map((a) => (
           <li key={a.kind}>
-            {a.href.startsWith("#") || a.href.startsWith("/") ? (
+            {a.href.startsWith("/") ? (
+              <Link href={a.href} className="underline">
+                {a.text}
+              </Link>
+            ) : a.href.startsWith("#") ? (
               <a href={a.href} className="underline">
                 {a.text}
               </a>
