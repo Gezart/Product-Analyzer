@@ -49,6 +49,7 @@ model Shop {
   googleBenchmarks GoogleBenchmark[]
   lineRefunds      LineRefund[]
   returnReasons    ReturnReason[]
+  aiPhotoDrafts    AiPhotoDraft[]
 
   @@map("shops")
 }
@@ -108,6 +109,7 @@ model Product {
   notifications    Notification[]
   competitorLinks  CompetitorLink[]
   googleBenchmarks GoogleBenchmark[]
+  aiPhotoDrafts    AiPhotoDraft[]
 
   @@unique([shopId, shopifyGid])
   @@index([shopId])
@@ -326,11 +328,38 @@ model AiUsage {
   inputTokens  Int     @default(0) @map("input_tokens")
   outputTokens Int     @default(0) @map("output_tokens")
   costUsd      Decimal @default(0) @map("cost_usd") @db.Decimal(10, 4)
+  /// AI photos made this month (their own limit) and what they cost; the columns above are descriptions.
+  photoCalls   Int     @default(0) @map("photo_calls")
+  photoCostUsd Decimal @default(0) @map("photo_cost_usd") @db.Decimal(10, 4)
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@id([shopId, month])
   @@map("ai_usage")
+}
+
+/// A photo made with AI, waiting for the merchant to add it to the product (or not). The image is kept
+/// until then (drafts older than a day are removed); once added, `mediaId` is the photo in Shopify.
+model AiPhotoDraft {
+  id            String   @id @default(cuid())
+  shopId        String   @map("shop_id")
+  productId     String   @map("product_id")
+  sourceMediaId String   @map("source_media_id")
+  style         String // white | scene
+  scene         String?
+  image         Bytes?
+  mimeType      String   @map("mime_type")
+  status        String   @default("draft") // draft | adding | added | discarded
+  mediaId       String?  @map("media_id")
+  fixId         String?  @map("fix_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  shop    Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, createdAt])
+  @@index([productId, status])
+  @@map("ai_photo_drafts")
 }
 
 // Background job queue (see src/lib/jobs). Claimed with FOR UPDATE SKIP LOCKED; one running job per shop.

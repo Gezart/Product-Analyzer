@@ -1,5 +1,17 @@
 # History
 
+## 2026-11-03 · ai-photos
+- Fix center: "Create photo with AI" (OpenAI image API, `gpt-image-2.5-flare`, plain `fetch`, no SDK) from one of the product's photos: a white background (best as the main photo) or a scene (the merchant's own or a fitting one); highlighted when the diagnosis finds too few photos
+- The request asks to keep the product exactly as it is (shape, colors, text, logos) and to add no text, watermarks or other products; source photos are read only from Shopify's CDN (https, at most 2048 px, 20 MB, checked by their bytes as JPEG, PNG or WebP)
+- The merchant sees the photo first: "Add to product" uploads it to Shopify (staged upload, then added to the product's photos) as a fix in the history, with Undo; "Discard" drops it; drafts are kept for a day (new table `ai_photo_drafts`, RLS on, migration applied to Supabase)
+- Undo removes just that photo, even if the photos were reordered since
+- A product with no photo asks for one: the merchant uploads it in the fix center (also undoable)
+- AI photos are marked: their alt text says "AI-made photo" (visible in Shopify), they carry an "AI-made" badge in the fix center, and the file goes to Shopify exactly as OpenAI returns it, so its embedded metadata isn't removed
+- Monthly limit per plan (Growth 50, Pro 200; Starter gets the upgrade note), in `ai_usage.photo_calls`, taken atomically and given back when no photo comes out; the cost estimate goes in `photo_cost_usd`; `OPENAI_API_KEY` in `.env.example`
+- Readable errors: declined by the AI, bad key or no credit, busy, a photo that can't be used, timeout (150 s)
+- Verified on a local Postgres with Shopify (Admin API, CDN, staged upload) and OpenAI stubbed: the request, the draft, add, add twice, undo after a reorder, scene, discard, declined, bad key, server error, limit, two at once with one left, bad input, a source that isn't an image or isn't on the CDN, a failed upload then retry, another shop's draft, an old draft, pruning, no photo and the merchant's upload (and a GIF, too large, no file), Starter, no key
+- Open: real use needs the owner's `OPENAI_API_KEY`; removing a photo uses Shopify's `productDeleteMedia` (deprecated, still in 2026-10; its replacement needs the `write_files` permission)
+
 ## 2026-11-03 · ai-descriptions
 - Fix center: "Write with AI" for the description and SEO (Claude Opus 5.5 through `@anthropic-ai/sdk`, owner approved); highlighted when the diagnosis finds a short, thin or copied description
 - The request carries the title, type, vendor, variant options, tags, current description, what the diagnosis found and up to 4 product photos; the answer comes back in the product's language as structured JSON

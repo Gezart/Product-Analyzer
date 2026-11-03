@@ -1,4 +1,5 @@
 import { adminGraphql } from "@/lib/admin";
+import { EXTENSIONS } from "@/lib/ai-photo";
 import { collectionChanges, mediaMoves } from "@/lib/fixes";
 
 const STATE_QUERY = `#graphql
@@ -32,6 +33,8 @@ export function stateOf(live, type) {
     description: { descriptionHtml: live.descriptionHtml },
     seo: { seoTitle: live.seo.title ?? "", seoDescription: live.seo.description ?? "" },
     images: { mediaIds: live.media.map((m) => m.id) },
+    // A photo added by the app: undone by removing that photo (whatever the order is now).
+    photo: { mediaIds: live.media.map((m) => m.id) },
     collection: { collectionIds: live.collections.filter((c) => c.manual).map((c) => c.id).sort() },
   };
   return states[type];
@@ -107,6 +110,21 @@ export async function writeState(
       check(r.productReorderMedia.mediaUserErrors, "Image order");
       return { pending: !(await waitForJob(session, r.productReorderMedia.job)) };
     }
+    case "photo": {
+      // Only removes: the photos in `current` that `target` no longer has (the ones the fix added).
+      const remove = current.mediaIds.filter((id) => !target.mediaIds.includes(id));
+      if (!remove.length) return { pending: false };
+      const r = await adminGraphql(
+        session,
+        `#graphql
+        mutation FixRemovePhoto($productId: ID!, $mediaIds: [ID!]!) {
+          productDeleteMedia(productId: $productId, mediaIds: $mediaIds) { deletedMediaIds mediaUserErrors { field message } }
+        }`,
+        { productId: productGid, mediaIds: remove },
+      );
+      check(r.productDeleteMedia.mediaUserErrors, "Remove photo");
+      return { pending: false };
+    }
     case "collection": {
       // Note: re-adding to a manually sorted collection puts the product at the end of it.
       const { add, remove } = collectionChanges(current.collectionIds, target.collectionIds);
@@ -137,6 +155,45 @@ export async function writeState(
       return { pending };
     }
   }
+}
+
+const STAGED_UPLOAD = `#graphql
+  mutation PhotoUpload($input: [StagedUploadInput!]!) {
+    stagedUploadsCreate(input: $input) { stagedTargets { url resourceUrl parameters { name value } } userErrors { field message } }
+  }`;
+const ADD_PHOTO = `#graphql
+  mutation AddPhoto($product: ProductUpdateInput!, $media: [CreateMediaInput!]) {
+    productUpdate(product: $product, media: $media) { product { media(last: 10) { nodes { id alt } } } userErrors { field message } }
+  }`;
+
+/**
+ * Uploads an image file to Shopify and adds it to the end of the product's photos; resolves the new
+ * photo's media id. `beforeIds` are the product's media before, to tell the new one apart.
+ */
+export async function addProductPhoto(session, productGid, { bytes, mimeType, alt, beforeIds }) {
+  const filename = `photo-${Date.now()}.${EXTENSIONS[mimeType] ?? "jpg"}`;
+  const staged = await adminGraphql(session, STAGED_UPLOAD, {
+    input: [{ filename, mimeType, resource: "IMAGE", httpMethod: "POST", fileSize: String(bytes.length) }],
+  });
+  check(staged.stagedUploadsCreate.userErrors, "Upload");
+  const target = staged.stagedUploadsCreate.stagedTargets?.[0];
+  if (!target?.url || !target.resourceUrl) throw new Error("Upload: Shopify gave no upload address");
+  const form = new FormData();
+  for (const p of target.parameters) form.append(p.name, p.value);
+  form.append("file", new Blob([bytes], { type: mimeType }), filename);
+  const sent = await fetch(target.url, { method: "POST", body: form, signal: AbortSignal.timeout(60_000) });
+  if (!sent.ok) throw new Error(`Upload: the file couldn't be sent to Shopify (${sent.status})`);
+
+  const r = await adminGraphql(session, ADD_PHOTO, {
+    product: { id: productGid },
+    media: [{ originalSource: target.resourceUrl, alt, mediaContentType: "IMAGE" }],
+  });
+  check(r.productUpdate.userErrors, "Add photo");
+  const nodes = r.productUpdate.product?.media?.nodes ?? [];
+  const added = nodes.filter((m) => !beforeIds.includes(m.id));
+  const id = (added.find((m) => m.alt === alt) ?? added.at(-1))?.id;
+  if (!id) throw new Error("Add photo: Shopify didn't return the new photo");
+  return id;
 }
 
 /** Manual collections of the shop, to add a product to. */

@@ -1,4 +1,6 @@
 import { claudeConfigured } from "@/lib/ai/claude";
+import { openaiConfigured } from "@/lib/ai/openai-image";
+import { aiMediaIds } from "@/lib/ai/photos";
 import { aiAllowance } from "@/lib/ai/usage";
 import { db } from "@/lib/db";
 import { OVER_LIMIT_MESSAGE, overLimitUpgrade } from "@/lib/feature-gate";
@@ -46,9 +48,26 @@ export const GET = appRoute(async ({ shop, session, params }) => {
   const hints = reasons.flatMap((r) =>
     FIX_HINTS[r.code] ? [{ code: r.code, ...FIX_HINTS[r.code], ...(r.data?.hint ? { hint: r.data.hint } : {}), ...(r.data?.hintType ? { type: r.data.hintType } : {}) }] : [],
   );
-  // "Write with AI": on the plan, set up by the app owner, with this month's uses left.
+  // "Write with AI" and "Create photo with AI": on the plan, set up by the app owner, with this month's uses left.
+  const [texts, photos, aiMedia] = await Promise.all([
+    hasFeature(shop.plan, "aiDescriptions") ? aiAllowance(shop, "texts") : null,
+    hasFeature(shop.plan, "aiPhotos") ? aiAllowance(shop, "photos") : null,
+    aiMediaIds(id),
+  ]);
   const ai = {
-    descriptions: hasFeature(shop.plan, "aiDescriptions") ? { configured: claudeConfigured(), ...(await aiAllowance(shop)) } : { upgrade: FEATURE_PLAN.aiDescriptions },
+    descriptions: texts ? { configured: claudeConfigured(), ...texts } : { upgrade: FEATURE_PLAN.aiDescriptions },
+    photos: photos ? { configured: openaiConfigured(), ...photos } : { upgrade: FEATURE_PLAN.aiPhotos },
   };
-  return Response.json({ live, liveError, manualCollections: collections, fixes, hints, diagnosisId: diagnosis?.id ?? null, upgrade, ai, reasonCodes: reasons.map((r) => r.code) });
+  return Response.json({
+    live,
+    liveError,
+    manualCollections: collections,
+    fixes,
+    hints,
+    diagnosisId: diagnosis?.id ?? null,
+    upgrade,
+    ai,
+    aiMediaIds: aiMedia,
+    reasonCodes: reasons.map((r) => r.code),
+  });
 });

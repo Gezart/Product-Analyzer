@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiError } from "@/app/api-error";
 import { listen } from "@/app/polaris-events";
+import { AiPhotos } from "./ai-photos";
 import { UpgradeBanner } from "@/app/upgrade-banner";
 import { fillInsLeft } from "@/lib/ai-text";
 
 const LABELS = { title: "Title", description: "Description", seo: "SEO", images: "Image order", collection: "Collections" };
+const HISTORY_LABELS = { ...LABELS, photo: "Photo added" };
 
 /** Edit, apply and undo fixes. Every apply saves the old version first; undo restores it exactly. */
 export function FixCenter({ productId, onChanged }) {
@@ -149,6 +151,13 @@ export function FixCenter({ productId, onChanged }) {
   // AI drafts leave [fill in: …] for facts only the merchant knows: nothing applies until they're gone.
   const descriptionFillIns = fillInsLeft(description);
   const seoFillIns = fillInsLeft(seoTitle, seoDescription);
+  /** A photo went to Shopify: the photo list is read again (the merchant's reorder draft is reset). */
+  async function photoAdded(text) {
+    await load(["images"]);
+    setMessage({ tone: "success", text });
+    onChanged();
+  }
+
   function restoreText() {
     setDescription(beforeAi.description);
     setSeoTitle(beforeAi.seoTitle);
@@ -246,7 +255,6 @@ export function FixCenter({ productId, onChanged }) {
             <s-stack gap="small">
               <s-text>Image order (first image shows in collections and search)</s-text>
               {hintFor("images")}
-              {mediaIds.length === 0 && <s-text tone="neutral">No images. Add them in Shopify.</s-text>}
               <ol className="m-0 flex list-none flex-wrap gap-3 p-0">
                 {mediaIds.map((id, i) => {
                   const m = mediaById.get(id);
@@ -258,6 +266,7 @@ export function FixCenter({ productId, onChanged }) {
                       ) : (
                         <div className="flex h-20 w-20 items-center justify-center bg-zinc-100 text-xs">{m?.type ?? "Media"}</div>
                       )}
+                      {data.aiMediaIds?.includes(id) && <s-badge>AI-made</s-badge>}
                       <div className="flex gap-1 text-xs">
                         <button type="button" disabled={i === 0} onClick={() => move(i, -1)} className="rounded border px-1 disabled:opacity-30" aria-label="Move earlier">
                           ←
@@ -271,7 +280,19 @@ export function FixCenter({ productId, onChanged }) {
                   );
                 })}
               </ol>
-              <div>{button("images", { mediaIds }, mediaIds.join() !== data.live.media.map((m) => m.id).join())}</div>
+              {mediaIds.length > 0 && <div>{button("images", { mediaIds }, mediaIds.join() !== data.live.media.map((m) => m.id).join())}</div>}
+              <AiPhotos
+                productId={productId}
+                media={data.live.media}
+                ai={data.ai?.photos}
+                primary={data.reasonCodes?.includes("few_images")}
+                diagnosisId={data.diagnosisId}
+                locked={data.upgrade != null}
+                busy={busy}
+                setBusy={setBusy}
+                setMessage={setMessage}
+                onAdded={photoAdded}
+              />
             </s-stack>
 
             <s-stack gap="small">
@@ -308,7 +329,7 @@ export function FixCenter({ productId, onChanged }) {
             <ul className="m-0 list-none space-y-1 p-0 text-sm">
               {data.fixes.map((f) => (
                 <li key={f.id} className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{LABELS[f.type] ?? f.type}</span>
+                  <span className="font-medium">{HISTORY_LABELS[f.type] ?? f.type}</span>
                   <s-badge tone={f.status === "applied" ? "success" : f.status === "failed" ? "critical" : undefined}>{f.status}</s-badge>
                   <span className="text-zinc-500">{new Date(f.appliedAt ?? f.createdAt).toLocaleString()}</span>
                   {f.error && <span className="text-red-700">{f.error}</span>}
