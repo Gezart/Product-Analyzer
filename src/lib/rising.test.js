@@ -35,3 +35,13 @@ test("an action's effect: units a day since it against the 30 days before", () =
   // Today is the start: nothing yet.
   assert.deepEqual(actionEffect(rows, "2026-11-04", "2026-11-04"), { days: 0, before: 2, after: 0, change: null, done: false });
 });
+
+test("an action's effect at day 7 (first result) and day 30 (final)", () => {
+  const rows = [];
+  for (let i = 1; i <= 30; i++) rows.push({ date: new Date(Date.UTC(2026, 10, 4) - i * 86_400_000).toISOString().slice(0, 10), units: 2 });
+  for (let i = 0; i < 40; i++) rows.push({ date: new Date(Date.UTC(2026, 10, 4) + i * 86_400_000).toISOString().slice(0, 10), units: 3 });
+  assert.equal(actionEffect(rows, "2026-11-04", "2026-11-10").change, null); // 6 days
+  assert.equal(actionEffect(rows, "2026-11-04", "2026-11-11").change, 0.5); // 7 days
+  assert.equal(actionEffect(rows, "2026-11-04", "2026-12-03").done, false); // 29 days
+  assert.deepEqual(actionEffect(rows, "2026-11-04", "2026-12-04"), { days: 30, before: 2, after: 3, change: 0.5, done: true }); // 30 days
+});

@@ -1,11 +1,11 @@
 # History
 
 ## 2026-11-04 · rising-effect
-- Each suggested action on a rising star has a "Done" button: from that day (the store's calendar) its sales are measured as units a day since, against the 30 days before, for 30 days (a result from day 7); the same action isn't recorded twice while it's measured
-- A rising star moved up 3+ places into the first 24 on the Collections page is recorded the same way, automatically (never a rescue plan: a "no change" there must not lead to a markdown)
+- Each suggested action on a rising star has a "Done" button: from that day (the store's calendar) its sales are measured as units a day since, against the 30 days before, for 30 days (a result from day 7); only for products that are rising stars; the same action isn't recorded twice while it's measured, also with clicks at the same moment (the database keeps one per product, action and day)
+- A rising star moved up 3+ places into the first 24 on the Collections page is recorded the same way, automatically, and removed when that order is undone; a rising star never gets a rescue plan from a move, whatever its status (a "no change" there must not lead to a markdown)
 - Product page: "Rising star actions" lists each one with its result ("3 a day since vs 2 before (+50%)"), also after the product stops rising; on every plan
-- New table `rising_actions` (RLS on, migration applied to Supabase); the measurement is pure and tested (`actionEffect`)
-- Verified on a local Postgres: an action recorded (also on the Free plan), recorded again (refused), a bad kind, another shop's product, the result 10 days later (+36%), a rising star moved up on the Collections page (recorded once, a non-rising one not, no position fix for healthy products)
+- New table `rising_actions` (RLS on, migrations applied to Supabase); the measurement is pure and tested (`actionEffect`)
+- Verified on a local Postgres: an action recorded (also on the Free plan), recorded again (refused), a bad kind, another shop's product, the result 10 days later (+36%), a rising star moved up on the Collections page (recorded once, a non-rising one not, no position fix for healthy products; undone with the order), a rising hidden gem (no rescue plan), three clicks at once (one recorded), bad input and a product that isn't rising
 
 ## 2026-11-04 · rising-stars
 - New rule with the nightly scores (pure, tested): a rising star sold at least 5 units in the last 30 days, 20% or more above the 30 days before (which had sales), and converts at least as well as the store's median when its visits are known; never dead stock, a slow mover or a product waiting for its season (a stock-out risk can be one: then it needs stock); stored on the score (`product_scores.rising`, migration applied to Supabase)
