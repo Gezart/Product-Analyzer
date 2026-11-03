@@ -218,6 +218,10 @@ async function productSeason(product) {
 }
 
 /** Why a product qualifies for a markdown now (`{ reason, rescueId }`), or null. `product` comes with its shop. */
+export async function markdownEligibility(product) {
+  return eligibility(product);
+}
+
 async function eligibility(product) {
   const productId = product.id;
   const [rescue, score, season, variants] = await Promise.all([

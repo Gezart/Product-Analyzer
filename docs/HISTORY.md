@@ -1,5 +1,12 @@
 # History
 
+## 2026-11-03 · weekly-plan
+- Every Monday morning (07:00 store time, nightly job `weekly-plan`, once per week) the inbox gets "Your plan for this week": up to 5 actions picked from the products that need attention, most money at stake first, with up to 2 places kept for stock-out risks (fewest days left first)
+- The action per product (pure, tested): reorder (stock-out risk, days of stock left), start the markdown (when one is due, same rule as the product page), fix the page (the latest diagnosis's top reason), give a hidden gem a better place (Collections), or run a diagnosis; products being measured by a rescue plan or already on a markdown are left out; a week with nothing to do sends nothing
+- New "This week" page (nav, and the inbox item opens it): the week's actions with status, money at stake, what to do and a button to where it's done; earlier weeks can be picked; the plan is kept as it was on Monday
+- Diagnosis reason names moved to a shared module (`diagnosis-titles.js`)
+- Verified on a local Postgres: Tuesday (nothing), Monday (one plan, twice run), the actions and their order (a measured and a marked-down product left out, two stock-outs kept, another shop's product not used), the inbox text, Monday in the store's timezone while it's still Sunday in UTC, the API, a shop with nothing to do
+
 ## 2026-11-03 · collection-effect
 - A saved collection order measures its effect: each hidden gem, slow mover or dead-stock product it moved up by 3 places or more into the first 24 (what shoppers see first) gets a "Collection position" fix and a rescue plan comparing its sales after the move with before (joining a plan already running for the product)
 - Not measured: bestsellers and other healthy products (their sales don't need rescuing, and a "no change" verdict must not lead to a markdown), products that only slid up because others moved down, products the app doesn't know yet; a partly saved order is measured for what moved, an interrupted one isn't

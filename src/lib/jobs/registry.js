@@ -11,6 +11,7 @@ import { runDailyMetrics, runInitialSync, runOrdersCatchup, runRegisterWebhooks,
 import { runSyncInventory, runSyncProduct } from "@/lib/sync/live";
 import { runReturnsSync } from "@/lib/sync/returns";
 import { syncViews } from "@/lib/sync/views";
+import { sendWeeklyPlan } from "@/lib/weekly-plans";
 
 /** Follow-up runs per night for shops with many competitor links (each run reads for up to 3 minutes). */
 const MAX_PRICE_ROUNDS = 20;
@@ -77,6 +78,10 @@ export const handlers = {
   "google-benchmarks": async (job, signal) => {
     await syncBenchmarks(requireShop(job), signal);
   },
+  /** Mondays: this week's plan in the inbox (a no-op on other days). */
+  "weekly-plan": async (job) => {
+    await sendWeeklyPlan(requireShop(job));
+  },
   /** AI photos the merchant didn't add within a day are removed with their image. */
   "ai-photo-drafts": async (job) => {
     await pruneDrafts(requireShop(job));
@@ -100,6 +105,8 @@ export const nightlyJobs = [
   { type: "price-guard", hour: 6 },
   // Stores last month's report once it is over (no-op on other days).
   { type: "monthly-report", hour: 6 },
+  // After the night's scoring, catch-up and rescue verdicts: this week's plan (Mondays only).
+  { type: "weekly-plan", hour: 7 },
 ];
 
 /** Jobs enqueued once per shop every hour. */
