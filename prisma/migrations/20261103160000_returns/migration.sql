@@ -23,6 +23,7 @@ CREATE TABLE "return_reasons" (
     "quantity" INTEGER NOT NULL,
     "reason" TEXT NOT NULL,
     "reason_name" TEXT NOT NULL,
+    "return_status" TEXT NOT NULL DEFAULT 'CLOSED',
     "order_updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "return_reasons_pkey" PRIMARY KEY ("shop_id","return_line_gid")

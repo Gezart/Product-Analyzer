@@ -480,6 +480,8 @@ model ReturnReason {
   /// Stable reason handle, e.g. "too-small"; `reasonName` is how Shopify shows it.
   reason         String
   reasonName     String   @map("reason_name")
+  /// The return's status: REQUESTED or OPEN can still be declined or cancelled (re-checked nightly).
+  returnStatus   String   @default("CLOSED") @map("return_status")
   orderUpdatedAt DateTime @map("order_updated_at")
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)

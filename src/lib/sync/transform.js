@@ -293,6 +293,7 @@ export function returnReasonsFromOrder(order, timeZone) {
           quantity: Math.max(0, num(n.quantity) ?? 0),
           reason: str(definition?.handle) ?? old[0],
           reasonName: str(definition?.name) ?? old[1],
+          returnStatus: str(ret.status) ?? "CLOSED",
           orderUpdatedAt: updatedAt,
         },
       ];

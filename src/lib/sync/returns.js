@@ -100,6 +100,7 @@ async function completeReturns(session, order, signal) {
   const all = await allPages(session, RETURN_IDS_QUERY, { id: order.id }, (d) => d.order?.returns, signal);
   const nodes = [];
   for (const r of all) {
+    if (r.status === "DECLINED" || r.status === "CANCELED") continue; // they don't count: no need for their lines
     nodes.push({ ...r, returnLineItems: { nodes: await allPages(session, RETURN_LINES_QUERY, { id: r.id }, (d) => d.return?.returnLineItems, signal) } });
   }
   return { ...order, returns: { nodes } };
@@ -178,6 +179,7 @@ export async function runReturnsSync(job, signal, { budgetMs = RUN_BUDGET_MS } =
   const refunds = await phase("returns", (since) =>
     eachOrder(session, REFUNDS_QUERY, returnsSearch(REFUNDED_SEARCH, windowStart, since), async (order) => {
       const full = await completeRefunds(session, order, signal);
+      if (signal?.aborted) return; // possibly incomplete: the next run reads this order again
       await replaceOrderRefunds(shopId, order.id, new Date(order.updatedAt ?? order.createdAt), lineRefundsFromOrder(full, shop.timezone));
     }, progress, signal),
   );
@@ -189,16 +191,19 @@ export async function runReturnsSync(job, signal, { budgetMs = RUN_BUDGET_MS } =
       const store = async (order) => {
         seen.add(order.id);
         const full = await completeReturns(session, order, signal);
+        if (signal?.aborted) return; // possibly incomplete: the next run reads this order again
         await replaceOrderReturnReasons(shopId, order.id, new Date(order.updatedAt ?? order.createdAt), returnReasonsFromOrder(full, shop.timezone));
       };
       await eachOrder(session, RETURNS_QUERY, returnsSearch(RETURNED_SEARCH, windowStart, since), store, progress, signal);
-      // Orders whose returns were all declined or cancelled leave that search: re-read the ones with
-      // stored reasons that changed, so their reasons are cleared.
-      const stored = await db().returnReason.findMany({ where: { shopId }, distinct: ["orderGid"], select: { orderGid: true } });
-      const recheck = stored.map((r) => r.orderGid).filter((id) => !seen.has(id));
+      // Returns still requested or open can be declined or cancelled, and their order then leaves that
+      // search: re-read those orders if they changed, so their reasons are cleared. (Its own progress:
+      // where it stops says nothing about the main search's.)
+      const open = await db().returnReason.findMany({ where: { shopId, returnStatus: { in: ["REQUESTED", "OPEN"] } }, distinct: ["orderGid"], select: { orderGid: true } });
+      const recheck = open.map((r) => r.orderGid).filter((id) => !seen.has(id));
+      const recheckProgress = { deadline: progress.deadline, reached: null };
       for (let i = 0; i < recheck.length && !signal?.aborted; i += 20) {
         const ids = recheck.slice(i, i + 20).map((gid) => `id:${numericId(gid)}`).join(" OR ");
-        await eachOrder(session, RETURNS_QUERY, `(${ids}) AND updated_at:>='${since}'`, store, progress, signal);
+        await eachOrder(session, RETURNS_QUERY, `(${ids}) AND updated_at:>='${since}'`, store, recheckProgress, signal);
       }
     });
   }
