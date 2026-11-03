@@ -83,3 +83,11 @@ test("stuck split: dead stock share of the stuck value, and products with no sto
   assert.deepEqual(split([row({ productId: "a", status: "dead_stock", stockValue: 0 })]), { products: 1, value: 0, deadShare: 0 });
   assert.deepEqual(split([row({ productId: "a", status: "healthy", stockValue: 900 })]), { products: 0, value: 0, deadShare: 0 });
 });
+
+test("rising stars on the dashboard: count and the fastest-growing five", () => {
+  const rows = Array.from({ length: 7 }, (_, i) => ({ productId: `r${i}`, status: "healthy", stockValue: 0, moneyAtStake: 0, rising: true, trend: 1.2 + i / 10 }));
+  rows.push({ productId: "flat", status: "healthy", stockValue: 0, moneyAtStake: 0, rising: false, trend: 3 });
+  const { rising } = summarize(rows);
+  assert.equal(rising.count, 7);
+  assert.deepEqual(rising.top.map((r) => r.productId), ["r6", "r5", "r4", "r3", "r2"]);
+});

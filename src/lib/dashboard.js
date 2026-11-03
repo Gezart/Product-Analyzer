@@ -36,6 +36,11 @@ export function summarize(rows, topN = 10) {
     overLimit: rows.filter((r) => r.status === "over_limit").length,
     byStatus,
     top,
+    // Rising stars: the fastest-growing first (sales over the 30 days before).
+    rising: {
+      count: scored.filter((r) => r.rising).length,
+      top: scored.filter((r) => r.rising).sort((a, b) => (b.trend ?? 0) - (a.trend ?? 0)).slice(0, 5),
+    },
   };
 }
 

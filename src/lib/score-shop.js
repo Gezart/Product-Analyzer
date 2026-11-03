@@ -212,6 +212,7 @@ export async function scoreShop(shopId, now = new Date()) {
         // Capped so extreme stock with almost no sales fits Decimal(10,2).
         daysOfCover: r.daysOfCover != null ? Math.min(r.daysOfCover, 99999).toFixed(2) : null,
         trend: r.trend?.toFixed(4) ?? null,
+        rising: r.rising,
       })),
       // Not analyzed, but their stock value still shows in the product list.
       ...excluded.map((p) => ({ productId: p.id, computedAt: now, status: "excluded", moneyAtStake: "0.00", ...stockColumns(p) })),

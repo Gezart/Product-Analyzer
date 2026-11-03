@@ -26,6 +26,7 @@ export function ProductList() {
   const router = useRouter();
   const params = useSearchParams();
   const status = STATUSES.includes(params.get("status")) ? params.get("status") : null;
+  const risingOnly = params.get("rising") === "1";
   const defaultSort = status === "stockout_risk" ? "days" : "money";
   const sort = SORTS[params.get("sort")] ? params.get("sort") : defaultSort;
   const [data, setData] = useState(null);
@@ -41,6 +42,7 @@ export function ProductList() {
     const q = new URLSearchParams();
     const nextStatus = next.status !== undefined ? next.status : status;
     if (nextStatus) q.set("status", nextStatus);
+    if (next.rising ?? (next.status === undefined && risingOnly)) q.set("rising", "1");
     q.set("sort", next.sort ?? sort);
     router.replace(`/products?${q}`);
   };
@@ -48,7 +50,8 @@ export function ProductList() {
   // The market column (and its sort) appears once any product has a comparable competitor price.
   const hasMarket = (data?.products ?? []).some((p) => p.marketGap != null);
   const sortBy = sort === "market" && !hasMarket ? defaultSort : sort;
-  const shown = (data?.products ?? []).filter((p) => !status || p.status === status).sort(SORTS[sortBy].compare);
+  const shown = (data?.products ?? []).filter((p) => (!status || p.status === status) && (!risingOnly || p.rising)).sort(SORTS[sortBy].compare);
+  const risingCount = (data?.products ?? []).filter((p) => p.rising).length;
   const counts = Object.fromEntries(STATUSES.map((s) => [s, (data?.products ?? []).filter((p) => p.status === s).length]));
 
   return (
@@ -64,7 +67,7 @@ export function ProductList() {
         {data && (
           <>
             <div className="flex flex-wrap gap-2">
-              <s-button variant={status ? "tertiary" : "secondary"} ref={listen("click", () => go({ status: "" }))}>
+              <s-button variant={status || risingOnly ? "tertiary" : "secondary"} ref={listen("click", () => go({ status: "", rising: false }))}>
                 All ({data.products.length})
               </s-button>
               {STATUSES.filter((s) => counts[s] > 0).map((s) => (
@@ -81,6 +84,14 @@ export function ProductList() {
                 </button>
               ))}
             </div>
+            {risingCount > 0 && (
+              <div>
+                <s-button variant={risingOnly ? "secondary" : "tertiary"} ref={listen("click", () => go({ status: "", rising: !risingOnly }))}>
+                  ↑ Rising stars ({risingCount})
+                </s-button>
+              </div>
+            )}
+            {risingOnly && <s-text tone="neutral">Rising stars: sales up 20% or more over the 30 days before. Give them more visibility and keep them in stock.</s-text>}
             {status && <s-text tone="neutral">Next for {STATUS_INFO[status].label.toLowerCase()}: {STATUS_INFO[status].action}.</s-text>}
             <s-section>
               {shown.length === 0 ? (
@@ -108,6 +119,7 @@ export function ProductList() {
                           </td>
                           <td className="py-2 pr-4">
                             <s-badge tone={STATUS_INFO[p.status]?.tone}>{STATUS_INFO[p.status]?.label ?? p.status}</s-badge>
+                            {p.rising && <span className="ml-1 text-xs font-medium text-emerald-700">↑ Rising</span>}
                           </td>
                           <td className="py-2 pr-4 text-right">{p.moneyAtStake > 0 ? money.format(p.moneyAtStake) : "—"}</td>
                           <td className="hidden py-2 pr-4 text-right sm:table-cell">{p.status === "unscored" ? "—" : money.format(p.stockValue)}</td>

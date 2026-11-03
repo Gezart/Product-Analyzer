@@ -13,7 +13,8 @@ export async function latestScores(shopId, { unscored = false } = {}) {
     SELECT p."id" AS "productId", p."title", COALESCE(s."status", 'unscored') AS "status",
       COALESCE(s."money_at_stake", 0)::text AS "moneyAtStake", COALESCE(s."stock_value", 0)::text AS "stockValue",
       COALESCE(s."cost_is_estimate", false) AS "costIsEstimate", s."sell_through"::text AS "sellThrough",
-      s."days_of_cover"::text AS "daysOfCover", s."computed_at" AS "computedAt"
+      s."days_of_cover"::text AS "daysOfCover", s."computed_at" AS "computedAt",
+      COALESCE(s."rising", false) AS "rising", s."trend"::text AS "trend"
     FROM "products" p
     LEFT JOIN LATERAL (
       SELECT x.* FROM "product_scores" x WHERE x."product_id" = p."id" ORDER BY x."computed_at" DESC LIMIT 1
@@ -24,7 +25,8 @@ export async function latestScores(shopId, { unscored = false } = {}) {
     SELECT p."id" AS "productId", p."title", s."status",
       s."money_at_stake"::text AS "moneyAtStake", s."stock_value"::text AS "stockValue",
       s."cost_is_estimate" AS "costIsEstimate", s."sell_through"::text AS "sellThrough",
-      s."days_of_cover"::text AS "daysOfCover", s."computed_at" AS "computedAt"
+      s."days_of_cover"::text AS "daysOfCover", s."computed_at" AS "computedAt",
+      s."rising" AS "rising", s."trend"::text AS "trend"
     FROM "products" p
     CROSS JOIN LATERAL (
       SELECT x.* FROM "product_scores" x WHERE x."product_id" = p."id" ORDER BY x."computed_at" DESC LIMIT 1
@@ -40,6 +42,8 @@ export async function latestScores(shopId, { unscored = false } = {}) {
     costIsEstimate: r.costIsEstimate,
     sellThrough: num(r.sellThrough),
     daysOfCover: num(r.daysOfCover),
+    rising: Boolean(r.rising),
+    trend: num(r.trend),
     computedAt: r.computedAt,
   }));
 }

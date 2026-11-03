@@ -95,6 +95,7 @@ export const GET = appRoute(async ({ shop, params }) => {
           sellThrough: score.sellThrough == null ? null : Number(score.sellThrough),
           daysOfCover: score.daysOfCover == null ? null : Number(score.daysOfCover),
           trend: score.trend == null ? null : Number(score.trend),
+          rising: score.rising,
           computedAt: score.computedAt,
         }
       : null,

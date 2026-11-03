@@ -118,6 +118,15 @@ From the features workspace (Weekly plan). Decision: in the inbox for now; email
 | `weekly-plan` | Every Monday (store time) the inbox gets "Your plan for this week": 3–5 actions picked by money at stake from the products that need attention: reorder (stock-out risk), start the markdown (when one is due), fix the page (the diagnosis's top reason), give a hidden gem a better place (Collections), or diagnose; products being measured or on a markdown are left out. A "This week" page lists them with a button to each product | A Monday plan with its actions is in the inbox and opens the page | done |
 | `weekly-recap` | The plan's "Last week" part: rescue verdicts that came in (with the extra sales of the improved ones), markdowns started and finished, each with a button to the product | Last week's results show with the plan | done |
 
+## Phase 2h · Rising stars
+
+From the features workspace (Rising stars), picked by the owner as the next feature.
+
+| Branch | Task | Done when | Status |
+| --- | --- | --- | --- |
+| `rising-stars` | The rule (nightly with the scores): at least 5 units in the last 30 days, 20%+ over the 30 days before (which had sales), converting at least as well as the store's median when visits are known; never dead stock, a slow mover or waiting for its season. A "Rising stars" card on the dashboard, a filter and mark in the product list, and on the product page the growth with suggested actions (stock when it runs out within 45 days at this pace, move it up in its collections, feature it on the home page) | A rising product shows on the dashboard, in the list and on its page with its actions | doing |
+| `rising-effect` | Measure sales after an action (e.g. moved up in a collection, featured) vs the period before | An action on a rising star shows its measurement | todo |
+
 ## v2 (not in v1)
 
 AI diagnosis and AI drafts (Claude), weekly email digest.

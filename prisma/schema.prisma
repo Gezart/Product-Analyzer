@@ -163,6 +163,8 @@ model ProductScore {
   sellThrough    Decimal? @map("sell_through") @db.Decimal(6, 4)
   daysOfCover    Decimal? @map("days_of_cover") @db.Decimal(10, 2)
   trend          Decimal? @db.Decimal(10, 4)
+  /// Rising star: sales up 20%+ over the 30 days before (see `isRisingStar`).
+  rising         Boolean  @default(false)
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 

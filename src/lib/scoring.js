@@ -160,6 +160,22 @@ function afterDeadStock(p, m, b, t) {
   return "healthy";
 }
 
+/** Rising stars: sales up this much over the 30 days before, with at least this many units. */
+export const RISING = { growth: 1.2, minUnits: 5 };
+
+/**
+ * A rising star: sold at least 5 units in the last 30 days, 20% or more above the 30 days before (which
+ * had sales), and converting at least as well as the store's median when its visits are known. Never a
+ * product that's dead stock, a slow mover or waiting for its season.
+ */
+export function isRisingStar(p, m, b, status, t = DEFAULT_THRESHOLDS) {
+  if (["dead_stock", "slow_mover", "seasonal", "excluded", "over_limit"].includes(status)) return false;
+  if (p.units30 < RISING.minUnits || !(p.unitsPrev30 > 0) || p.units30 < p.unitsPrev30 * RISING.growth) return false;
+  // Conversion counts only with enough visits to judge and a store median to compare with.
+  if (b.medianConversion != null && p.views30 >= t.minViews && m.conversion != null && m.conversion < b.medianConversion) return false;
+  return true;
+}
+
 export function scoreProducts(products, thresholds, historyDays = 60) {
   const t = sanitizeThresholds(thresholds);
   const b = computeBenchmarks(products, t);
@@ -167,7 +183,7 @@ export function scoreProducts(products, thresholds, historyDays = 60) {
     .map((p) => {
       const m = computeMetrics(p);
       const status = classify(p, m, b, t, historyDays);
-      return { id: p.id, ...m, status, moneyAtStake: m.stockValue * STATUS_WEIGHTS[status] };
+      return { id: p.id, ...m, status, rising: isRisingStar(p, m, b, status, t), moneyAtStake: m.stockValue * STATUS_WEIGHTS[status] };
     })
     .sort((a, z) => z.moneyAtStake - a.moneyAtStake);
 }

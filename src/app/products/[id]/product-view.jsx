@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { growthLabel, risingActions } from "@/lib/rising";
 import { returnPct } from "@/lib/diagnosis";
 import { seasonGraceDays, seasonWaiting } from "@/lib/scoring";
 import { justEnded } from "@/lib/season";
@@ -93,6 +94,7 @@ export function ProductView() {
               {data.product.status !== "ACTIVE" && <s-badge>{data.product.status.toLowerCase()}</s-badge>}
             </s-stack>
             {next && <s-text>Next: {next}</s-text>}
+            {data.score?.rising && <RisingStar trend={data.score.trend} daysOfCover={data.daysOfCover} />}
             <div className="grid gap-4 sm:grid-cols-4">
               <Stat label="In stock" value={data.untracked ? "Sells without stock" : data.stock.toLocaleString()} />
               <Stat
@@ -252,6 +254,30 @@ function Stat({ label, value, note }) {
       <div className="text-xs text-zinc-500">{label}</div>
       <div className="text-lg font-semibold">{value}</div>
       {note && <div className="text-xs text-zinc-500">{note}</div>}
+    </div>
+  );
+}
+
+/** A rising star: how fast it grows, and what to do so the growth lasts. */
+function RisingStar({ trend, daysOfCover }) {
+  return (
+    <div className="rounded-lg bg-emerald-50 p-3 text-sm">
+      <p className="m-0 font-medium text-emerald-800">Rising star: sales {growthLabel(trend)} over the 30 days before.</p>
+      <ul className="m-0 mt-1 list-disc space-y-0.5 pl-5 text-emerald-900">
+        {risingActions({ daysOfCover }).map((a) => (
+          <li key={a.kind}>
+            {a.href.startsWith("#") || a.href.startsWith("/") ? (
+              <a href={a.href} className="underline">
+                {a.text}
+              </a>
+            ) : (
+              <a href={a.href} target="_top" className="underline">
+                {a.text}
+              </a>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
