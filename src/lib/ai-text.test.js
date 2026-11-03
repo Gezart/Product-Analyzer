@@ -51,10 +51,13 @@ test("the cost of a request at Claude Opus 5.5 prices", () => {
   assert.equal(requestCostUsd(undefined), 0);
 });
 
-test("the draft from Claude's answer: cleaned, cut to Shopify's limits, placeholders listed", () => {
+test("the draft from Claude's answer: cleaned, placeholders listed", () => {
   const d = draftFromAnswer({ description_html: "<p>Linen <b>shirt</b> in [fill in: material].</p><script>x</script>", seo_title: "T".repeat(90), seo_description: "Buy it", fill_in: ["material"] });
   assert.equal(d.descriptionHtml, "<p>Linen <b>shirt</b> in [fill in: material].</p>");
-  assert.equal(d.seoTitle.length, 70);
+  assert.equal(d.seoTitle.length, 90); // not cut: the editor asks to shorten it before Apply
+  const long = draftFromAnswer({ description_html: "<p>ok</p>", seo_title: `${"A".repeat(65)} [fill in: brand]`, seo_description: "d", fill_in: ["brand"] });
+  assert.ok(long.seoTitle.endsWith("[fill in: brand]"));
+  assert.deepEqual(long.fillIn, ["brand"]);
   assert.deepEqual(d.fillIn, ["material"]);
   // A placeholder written another way is still one; one only listed is added to the text.
   const fr = draftFromAnswer({ description_html: "<p>Fait en [à compléter : matière].</p>", seo_title: "x", seo_description: "y", fill_in: ["matière"] });

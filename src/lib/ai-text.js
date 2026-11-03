@@ -120,12 +120,14 @@ export function requestCostUsd(usage) {
   return Math.round((input * INPUT_USD + (usage?.output_tokens ?? 0) * OUTPUT_USD) * 10000) / 10000;
 }
 
-/** The draft from Claude's JSON answer, cleaned and cut to Shopify's limits; null when it isn't usable. */
+/** The draft from Claude's JSON answer, cleaned, with its placeholders listed; null when it isn't usable. */
 export function draftFromAnswer(json) {
   if (!json || typeof json.description_html !== "string" || !json.description_html.trim()) return null;
   const html = markPlaceholders(cleanDescriptionHtml(json.description_html));
-  const seoTitle = markPlaceholders(json.seo_title).trim().slice(0, 70);
-  const seoDescription = markPlaceholders(json.seo_description).trim().slice(0, 320);
+  // Not cut to Shopify's limits (70 / 320): a cut could break a placeholder. The editor shows the
+  // length and Apply waits until it fits.
+  const seoTitle = markPlaceholders(json.seo_title).trim();
+  const seoDescription = markPlaceholders(json.seo_description).trim();
   const fillIn = fillInsLeft(html, seoTitle, seoDescription);
   // The AI says it left details open but didn't mark them in the text: mark them, so they're checked.
   const listed = (Array.isArray(json.fill_in) ? json.fill_in : []).map((f) => String(f).trim()).filter(Boolean);

@@ -115,7 +115,7 @@ export function FixCenter({ productId, onChanged }) {
     const body = await res.json().catch(() => ({}));
     setBusy(null);
     if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
-    setBeforeAi({ description, seoTitle, seoDescription });
+    setBeforeAi((b) => b ?? { description, seoTitle, seoDescription }); // a second draft keeps the merchant's own text
     setDescription(body.draft.descriptionHtml);
     setSeoTitle(body.draft.seoTitle);
     setSeoDescription(body.draft.seoDescription);
