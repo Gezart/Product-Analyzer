@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { CARD, EYEBROW, PRIMARY_LINK, statusStyle } from "@/app/status-style";
 import { UpgradeBanner } from "@/app/upgrade-banner";
 import { stuckSplit } from "@/lib/dashboard";
+import { growthLabel } from "@/lib/rising";
 import { hasFeature, PLANS } from "@/lib/plans";
 import { daysPhrase, formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
@@ -103,6 +104,7 @@ export function DashboardView({ data }) {
         )}
 
         <TopTable top={data.top} money={money} />
+        {data.rising?.count > 0 && <RisingStars rising={data.rising} />}
       </s-stack>
     </div>
   );
@@ -446,5 +448,30 @@ function SparkIcon() {
       <path d="M12 3l1.9 4.6 4.6 1.9-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z" />
       <path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z" />
     </svg>
+  );
+}
+
+/** Products whose sales are taking off: the fastest-growing five, and a link to all of them. */
+function RisingStars({ rising }) {
+  return (
+    <section className={`${CARD} flex flex-col gap-3 p-6`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="m-0 text-base font-semibold text-zinc-900">Rising stars</h2>
+        <Link href="/products?rising=1" className={PRIMARY_LINK}>
+          See all {rising.count}
+        </Link>
+      </div>
+      <p className="m-0 text-sm text-zinc-500">Sales up 20% or more over the 30 days before. Give them more visibility and keep them in stock.</p>
+      <ul className="m-0 list-none space-y-1.5 p-0 text-sm">
+        {rising.top.map((r) => (
+          <li key={r.productId} className="flex items-center justify-between gap-3">
+            <Link href={`/products/${r.productId}`} className="truncate underline">
+              {r.title}
+            </Link>
+            <span className="shrink-0 font-medium text-emerald-700">{growthLabel(r.trend)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

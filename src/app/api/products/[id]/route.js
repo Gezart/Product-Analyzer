@@ -68,6 +68,7 @@ export const GET = appRoute(async ({ shop, params }) => {
   );
   const daily30 = windows[0].units / 30;
 
+  const untracked = product.variants.length > 0 && product.variants.every((v) => v.sellsWhenOut) && stock.stock <= 0;
   return Response.json({
     currency: shop.currency,
     product: {
@@ -95,6 +96,7 @@ export const GET = appRoute(async ({ shop, params }) => {
           sellThrough: score.sellThrough == null ? null : Number(score.sellThrough),
           daysOfCover: score.daysOfCover == null ? null : Number(score.daysOfCover),
           trend: score.trend == null ? null : Number(score.trend),
+          rising: score.rising,
           computedAt: score.computedAt,
         }
       : null,
@@ -102,10 +104,11 @@ export const GET = appRoute(async ({ shop, params }) => {
     stock: stock.stock,
     markdownRunning: product.markdownPlans.length > 0,
     // Sold without stock (inventory not tracked, e.g. a gift card, or selling past zero): stock numbers don't apply.
-    untracked: product.variants.length > 0 && product.variants.every((v) => v.sellsWhenOut) && stock.stock <= 0,
+    untracked,
     stockValue: stock.stockValue,
     stockValueIsEstimate: stock.costIsEstimate,
-    daysOfCover: daily30 > 0 ? stock.stock / daily30 : null,
+    // Days of stock don't apply to a product sold without stock (as in scoring).
+    daysOfCover: daily30 > 0 && !untracked ? stock.stock / daily30 : null,
     knownDays,
     windows,
     trend: windows[0].partial || windows[1].partial ? null : trend30(rows, today),

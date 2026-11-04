@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_THRESHOLDS, STATUS_WEIGHTS, computeMetrics, quantile, sanitizeThresholds, scoreProducts, seasonGraceDays, seasonWaiting, stockFromVariants } from "./scoring.js";
+import { DEFAULT_THRESHOLDS, STATUS_WEIGHTS, computeMetrics, isRisingStar, quantile, sanitizeThresholds, scoreProducts, seasonGraceDays, seasonWaiting, stockFromVariants } from "./scoring.js";
 
 function product(overrides) {
   const stock = overrides.stock ?? 50;
@@ -330,4 +330,49 @@ test("waiting for the season: out of it, or before its grace days are over", () 
   assert.equal(seasonWaiting(inSeason(30)), false);
   assert.equal(seasonWaiting(inSeason(13, 28)), true);
   assert.equal(seasonWaiting(inSeason(14, 28)), false);
+});
+
+test("rising stars: +20% over the 30 days before, at least 5 units, converting at least as well as the store", () => {
+  // The store converts 5% (median of the steady products).
+  const results = scoreProducts(
+    store(
+      product({ id: "up", units30: 12, unitsPrev30: 10, views30: 200, purchases30: 12 }),
+      product({ id: "small", units30: 4, unitsPrev30: 2, views30: 100, purchases30: 4 }),
+      product({ id: "flat", units30: 11, unitsPrev30: 10 }),
+      product({ id: "fromZero", units30: 9, unitsPrev30: 0 }),
+      product({ id: "weak", units30: 13, unitsPrev30: 10, views30: 400, purchases30: 13 }),
+      product({ id: "noViews", units30: 13, unitsPrev30: 10, views30: 0, purchases30: 0 }),
+    ),
+  );
+  const rising = (id) => find(results, id).rising;
+  assert.equal(rising("up"), true); // +20%, 6% conversion
+  assert.equal(rising("small"), false); // under 5 units
+  assert.equal(rising("flat"), false); // +10%
+  assert.equal(rising("fromZero"), false); // nothing to compare with (new demand, or a new product)
+  assert.equal(rising("weak"), false); // 3.25% conversion, under the store's
+  assert.equal(rising("noViews"), true); // visits unknown: sales decide
+  assert.equal(rising("n0"), false); // steady
+});
+
+test("a rising star is never dead stock, a slow mover or waiting for its season", () => {
+  const p = { units30: 20, unitsPrev30: 10, views30: 0 };
+  const m = { conversion: null };
+  const b = { medianConversion: 0.05 };
+  assert.equal(isRisingStar(p, m, b, "healthy"), true);
+  assert.equal(isRisingStar(p, m, b, "stockout_risk"), true); // rising and running out: reorder
+  for (const status of ["dead_stock", "slow_mover", "seasonal", "excluded", "over_limit"]) assert.equal(isRisingStar(p, m, b, status), false);
+});
+
+test("rising stars at the edges: exactly 5 units, exactly +20%, the store's median, few visits", () => {
+  const b = { medianConversion: 0.05 };
+  const t = DEFAULT_THRESHOLDS;
+  assert.equal(isRisingStar({ units30: 5, unitsPrev30: 4, views30: 0 }, { conversion: null }, b, "healthy", t), true); // 5 = 4 × 1.25
+  assert.equal(isRisingStar({ units30: 6, unitsPrev30: 5, views30: 0 }, { conversion: null }, b, "healthy", t), true); // exactly +20%
+  assert.equal(isRisingStar({ units30: 4, unitsPrev30: 1, views30: 0 }, { conversion: null }, b, "healthy", t), false); // under 5 units
+  assert.equal(isRisingStar({ units30: 12, unitsPrev30: 10, views30: 200 }, { conversion: 0.05 }, b, "healthy", t), true); // equal to the median
+  assert.equal(isRisingStar({ units30: 12, unitsPrev30: 10, views30: 200 }, { conversion: 0.049 }, b, "healthy", t), false);
+  // Under 20 visits the conversion isn't judged.
+  assert.equal(isRisingStar({ units30: 12, unitsPrev30: 10, views30: 19 }, { conversion: 0.01 }, b, "healthy", t), true);
+  // No store median (no visit data): sales decide.
+  assert.equal(isRisingStar({ units30: 12, unitsPrev30: 10, views30: 200 }, { conversion: 0.01 }, { medianConversion: null }, "healthy", t), true);
 });
