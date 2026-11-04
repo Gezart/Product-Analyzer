@@ -222,6 +222,17 @@ export async function reorderHistory(shopId, gid) {
   return rows.map(({ before, after, ...r }) => ({ ...r, moved: movedCount(before, after) }));
 }
 
+/** Each collection's latest saved order (by collection GID): `{ status, moved, appliedAt, undoneAt, createdAt }`. */
+export async function latestSaves(shopId) {
+  const rows = await db().collectionReorder.findMany({
+    where: { shopId },
+    distinct: ["collectionGid"],
+    orderBy: [{ collectionGid: "asc" }, { createdAt: "desc" }],
+    select: { collectionGid: true, status: true, before: true, after: true, appliedAt: true, undoneAt: true, createdAt: true },
+  });
+  return new Map(rows.map(({ collectionGid, before, after, ...r }) => [collectionGid, { ...r, moved: movedCount(before, after) }]));
+}
+
 /** Collections with saved orders (for a plan without the optimizer: their saves can still be undone). */
 export async function savedCollections(shopId) {
   const rows = await db().collectionReorder.findMany({

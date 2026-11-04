@@ -1,5 +1,13 @@
 # History
 
+## 2026-11-04 · design-collections
+- Collection Optimizer redone to the owner's design: "Collection Optimizer" with "The app proposes a better order for each collection. You confirm, then it writes the order to Shopify."
+- Left: the collections with their product count and state ("Applied Oct 22 · 3 moved", "Undone Oct 12", "Last save failed", "Not optimized yet", too many products), and automatically sorted ones greyed out with "switch to Manually in Shopify to optimize"
+- Right: "Dresses · proposed order" with each product's status, place now and new, and its move (↑ in green, ↓ in amber), its reason and 30-day sales; rows can be dragged (or moved with ↑ ↓); "Back to the proposal", "Skip" (next collection) and "Confirm and apply"
+- Below it: the latest applied order with "Undo order" (moved products are measured on their own pages), and the earlier saves
+- The collections API adds each collection's latest saved order and the first automatically sorted collections; helpers are pure and tested (`src/lib/collections-page.js`)
+- Checked in a browser at 1280 px and 390 px, including dragging a row and applying
+
 ## 2026-11-04 · design-inbox
 - Inbox redone to the owner's design, with the weekly plan in it: "Inbox · Your weekly plan and everything the app did or found." and "Mark all as read"; the plan card ("Weekly plan · Monday, Nov 2", "N moves for this week", ranked by money at stake, the week picker) with one row per move (what to do, why, and its button) and "Last week" (improved fixes and their extra sales, the other results, markdowns started and ended); then the notifications with the design's icon tiles and colors (a rescue result's color follows its verdict), what kind each is, and when ("2 h ago", "Yesterday", "Oct 20"); unread ones tinted
 - The separate "This week" page is gone: `/plan` opens the inbox (old links in notifications still work) and the weekly plan notification, the dashboard and the menu lead to the inbox
