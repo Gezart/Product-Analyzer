@@ -98,7 +98,7 @@ export function cleanDescriptionHtml(html) {
 }
 
 /** A placeholder: `[fill in: material]` (also without the colon or the closing bracket). */
-const FILL_IN = /\[\s*fill[\s-]*in\b\s*:?\s*([^\]<\n]*)\]?/gi;
+export const FILL_IN = /\[\s*fill[\s-]*in\b\s*:?\s*([^\]<\n]*)\]?/gi;
 
 /** The [fill in: …] placeholders still in a text, for the merchant to finish before applying. */
 export function fillInsLeft(...texts) {

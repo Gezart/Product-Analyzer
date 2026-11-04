@@ -137,7 +137,7 @@ The owner's design (Unstuck App Design canvas) is followed as closely as possibl
 | `design-dashboard` | Dashboard as in the design: catalog health, this week's moves, money stuck by status, next best move, rising stars, running out, top 10 | The dashboard matches the design with live data | done |
 | `design-products` | Products list as in the design: search, sort, status filter pills with counts, the table (status pills, extra pill for rising stars / markdown, money, stock value, days, sell-through, vs market, last change) | The list matches the design | done |
 | `design-product` | Product page as in the design (next step, numbers, daily sales, why it isn't selling, market price, variants, actions); sections for features not built yet are left out | The product page matches the design | done |
-| `design-fix-center` | Fix center as in the design (description with AI, photos with AI, title and SEO, collections and price, from the diagnosis, history) | The fix center matches the design | todo |
+| `design-fix-center` | Fix center as in the design (description with AI, photos with AI, title and SEO, collections and price, from the diagnosis, history) | The fix center matches the design | done |
 | `design-inbox` | Inbox with the weekly plan on top, as in the design (the separate "This week" page goes into it) | The inbox matches the design | todo |
 | `design-collections` | Collection Optimizer as in the design | Matches the design | todo |
 | `design-markdown-compare` | Markdown and Compare as in the design | Match the design | todo |

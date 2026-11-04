@@ -98,7 +98,7 @@ export function RescuePlan({ plan, productId, onChanged }) {
           {undoing ? "Undoing…" : "Undo the fixes"}
         </button>
       )}
-      {undoError && <Notice tone="bad" className="px-4 py-3 text-[13px]">{undoError}</Notice>}
+      {undoError && <Notice tone="bad" compact>{undoError}</Notice>}
       {r && (
         <div className="-mx-[18px] overflow-x-auto">
           <table className="w-full min-w-[520px] border-collapse text-[13px]">

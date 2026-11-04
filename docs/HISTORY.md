@@ -1,5 +1,15 @@
 # History
 
+## 2026-11-04 · design-fix-center
+- Fix center redone to the owner's design (`/products/[id]/fix`): "Fix center · title", "Changes go straight to Shopify. Every change can be undone." and the AI use this month ("18 of 30 drafts · 9 of 20 photos")
+- Description: the text shown as shoppers see it (simple tags only, built safely, with [fill in: …] highlighted), "Write with AI" / "Write again", "Current · N words" and "AI draft · N words" to switch between your text and the draft (edits to both kept), "Edit text" for the HTML
+- Photos: the current photos in order (move earlier or later, AI-made ones marked), "Create more with AI" (start photo, white background or a scene), the AI suggestions with a box to pick the ones to add; a product without a photo asks for an upload first
+- Title and SEO with what they were and character counts; collections as chips (✕ to remove, "+ name" to add, automated ones in grey)
+- Beside them: "From the diagnosis" as a checklist that ticks as the drafts meet each reason (3 photos, 80 words, size/material/care, SEO, a collection), with its hint; the history with Undo
+- One bar at the bottom: "N changes ready", Discard, and "Apply to Shopify", which applies each change in turn (then the picked AI photos) and says which went through if one fails; nothing applies while a [fill in: …] is left or a field is too long
+- Helpers are pure and tested (`src/lib/fix-page.js`); the fix-center API also gives the diagnosis's reasons with their numbers
+- Checked in a browser at 1280 px and 390 px, and the whole flow (AI draft, switching, fill-in, checklist, apply with a failure) with stubbed answers
+
 ## 2026-11-04 · design-product
 - Product page redone to the owner's design: "← Products"; header with the thumbnail, title, status pill, "N% above market" (past the store's threshold), "Rising star" and markdown pills, "Compare" and "Fix the page"; the soft indigo "Next step" (from the diagnosis's reasons, e.g. "Check the price, add photos and write a fuller description", with "Start in Fix center →"; a running markdown, rescue plan or season comes first); the season in a teal panel; the six numbers (money at stake, stock, sell-through, days of stock, conversion against the store average, last sale); "Daily sales · N sold in 30 days" bars with 30/60/90 days and the window's revenue, visits and conversion; "Why it isn't selling" with a severity chip and a button per reason (to its Fix center section or the right part of the page); "Market price" (Google's benchmark, competitor links with their median, add and remove); "Variants" with stock ("0 · out" in red), sold in 60 days, price and cost; cards for the rescue plan, the markdown (state, ladder and the lowest price it may reach), the rising star actions and returns
 - The Fix center and the markdown move to their own pages, as in the design: `/products/[id]/fix` ("Fix center · title", sections reachable by #description, #photos, #seo, #collections) and `/products/[id]/markdown`; their own redesign follows in later tasks
