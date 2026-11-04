@@ -85,7 +85,7 @@ export const GET = appRoute(async ({ request, shop }) => {
         ...grossMargin(variants),
         stock: stock.stock,
         // Variants that can't be bought (no stock, not sold when out), by name: "S, M".
-        outOfStock: outOfStockNames([...p.variants].sort((a, b) => Number(BigInt(a.shopifyGid.split("/").pop()) - BigInt(b.shopifyGid.split("/").pop())))),
+        outOfStock: outOfStockNames([...p.variants].sort((a, b) => a.shopifyGid.localeCompare(b.shopifyGid, "en", { numeric: true }))),
         variantCount: p.variants.length,
         stockValue: stock.stockValue,
         stockValueIsEstimate: stock.costIsEstimate,

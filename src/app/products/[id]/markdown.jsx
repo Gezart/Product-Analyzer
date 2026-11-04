@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiError } from "@/app/api-error";
 import { BTN, CARD, H2, Notice, PageHeader, Pill, THEAD, TROW, UpgradeNotice } from "@/app/ui/kit";
 import { shiftDate } from "@/lib/dates";
-import { currentFloor } from "@/lib/markdown";
+import { currentFloor, discountedPrice } from "@/lib/markdown";
 import { getPlan } from "@/lib/plans";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
@@ -71,6 +71,15 @@ export function Markdown({ productId }) {
   const status = data.scoreStatus && STATUS_INFO[data.scoreStatus];
   // A running plan's floor is the stricter of the floor at approval and today's cost + margin (as the engine checks).
   const floorOf = (v) => (running && data.rules ? currentFloor(v, data.costs?.[v.id] ?? null, data.rules.marginFloorPct) : v.floor);
+  // A running plan never goes deeper than it was approved for, nor than today's setting (as the engine).
+  const maxDiscount = running ? Math.min(Number(running.maxDiscountPct), data.rules?.maxDiscountPct ?? Infinity) : (data.preview?.settings.maxDiscountPct ?? null);
+  // A step's price: what the app wrote for the live one; for later steps of a running plan, what the engine
+  // will write (today's floor and maximum discount), as planned before approval.
+  const priceAt = (v, i) => {
+    if (i === current && running?.steps.applied?.[v.id]) return running.steps.applied[v.id].price;
+    if (running && i > current) return discountedPrice(v.originalPrice, data.ladder.steps[i], floorOf(v), maxDiscount);
+    return v.stepPrices[i];
+  };
   // What the plan did: while it runs, or the last one when nothing new is proposed (a failed start that changed nothing has none).
   const showResults = data.results && plan && (running || (!proposal && !(plan.status === "failed" && plan.currentStep < 0)));
 
@@ -137,7 +146,6 @@ export function Markdown({ productId }) {
       {variants.length > 0 && (
         <Ladder
           variants={variants}
-          applied={running?.steps.applied}
           current={current}
           startedOn={startedOn}
           ladder={data.ladder}
@@ -145,6 +153,7 @@ export function Markdown({ productId }) {
           running={Boolean(running)}
           paused={running?.status === "paused"}
           floorOf={floorOf}
+          priceAt={priceAt}
         />
       )}
 
@@ -201,7 +210,7 @@ export function Markdown({ productId }) {
 
       {variants.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2">
-          <Rules data={data} plan={running} variants={variants} money={money} floorOf={floorOf} />
+          <Rules data={data} plan={running} variants={variants} money={money} floorOf={floorOf} maxDiscount={maxDiscount} />
           <section aria-labelledby="guard" className={`${CARD} flex flex-col gap-2 px-5 py-[18px]`}>
             <h2 id="guard" className={H2}>
               Never below the floor
@@ -285,10 +294,8 @@ function Tile({ label, value, sub }) {
  * The ladder as bars (the first variant's prices: start, then each step) with the floor as a dashed
  * line; with several variants, each one's prices in a table under it.
  */
-function Ladder({ variants, applied, current, startedOn, ladder, money, running, paused, floorOf }) {
+function Ladder({ variants, current, startedOn, ladder, money, running, paused, floorOf, priceAt }) {
   const v = variants[0];
-  // The current step shows what the app actually wrote (it can differ after a cost or settings change).
-  const priceAt = (x, i) => (i === current && applied?.[x.id] ? applied[x.id].price : x.stepPrices[i]);
   const bars = [
     { label: "Start", when: running ? `Before ${shortDay(startedOn)}` : "Today", price: v.originalPrice, state: running && current >= 0 ? "done" : "live" },
     ...ladder.steps.map((d, i) => ({
@@ -317,7 +324,7 @@ function Ladder({ variants, applied, current, startedOn, ladder, money, running,
             : current < 0 && running
               ? "Step 1 goes live within the hour"
               : next != null
-                ? `Next step on ${shortDay(addDays(startedOn, next * ladder.stepDays))} · ${money.format(v.stepPrices[next])}`
+                ? `Next step on ${shortDay(addDays(startedOn, next * ladder.stepDays))} · ${money.format(priceAt(v, next))}`
                 : running
                   ? "Last step is live"
                   : `Starts when you approve · one step every ${ladder.stepDays} days`}
@@ -393,19 +400,17 @@ function Ladder({ variants, applied, current, startedOn, ladder, money, running,
           </div>
         </>
       )}
-      <p className="m-0 text-xs text-muted">Later steps are recalculated against the live cost and your settings when they go live.</p>
+      <p className="m-0 text-xs text-muted">Later steps use today&apos;s cost and your settings; they&apos;re worked out again when they go live.</p>
     </section>
   );
 }
 
 /** "Rules for this product": the steps, cost, minimum margin with the floor, maximum discount, the end. */
-function Rules({ data, plan, variants, money, floorOf }) {
+function Rules({ data, plan, variants, money, floorOf, maxDiscount }) {
   const settings = data.preview?.settings ?? data.rules;
   const costs = [...new Set(variants.map((v) => data.costs?.[v.id]).filter((c) => c != null))].sort((a, b) => a - b);
   const floors = [...new Set(variants.map(floorOf))].sort((a, b) => a - b);
   const range = (list) => (list.length === 0 ? "—" : list.length === 1 ? money.format(list[0]) : `${money.format(list[0])}–${money.format(list.at(-1))}`);
-  // A running plan never goes deeper than it was approved for, nor than today's setting.
-  const maxDiscount = plan ? Math.min(Number(plan.maxDiscountPct), settings?.maxDiscountPct ?? Infinity) : settings?.maxDiscountPct;
   const endAction = plan ? plan.endAction : settings?.endAction;
   const rows = [
     ["Steps", `${data.ladder.steps.map((d) => `${Math.round(d * 100)}%`).join(" → ")}, every ${data.ladder.stepDays} days`],
