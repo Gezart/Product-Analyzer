@@ -1,7 +1,6 @@
 import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { liveTotals } from "@/lib/results";
-import { WINDOW } from "@/lib/rescue";
 import { appRoute } from "@/lib/route";
 
 const DAY_MS = 86_400_000;
@@ -31,10 +30,13 @@ export const GET = appRoute(async ({ shop }) => {
   const plans = [...measuring, ...finished].sort((a, b) => b.startedAt - a.startedAt);
   const productIds = [...new Set(plans.map((p) => p.productId))];
   const fixIds = plans.flatMap((p) => p.fixIds);
-  // Visits and purchases around each measuring plan: the days since it started, and as many before it.
-  const earliest = measuring.length
-    ? new Date(Math.min(...measuring.map((p) => p.startedAt.getTime())) - 2 * WINDOW.maxDays * DAY_MS)
-    : null;
+  // Visits and purchases around each measuring plan: the days since it started, and as many before its
+  // baseline's end (the first fix's day, for a plan restarted by later fixes).
+  const fromOf = (p) => {
+    const baselineEnd = /^\d{4}-\d{2}-\d{2}$/.test(p.baseline?.baselineEnd ?? "") ? new Date(`${p.baseline.baselineEnd}T00:00:00Z`) : p.startedAt;
+    return Math.min(baselineEnd.getTime(), p.startedAt.getTime()) - Math.max(1, (todayDate - p.startedAt) / DAY_MS) * DAY_MS;
+  };
+  const earliest = measuring.length ? new Date(Math.min(...measuring.map(fromOf))) : null;
   const [fixes, metrics, markdowns] = await Promise.all([
     fixIds.length ? db().fix.findMany({ where: { id: { in: fixIds } }, select: { id: true, type: true, status: true } }) : [],
     earliest
