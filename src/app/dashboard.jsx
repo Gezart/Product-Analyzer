@@ -8,8 +8,9 @@ import { hasFeature, PLANS } from "@/lib/plans";
 import { growthLabel } from "@/lib/rising";
 import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
-const percent = new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 0 });
-const count = new Intl.NumberFormat("en-US");
+// The browser's locale, like the money amounts.
+const percent = new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 0 });
+const count = new Intl.NumberFormat();
 /** Small uppercase label (the design's "Money stuck in stock", "Next best move"). */
 const LABEL = "m-0 text-xs font-semibold uppercase tracking-[0.06em] text-muted";
 /** The design's dot color per status (the bar and the tiles). */
@@ -269,6 +270,9 @@ function Stat({ label, value }) {
   );
 }
 
+/** "no sale in 142 days" ("in 1 day"); nothing when it sold today (or the days aren't known). */
+export const noSaleFact = (days) => (days == null || days < 1 ? null : `no sale in ${count.format(days)} day${days === 1 ? "" : "s"}`);
+
 /** What to do on the first product, by its status. */
 function nextStep(item) {
   if (item.status === "stockout_risk") return { text: "See its stock →", href: `/products/${item.productId}#variants` };
@@ -296,7 +300,7 @@ function NextMove({ item, facts, upNext, of, attention, money }) {
   const step = nextStep(item);
   const detail = [
     item.status === "stockout_risk" ? `${formatDays(item.daysOfCover)} days of stock left` : "at stake",
-    facts?.daysSinceSale != null && item.status !== "stockout_risk" ? `no sale in ${count.format(facts.daysSinceSale)} days` : null,
+    item.status !== "stockout_risk" ? noSaleFact(facts?.daysSinceSale) : null,
     facts?.imageCount != null ? `${facts.imageCount} photo${facts.imageCount === 1 ? "" : "s"}` : null,
   ].filter(Boolean);
   return (
@@ -322,7 +326,7 @@ function NextMove({ item, facts, upNext, of, attention, money }) {
         {item.status !== "stockout_risk" && <p className="m-0 text-[30px] font-bold tracking-[-0.01em] tabular-nums">{money.format(item.moneyAtStake)}</p>}
         <p className="m-0 text-[13px] text-muted">{detail.join(" · ")}</p>
       </div>
-      <Link href={step.href} className={`${BTN.primary} py-2.5`}>
+      <Link href={step.href} className={BTN.block}>
         {step.text}
       </Link>
       {upNext.length > 0 && (
@@ -369,7 +373,7 @@ function RisingStars({ rising }) {
               </Link>
               <span className="text-[13px] font-semibold text-[#047857]">{growthLabel(r.trend)}</span>
               {r.conversion != null && <span className="text-[13px] text-muted">{(r.conversion * 100).toFixed(1)}% conv.</span>}
-              <Link href="/collections" className={`${BTN.small} px-2.5 py-[5px]`}>
+              <Link href="/collections" className={BTN.tiny}>
                 Move to top
               </Link>
             </li>

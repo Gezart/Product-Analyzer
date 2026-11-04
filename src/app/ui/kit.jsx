@@ -11,6 +11,12 @@ export const BTN = {
     "inline-flex items-center justify-center gap-2 rounded-lg border border-line-strong bg-white px-3.5 py-[9px] text-sm font-semibold text-ink no-underline hover:bg-head hover:text-ink disabled:cursor-not-allowed disabled:opacity-50",
   small:
     "inline-flex items-center justify-center gap-1.5 rounded-lg border border-line-strong bg-white px-3 py-[7px] text-[13px] font-semibold text-ink no-underline whitespace-nowrap hover:bg-head hover:text-ink disabled:cursor-not-allowed disabled:opacity-50",
+  /** A compact row action (the design's "Move to top": 5px 10px). */
+  tiny:
+    "inline-flex items-center justify-center gap-1.5 rounded-lg border border-line-strong bg-white px-2.5 py-[5px] text-[13px] font-semibold text-ink no-underline whitespace-nowrap hover:bg-head hover:text-ink disabled:cursor-not-allowed disabled:opacity-50",
+  /** A full-width call to action in a card (the design's "Fix the page →": 10px 14px). */
+  block:
+    "flex w-full items-center justify-center gap-2 rounded-lg border-0 bg-ink px-3.5 py-2.5 text-center text-sm font-semibold text-white no-underline hover:bg-black hover:text-white",
   smallPrimary:
     "inline-flex items-center justify-center gap-1.5 rounded-lg border-0 bg-ink px-3 py-[7px] text-[13px] font-semibold text-white no-underline whitespace-nowrap hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-50",
 };

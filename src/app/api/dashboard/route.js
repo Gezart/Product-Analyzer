@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { appRoute } from "@/lib/route";
 import { latestScores } from "@/lib/scores";
+import { weekOf } from "@/lib/weekly-plan";
 import { weeklyPlan } from "@/lib/weekly-plans";
 
 /** Running out: stock-out risks, fewest days of stock first (the dashboard shows 3). */
@@ -23,7 +24,8 @@ export const GET = appRoute(async ({ shop }) => {
   const summary = summarize(scores);
   const first = summary.top[0];
   const rising = summary.rising.top.slice(0, 3);
-  const today = asDate(localDateKey(new Date(), shop.timezone));
+  const dayKey = localDateKey(new Date(), shop.timezone);
+  const today = asDate(dayKey);
   const [plan, firstProduct, lastSale, risingSums] = await Promise.all([
     weeklyPlan(shop.id),
     first ? db().product.findUnique({ where: { id: first.productId }, select: { imageCount: true } }) : null,
@@ -44,8 +46,8 @@ export const GET = appRoute(async ({ shop }) => {
     imported,
     ...summary,
     rising: { ...summary.rising, top: rising.map((r) => ({ ...r, conversion: conversion.get(r.productId) ?? null })) },
-    // This week's plan (kept as it was on Monday): its first three moves.
-    week: plan.plan ? { week: plan.plan.week, actions: (plan.plan.actions ?? []).slice(0, 3) } : null,
+    // This week's plan (kept as it was on Monday): its first three moves; an older week's isn't "this week".
+    week: plan.plan && plan.plan.week === weekOf(dayKey) ? { week: plan.plan.week, actions: (plan.plan.actions ?? []).slice(0, 3) } : null,
     nextMove: first
       ? {
           imageCount: firstProduct?.imageCount ?? null,

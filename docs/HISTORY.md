@@ -3,7 +3,7 @@
 ## 2026-11-04 · design-dashboard
 - Dashboard redone to the owner's design: "Catalog health" with when it was analyzed and how many products, "All products" and "This week's plan"; "This week · N moves worth €X" (the first three of the week's plan); "Money stuck in stock" with the three key numbers, the status bar and a tile per status (the design's dot colors) plus the dashed "Seasonal · off season" tile; "Next best move" (status, money at stake, days since the last sale, photos, the right button for its status) with "Up next"; "Rising stars" (growth, conversion, "Move to top"); "Running out" (fewest days of stock); "Top 10 to act on today"
 - The dashboard API adds what these need: the week's first moves, the next move's facts, the rising stars' conversion over 30 days and the products running out
-- Upgrade notes keep their place in the design's soft panel style; the inbox banner is gone (the weekly plan and the menu lead there)
+- Upgrade notes keep their place in the design's soft panel style; the inbox banner is gone (the weekly plan and the menu lead there); "This week" shows only the current week's plan
 - Checked in a browser with design-like data at 1280 px and 390 px (the table scrolls in its box on a phone)
 
 ## 2026-11-04 · design-shell
