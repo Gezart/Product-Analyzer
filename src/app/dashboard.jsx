@@ -94,7 +94,7 @@ export function DashboardView({ data }) {
           <Link href="/products" className={BTN.secondary}>
             All products
           </Link>
-          <Link href="/plan" className={BTN.primary}>
+          <Link href="/inbox" className={BTN.primary}>
             This week&apos;s plan
           </Link>
         </div>
@@ -162,7 +162,7 @@ function ThisWeek({ week, money }) {
           This week · {week.actions.length} move{week.actions.length === 1 ? "" : "s"}
           {worth > 0 ? ` worth ${money.format(worth)}` : ""}
         </h2>
-        <Link href={`/plan?week=${week.week}`} className="text-[13px] font-semibold">
+        <Link href={`/inbox?week=${week.week}`} className="text-[13px] font-semibold">
           Full weekly plan
         </Link>
       </div>

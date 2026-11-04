@@ -64,7 +64,7 @@ test("season notes: one product opens it, several open the seasonal list", () =>
 
 test("the weekly plan in the inbox", () => {
   const n = describe({ type: "weekly_plan", data: { week: "2026-11-02", actions: [{ title: "Linen Shirt" }, { title: "Mug" }] } });
-  assert.deepEqual(n, { title: "Your plan for this week", body: "2 actions, starting with Linen Shirt.", href: "/plan?week=2026-11-02" });
+  assert.deepEqual(n, { title: "Your plan for this week", body: "2 actions, starting with Linen Shirt.", href: "/inbox?week=2026-11-02" });
 });
 
 test("the weekly plan with last week's results", () => {

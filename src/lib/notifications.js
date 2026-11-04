@@ -114,7 +114,7 @@ export function describe(n) {
       return {
         title: "Your plan for this week",
         body: `${todo}${last ? ` Last week: ${last}.` : ""}`,
-        href: `/plan?week=${d.week}`,
+        href: `/inbox?week=${d.week}`,
       };
     }
     default:

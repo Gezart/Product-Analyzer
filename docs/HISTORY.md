@@ -1,5 +1,11 @@
 # History
 
+## 2026-11-04 · design-inbox
+- Inbox redone to the owner's design, with the weekly plan in it: "Inbox · Your weekly plan and everything the app did or found." and "Mark all as read"; the plan card ("Weekly plan · Monday, Nov 2", "N moves for this week", ranked by money at stake, the week picker) with one row per move (what to do, why, and its button) and "Last week" (improved fixes and their extra sales, the other results, markdowns started and ended); then the notifications with the design's icon tiles and colors (a rescue result's color follows its verdict), what kind each is, and when ("2 h ago", "Yesterday", "Oct 20"); unread ones tinted
+- The separate "This week" page is gone: `/plan` opens the inbox (old links in notifications still work) and the weekly plan notification, the dashboard and the menu lead to the inbox
+- Helpers are pure and tested (`src/lib/inbox.js`)
+- Checked in a browser at 1280 px and 390 px
+
 ## 2026-11-04 · design-fix-center
 - Fix center redone to the owner's design (`/products/[id]/fix`): "Fix center · title", "Changes go straight to Shopify. Every change can be undone." and the AI use this month ("18 of 30 drafts · 9 of 20 photos")
 - Description: the text shown as shoppers see it (simple tags only, built safely, with [fill in: …] highlighted), "Write with AI" / "Write again", "Current · N words" and "AI draft · N words" to switch between your text and the draft (edits to both kept), "Edit text" for the HTML

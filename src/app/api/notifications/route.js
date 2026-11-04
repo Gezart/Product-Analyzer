@@ -23,6 +23,8 @@ export const GET = appRoute(async ({ request, shop }) => {
       type: n.type,
       createdAt: n.createdAt,
       read: n.readAt != null,
+      // A rescue verdict's result sets its color in the inbox.
+      verdict: n.type === "rescue_verdict" ? (n.data?.verdict ?? null) : undefined,
       ...describe({ type: n.type, productId: n.productId, productTitle: n.product?.title, data: n.data }),
     })),
   });

@@ -11,6 +11,10 @@ const tunnelHost = (() => {
 const nextConfig = {
   allowedDevOrigins: [...(tunnelHost ? [tunnelHost] : []), "*.trycloudflare.com", "*.ngrok-free.app", "*.ngrok.app"],
   cacheComponents: true,
+  // The weekly plan lives in the inbox now; old links (e.g. in saved notifications) still work.
+  async redirects() {
+    return [{ source: "/plan", destination: "/inbox", permanent: false }];
+  },
   partialPrefetching: true,
   turbopack: {
     rules: {
