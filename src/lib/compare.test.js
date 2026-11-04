@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bestIndex, grossMargin, outOfStockNames, pageQuality, parseCompareIds, stockAge } from "./compare.js";
+import { bestIndex, gapLabel, grossMargin, marketBest, outOfStockNames, pageQuality, parseCompareIds, stockAge } from "./compare.js";
 
 test("ids: 1–4 distinct, trimmed; otherwise null", () => {
   assert.deepEqual(parseCompareIds(" a, b ,a,"), ["a", "b"]);
@@ -56,4 +56,15 @@ test("variants that can't be bought, by name", () => {
   assert.deepEqual(outOfStockNames([v({ Title: "Default Title" }, 0)]), ["Default"]);
   assert.deepEqual(outOfStockNames([v({ Size: "S", Color: "Red" }, 0)]), ["S / Red"]);
   assert.deepEqual(outOfStockNames([]), []);
+});
+
+test("price vs market: the price nearest the market is the best, and its label", () => {
+  assert.equal(marketBest([0.18, -0.02, 0.04]), 1);
+  // Far below the market isn't better than just below it.
+  assert.equal(marketBest([-0.02, -0.3]), 0);
+  assert.equal(marketBest([0.1, null]), null);
+  assert.equal(marketBest([0.05, -0.05]), null);
+  assert.equal(gapLabel(0.18), "+18%");
+  assert.equal(gapLabel(-0.02), "−2%");
+  assert.equal(gapLabel(0.004), "0%");
 });

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiError } from "@/app/api-error";
 import { BTN, CARD, H2, Notice, PageHeader, Pill, THEAD, TROW, UpgradeNotice } from "@/app/ui/kit";
 import { shiftDate } from "@/lib/dates";
+import { currentFloor } from "@/lib/markdown";
 import { getPlan } from "@/lib/plans";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
@@ -68,6 +69,10 @@ export function Markdown({ productId }) {
   const steps = data.ladder.steps;
   const startedOn = running ? String(running.startedAt).slice(0, 10) : data.today;
   const status = data.scoreStatus && STATUS_INFO[data.scoreStatus];
+  // A running plan's floor is the stricter of the floor at approval and today's cost + margin (as the engine checks).
+  const floorOf = (v) => (running && data.rules ? currentFloor(v, data.costs?.[v.id] ?? null, data.rules.marginFloorPct) : v.floor);
+  // What the plan did: while it runs, or the last one when nothing new is proposed (a failed start that changed nothing has none).
+  const showResults = data.results && plan && (running || (!proposal && !(plan.status === "failed" && plan.currentStep < 0)));
 
   const pill = running
     ? running.status === "paused"
@@ -108,6 +113,7 @@ export function Markdown({ productId }) {
       </header>
 
       {msg && <Notice tone={msg.tone} compact>{msg.text}</Notice>}
+      {running?.status === "active" && current < 0 && <Notice compact>Step 1 isn&apos;t live yet; the app retries within the hour.</Notice>}
       {running?.status === "paused" && (
         <Notice tone="warn" compact>
           {running.endReason}. No further steps; when the plan ends (stock sold or ladder done) the app still restores or holds prices as set. Cancel to restore them now.
@@ -129,7 +135,17 @@ export function Markdown({ productId }) {
       )}
 
       {variants.length > 0 && (
-        <Ladder variants={variants} applied={running?.steps.applied} current={current} startedOn={startedOn} ladder={data.ladder} money={money} running={Boolean(running)} />
+        <Ladder
+          variants={variants}
+          applied={running?.steps.applied}
+          current={current}
+          startedOn={startedOn}
+          ladder={data.ladder}
+          money={money}
+          running={Boolean(running)}
+          paused={running?.status === "paused"}
+          floorOf={floorOf}
+        />
       )}
 
       {proposal && (
@@ -171,17 +187,21 @@ export function Markdown({ productId }) {
         </Notice>
       )}
 
-      {data.results && plan && (
+      {showResults && (
         <div className="grid gap-4 sm:grid-cols-3">
-          <Tile label="Sold since the start" value={data.results.soldSince.toLocaleString()} sub={`${data.results.soldBefore.toLocaleString()} in the 30 days before`} />
-          <Tile label="Stock left" value={data.results.stockNow.toLocaleString()} sub={plan.startStock ? `was ${plan.startStock.toLocaleString()}` : ""} />
-          <Tile label="Revenue from the plan" value={money0.format(data.results.revenueSince)} sub="all above the floor" />
+          <Tile
+            label={running ? "Sold since the start" : "Sold during the last markdown"}
+            value={data.results.soldSince.toLocaleString()}
+            sub={`${data.results.soldBefore.toLocaleString()} in the 30 days before`}
+          />
+          <Tile label={running ? "Stock left" : "Stock now"} value={data.results.stockNow.toLocaleString()} sub={plan.startStock ? `was ${plan.startStock.toLocaleString()} at the start` : ""} />
+          <Tile label={running ? "Revenue from the plan" : "Revenue during it"} value={money0.format(data.results.revenueSince)} sub="what shoppers paid, after discount codes" />
         </div>
       )}
 
       {variants.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2">
-          <Rules data={data} plan={running} variants={variants} money={money} />
+          <Rules data={data} plan={running} variants={variants} money={money} floorOf={floorOf} />
           <section aria-labelledby="guard" className={`${CARD} flex flex-col gap-2 px-5 py-[18px]`}>
             <h2 id="guard" className={H2}>
               Never below the floor
@@ -190,7 +210,7 @@ export function Markdown({ productId }) {
               <li>Every price is checked against today&apos;s cost right before it is written.</li>
               <li>The database refuses any markdown price below the floor.</li>
               <li>If you change the price in Shopify, the plan pauses instead of overwriting it.</li>
-              <li>Cancel puts back the prices from before the plan.</li>
+              <li>Cancel restores only the prices this plan wrote.</li>
             </ul>
           </section>
         </div>
@@ -265,7 +285,7 @@ function Tile({ label, value, sub }) {
  * The ladder as bars (the first variant's prices: start, then each step) with the floor as a dashed
  * line; with several variants, each one's prices in a table under it.
  */
-function Ladder({ variants, applied, current, startedOn, ladder, money, running }) {
+function Ladder({ variants, applied, current, startedOn, ladder, money, running, paused, floorOf }) {
   const v = variants[0];
   // The current step shows what the app actually wrote (it can differ after a cost or settings change).
   const priceAt = (x, i) => (i === current && applied?.[x.id] ? applied[x.id].price : x.stepPrices[i]);
@@ -278,9 +298,11 @@ function Ladder({ variants, applied, current, startedOn, ladder, money, running 
       state: i < current ? "done" : i === current ? "live" : "next",
     })),
   ];
-  const top = Math.max(...bars.map((b) => b.price), v.floor);
+  const floor = floorOf(v);
+  const top = Math.max(...bars.map((b) => b.price), floor);
   const h = (price) => Math.max(4, Math.round((price / top) * CHART));
-  const next = running && current + 1 < ladder.steps.length ? current + 1 : null;
+  // A paused plan takes no further steps.
+  const next = running && !paused && current + 1 < ladder.steps.length ? current + 1 : null;
   const COLORS = { done: "bg-accent-line", live: "bg-accent", next: "border-2 border-dashed border-accent bg-white" };
 
   return (
@@ -290,26 +312,30 @@ function Ladder({ variants, applied, current, startedOn, ladder, money, running 
           The ladder
         </h2>
         <span className="text-[13px] text-muted">
-          {next != null
-            ? `Next step on ${shortDay(addDays(startedOn, next * ladder.stepDays))} · ${money.format(v.stepPrices[next])}`
-            : running
-              ? "Last step is live"
-              : `Starts when you approve · one step every ${ladder.stepDays} days`}
+          {paused
+            ? "Paused: no further steps"
+            : current < 0 && running
+              ? "Step 1 goes live within the hour"
+              : next != null
+                ? `Next step on ${shortDay(addDays(startedOn, next * ladder.stepDays))} · ${money.format(v.stepPrices[next])}`
+                : running
+                  ? "Last step is live"
+                  : `Starts when you approve · one step every ${ladder.stepDays} days`}
         </span>
       </div>
       <div
         role="img"
-        aria-label={`Prices${variants.length > 1 ? ` for ${v.title}` : ""}: ${bars.map((b) => `${b.label} ${money.format(b.price)}`).join(", ")}; never below ${money.format(v.floor)}`}
+        aria-label={`Prices${variants.length > 1 ? ` for ${v.title}` : ""}: ${bars.map((b) => `${b.label} ${money.format(b.price)}`).join(", ")}; never below ${money.format(floor)}`}
         className="relative grid h-[230px] grid-cols-4 items-end gap-3 border-b border-line px-2 sm:gap-6"
       >
-        <div aria-hidden="true" className="absolute inset-x-0 border-t-2 border-dashed border-[#B91C1C]" style={{ bottom: `${h(v.floor)}px` }} />
+        <div aria-hidden="true" className="absolute inset-x-0 border-t-2 border-dashed border-[#B91C1C]" style={{ bottom: `${h(floor)}px` }} />
         {/* Just under the line, so it never covers a step's price above it. */}
-        <span aria-hidden="true" className="absolute right-3 z-10 bg-white px-1 text-xs font-bold text-[#B91C1C]" style={{ bottom: `${Math.max(2, h(v.floor) - 20)}px` }}>
-          Floor {money.format(v.floor)}
+        <span aria-hidden="true" className="absolute right-3 z-10 bg-white px-1 text-xs font-bold text-[#B91C1C]" style={{ bottom: `${Math.max(2, h(floor) - 20)}px` }}>
+          Floor {money.format(floor)}
         </span>
         {bars.map((b) => (
           <div key={b.label} className="flex flex-col items-center gap-1.5">
-            <span className="text-[13px] font-bold tabular-nums sm:text-sm">{money.format(b.price)}</span>
+            <span className="text-xs font-bold tabular-nums sm:text-sm">{money.format(b.price)}</span>
             <div className={`box-border w-full max-w-[120px] rounded-t-lg ${COLORS[b.state]}`} style={{ height: `${h(b.price)}px` }} />
           </div>
         ))}
@@ -355,11 +381,11 @@ function Ladder({ variants, applied, current, startedOn, ladder, money, running 
                       return (
                         <td key={i} className={`px-3 py-2 text-right tabular-nums ${i === current ? "font-bold" : ""}`}>
                           {money.format(p)}
-                          {p === x.floor ? " (floor)" : ""}
+                          {p <= floorOf(x) ? " (floor)" : ""}
                         </td>
                       );
                     })}
-                    <td className="py-2 pr-5 pl-3 text-right text-[#B91C1C] tabular-nums">{money.format(x.floor)}</td>
+                    <td className="py-2 pr-5 pl-3 text-right text-[#B91C1C] tabular-nums">{money.format(floorOf(x))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -373,12 +399,13 @@ function Ladder({ variants, applied, current, startedOn, ladder, money, running 
 }
 
 /** "Rules for this product": the steps, cost, minimum margin with the floor, maximum discount, the end. */
-function Rules({ data, plan, variants, money }) {
+function Rules({ data, plan, variants, money, floorOf }) {
   const settings = data.preview?.settings ?? data.rules;
   const costs = [...new Set(variants.map((v) => data.costs?.[v.id]).filter((c) => c != null))].sort((a, b) => a - b);
-  const floors = [...new Set(variants.map((v) => v.floor))].sort((a, b) => a - b);
+  const floors = [...new Set(variants.map(floorOf))].sort((a, b) => a - b);
   const range = (list) => (list.length === 0 ? "—" : list.length === 1 ? money.format(list[0]) : `${money.format(list[0])}–${money.format(list.at(-1))}`);
-  const maxDiscount = plan ? Number(plan.maxDiscountPct) : settings?.maxDiscountPct;
+  // A running plan never goes deeper than it was approved for, nor than today's setting.
+  const maxDiscount = plan ? Math.min(Number(plan.maxDiscountPct), settings?.maxDiscountPct ?? Infinity) : settings?.maxDiscountPct;
   const endAction = plan ? plan.endAction : settings?.endAction;
   const rows = [
     ["Steps", `${data.ladder.steps.map((d) => `${Math.round(d * 100)}%`).join(" → ")}, every ${data.ladder.stepDays} days`],

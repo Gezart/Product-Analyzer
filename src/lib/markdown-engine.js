@@ -273,7 +273,8 @@ export async function markdownOverview(shopId, productId, { preview: withPreview
     const start = plan.startedAt;
     const [since, before] = await Promise.all([
       db().productDailyMetric.aggregate({
-        where: { productId, date: { gte: start, ...(plan.endedAt ? { lte: plan.endedAt } : {}) } },
+        // Until the day it ended, in the store's calendar (sales dates are the store's days).
+        where: { productId, date: { gte: start, ...(plan.endedAt ? { lte: new Date(`${localDateKey(plan.endedAt, product.shop.timezone)}T00:00:00Z`) } : {}) } },
         _sum: { units: true, revenue: true },
       }),
       db().productDailyMetric.aggregate({ where: { productId, date: { gte: new Date(start.getTime() - 30 * DAY_MS), lt: start } }, _sum: { units: true } }),

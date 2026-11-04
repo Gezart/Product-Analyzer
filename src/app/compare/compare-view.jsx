@@ -4,14 +4,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BTN, CARD, Notice, PageHeader, Pill, UpgradeNotice } from "@/app/ui/kit";
-import { bestIndex, MAX_COMPARE } from "@/lib/compare";
+import { bestIndex, gapLabel, marketBest, MAX_COMPARE } from "@/lib/compare";
 import { FEATURE_PLAN, getPlan, hasFeature } from "@/lib/plans";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
 const pct = (n) => (n == null ? "—" : `${(n * 100).toFixed(1)}%`);
 const pct0 = (n) => `${Math.round(n * 100)}%`;
-/** "+18%" above the market, "−2%" below, "0%" within half a percent. */
-const gapLabel = (gap) => (Math.abs(gap) < 0.005 ? "0%" : `${gap > 0 ? "+" : "−"}${Math.round(Math.abs(gap) * 100)}%`);
 const PERIODS = [30, 60, 90];
 const TOGGLE = (on) =>
   `cursor-pointer rounded-[7px] border px-2.5 py-[5px] font-[inherit] text-[13px] font-semibold disabled:cursor-default disabled:opacity-50 ${on ? "border-ink bg-ink text-white" : "border-line-strong bg-white text-ink"}`;
@@ -78,8 +76,8 @@ export function CompareView() {
     { label: "Conversion", best: bestIndex(products.map((p) => p.conversion)), show: (p) => pct(p.conversion) },
     {
       label: "Price vs market",
-      // The price nearest below (or least above) the market is the best.
-      best: bestIndex(products.map((p) => p.marketGap), true),
+      // The price nearest the market price is the best.
+      best: marketBest(products.map((p) => p.marketGap)),
       show: (p) =>
         `${money2.format(p.price)}${p.marketGap != null ? ` · ${gapLabel(p.marketGap)}` : ""}${p.compareAtPrice ? ` (was ${money2.format(p.compareAtPrice)})` : ""}`,
     },
@@ -115,7 +113,8 @@ export function CompareView() {
       best: bestIndex(products.map((p) => p.pageQuality.score)),
       show: (p) => `${p.imageCount} photo${p.imageCount === 1 ? "" : "s"} · ${p.descriptionWords.toLocaleString()} words`,
       note: (p) => {
-        const missing = p.pageQuality.checks.filter((c) => !c.ok).map((c) => c.label.toLowerCase());
+        // "at least 3 images", but "SEO title" keeps its capitals.
+        const missing = p.pageQuality.checks.filter((c) => !c.ok).map((c) => (/^[A-Z]{2}/.test(c.label) ? c.label : c.label.charAt(0).toLowerCase() + c.label.slice(1)));
         return missing.length ? `Missing: ${missing.join(", ")}` : "All page checks pass";
       },
     },
@@ -136,7 +135,8 @@ export function CompareView() {
       <PageHeader title="Compare" subtitle="Why does one sell and the other not? The best value in each row is highlighted." actions={!upgrade && periods} />
       {upgrade && <UpgradeNotice>{upgrade}</UpgradeNotice>}
       {error && <Notice tone="bad">{error}</Notice>}
-      {!ids && !upgrade && (
+      {/* Nothing to show (none picked, none found, or an error): a way to pick products. */}
+      {!upgrade && (!ids || ((data || error) && products.length === 0)) && (
         <section className={`${CARD} flex flex-wrap items-center justify-between gap-3 px-5 py-[18px]`}>
           <p className="m-0 text-[13px] text-muted">Pick 2 to {MAX_COMPARE} products to see them side by side: sales, views, price against the market, stock and page quality.</p>
           <button type="button" onClick={pick} className={`${BTN.primary} cursor-pointer`}>
@@ -164,7 +164,7 @@ export function CompareView() {
                   </th>
                   {products.map((p) => (
                     <th key={p.id} scope="col" className="min-w-[170px] px-3 pt-4 pb-3 text-left align-bottom font-normal">
-                      <div aria-hidden="true" className="mb-2 h-12 w-12 rounded-lg bg-[#E9EBEF]" />
+                      <div aria-hidden="true" className="mb-2 aspect-[4/3] w-full max-w-[140px] rounded-lg bg-[#E9EBEF]" />
                       <Link href={`/products/${p.id}`} className="block font-semibold text-ink no-underline hover:text-ink hover:underline">
                         {p.title}
                       </Link>
@@ -183,7 +183,11 @@ export function CompareView() {
                   ))}
                   <th scope="col" className="px-3 pt-4 pr-5 pb-3 text-left align-bottom">
                     {products.length < MAX_COMPARE && (
-                      <button type="button" onClick={pick} className="cursor-pointer rounded-lg border border-dashed border-accent bg-white px-3 py-[7px] font-[inherit] text-[13px] font-semibold whitespace-nowrap text-accent">
+                      <button
+                        type="button"
+                        onClick={pick}
+                        className="grid aspect-[4/3] w-[140px] cursor-pointer place-items-center rounded-lg border border-dashed border-accent bg-white font-[inherit] text-[13px] font-semibold whitespace-nowrap text-accent"
+                      >
                         + Add product
                       </button>
                     )}

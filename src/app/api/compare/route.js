@@ -24,7 +24,7 @@ export const GET = appRoute(async ({ request, shop }) => {
   const products = await db().product.findMany({
     where: { shopId: shop.id, OR: [{ id: { in: ids } }, { shopifyGid: { in: ids } }] },
     include: {
-      variants: { select: { price: true, cost: true, inventoryQty: true, sellsWhenOut: true, options: true }, orderBy: { shopifyGid: "asc" } },
+      variants: { select: { shopifyGid: true, price: true, cost: true, inventoryQty: true, sellsWhenOut: true, options: true } },
       scores: { orderBy: { computedAt: "desc" }, take: 1, select: { status: true } },
     },
   });
@@ -85,7 +85,7 @@ export const GET = appRoute(async ({ request, shop }) => {
         ...grossMargin(variants),
         stock: stock.stock,
         // Variants that can't be bought (no stock, not sold when out), by name: "S, M".
-        outOfStock: outOfStockNames(p.variants),
+        outOfStock: outOfStockNames([...p.variants].sort((a, b) => Number(BigInt(a.shopifyGid.split("/").pop()) - BigInt(b.shopifyGid.split("/").pop())))),
         variantCount: p.variants.length,
         stockValue: stock.stockValue,
         stockValueIsEstimate: stock.costIsEstimate,

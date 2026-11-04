@@ -55,7 +55,6 @@ export function stockAge({ today, lastSale, createdAt, knownDays }) {
   return knownDays > 0 ? { days: knownDays, atLeast: true, sold: false } : { days: null, atLeast: false, sold: false };
 }
 
-/** Index of the best value in a row (highest, or lowest with `lowerIsBetter`); null on a tie or with fewer than 2 values. */
 /** Names of the variants that can't be bought (no stock and not sold when out): `["S", "M"]`. */
 export function outOfStockNames(variants) {
   return variants
@@ -63,6 +62,13 @@ export function outOfStockNames(variants) {
     .map((v) => Object.values(v.options ?? {}).filter((o) => o !== "Default Title").join(" / ") || "Default");
 }
 
+/** The price nearest the market price is the best: far above loses shoppers, far below gives money away. */
+export const marketBest = (gaps) => bestIndex(gaps.map((g) => (g == null ? null : Math.abs(g))), true);
+
+/** "+18%" above the market price, "−2%" below, "0%" within half a percent. */
+export const gapLabel = (gap) => (Math.abs(gap) < 0.005 ? "0%" : `${gap > 0 ? "+" : "−"}${Math.round(Math.abs(gap) * 100)}%`);
+
+/** Index of the best value in a row (highest, or lowest with `lowerIsBetter`); null on a tie or with fewer than 2 values. */
 export function bestIndex(values, lowerIsBetter = false) {
   const known = values.map((v, i) => [v, i]).filter(([v]) => v != null && Number.isFinite(v));
   if (known.length < 2) return null;
