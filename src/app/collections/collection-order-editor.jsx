@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BTN, CARD, H2, Notice, Pill, THEAD, TROW } from "@/app/ui/kit";
 import { dragMove, moveLabel } from "@/lib/collections-page";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
@@ -23,6 +23,8 @@ export function CollectionOrderEditor({ collectionId, onUpgrade, onSkip, onChang
   const [message, setMessage] = useState(null);
   const [dragging, setDragging] = useState(null);
   const [over, setOver] = useState(null);
+  const top = useRef(null);
+  const scrolled = useRef(false);
 
   /** Reads the collection again; `keepOrder` keeps the merchant's edited order (after a failed save). */
   const load = useCallback(
@@ -49,8 +51,15 @@ export function CollectionOrderEditor({ collectionId, onUpgrade, onSkip, onChang
     load();
   }, [load]);
 
-  if (error && !data) return <Notice tone="bad">{error}</Notice>;
-  if (!data) return <p className="m-0 text-muted">Loading the proposed order…</p>;
+  // On a phone the list sits above: once the order is shown, it scrolls into view.
+  useEffect(() => {
+    if (!data || scrolled.current || !top.current) return;
+    scrolled.current = true;
+    if (window.matchMedia("(max-width: 1023px)").matches) top.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [data]);
+
+  if (error && !data) return <Notice tone="bad" className="min-w-0">{error}</Notice>;
+  if (!data) return <p className="m-0 min-w-0 text-muted">Loading the proposed order…</p>;
 
   async function post(kind, url, body) {
     setBusy(kind);
@@ -96,10 +105,10 @@ export function CollectionOrderEditor({ collectionId, onUpgrade, onSkip, onChang
   // A plan without the optimizer: its saved orders can still be undone.
   if (!data.proposal) {
     return (
-      <>
+      <div ref={top} className="flex min-w-0 scroll-mt-4 flex-col gap-4 lg:col-span-2">
         {banner}
-        {saves}
-      </>
+        {data.history.length > 0 ? saves : <p className="m-0 text-[13px] text-muted">No saved orders for this collection.</p>}
+      </div>
     );
   }
 
@@ -113,7 +122,7 @@ export function CollectionOrderEditor({ collectionId, onUpgrade, onSkip, onChang
 
   return (
     <>
-      <section aria-labelledby="prop" className={`${CARD} overflow-hidden`}>
+      <section ref={top} aria-labelledby="prop" className={`${CARD} min-w-0 scroll-mt-4 overflow-hidden`}>
         <div className="flex flex-col gap-2 px-5 pt-4 pb-2.5">
           <div>
             <h2 id="prop" className={H2}>
@@ -160,6 +169,8 @@ export function CollectionOrderEditor({ collectionId, onUpgrade, onSkip, onChang
                     onDragStart={(e) => {
                       setDragging(i);
                       e.dataTransfer.effectAllowed = "move";
+                      // Some browsers (Firefox) only start a drag that carries data.
+                      e.dataTransfer.setData("text/plain", id);
                     }}
                     onDragOver={(e) => {
                       if (dragging == null) return;
@@ -216,7 +227,7 @@ export function CollectionOrderEditor({ collectionId, onUpgrade, onSkip, onChang
           </table>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-hair px-5 pt-3 pb-4">
-          <p className="m-0 text-[13px] text-ink-2">Drag rows (or use ↑ ↓) to change the order. The old order is kept for Undo.</p>
+          <p className="m-0 text-[13px] text-ink-2">Drag rows to change the order. The old order is kept for Undo.</p>
           <div className="flex flex-wrap gap-2">
             {edited && (
               <button type="button" disabled={busy !== null} onClick={() => setOrder(proposed)} className={`${BTN.secondary} cursor-pointer`}>
@@ -245,7 +256,7 @@ function Saves({ history, title, busy, onUndo }) {
   const [latest, ...earlier] = history;
   const applied = latest.status === "applied";
   return (
-    <section aria-labelledby="meas" className={`${CARD} flex flex-col gap-3 px-5 py-4`}>
+    <section aria-labelledby="meas" className={`${CARD} flex min-w-0 flex-col gap-3 px-5 py-4 lg:col-span-2`}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0 flex-[1_1_360px]">
           <h2 id="meas" className={H2}>
@@ -255,7 +266,11 @@ function Saves({ history, title, busy, onUndo }) {
           <p className="mt-0.5 mb-0 text-[13px] text-muted">
             {applied
               ? `New order applied on ${day(latest.appliedAt ?? latest.createdAt)}. ${latest.moved} product${latest.moved === 1 ? "" : "s"} moved. Products moved up are measured on their own pages: a rescue plan compares their sales over 14–30 days.`
-              : `${latest.moved} product${latest.moved === 1 ? "" : "s"} moved on ${day(latest.createdAt)}.`}
+              : latest.status === "failed"
+                ? `Tried to move ${latest.moved} product${latest.moved === 1 ? "" : "s"} on ${day(latest.createdAt)}; it didn't go through.`
+                : latest.status === "undone"
+                  ? `${latest.moved} product${latest.moved === 1 ? "" : "s"} moved on ${day(latest.appliedAt ?? latest.createdAt)}, undone ${day(latest.undoneAt ?? latest.createdAt)}.`
+                  : `${latest.moved} product${latest.moved === 1 ? "" : "s"} moving since ${day(latest.createdAt)}.`}
           </p>
           {latest.error && <p className="mt-1 mb-0 text-[13px] text-[#B91C1C]">{latest.error}</p>}
         </div>

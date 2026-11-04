@@ -10,12 +10,12 @@ const AUTOMATIC_SHOWN = 20;
 // those can still be undone.
 export const GET = appRoute(async ({ shop, session }) => {
   const missing = missingFeature(shop, "collectionOrder");
-  const latest = await latestSaves(shop.id);
-  const withLatest = (c) => ({ ...c, latest: latest.get(c.id) ?? null });
   if (missing) {
-    return Response.json({ ...missing, collections: (await savedCollections(shop.id)).map(withLatest), automatic: 0, automaticCollections: [], truncated: false });
+    const [saved, latest] = await Promise.all([savedCollections(shop.id), latestSaves(shop.id)]);
+    return Response.json({ ...missing, collections: saved.map((c) => ({ ...c, latest: latest.get(c.id) ?? null })), automatic: 0, automaticCollections: [], truncated: false });
   }
-  const { collections, truncated } = await orderCollections(session);
+  const [{ collections, truncated }, latest] = await Promise.all([orderCollections(session), latestSaves(shop.id)]);
+  const withLatest = (c) => ({ ...c, latest: latest.get(c.id) ?? null });
   const automatic = collections.filter((c) => !c.manual);
   return Response.json({
     collections: collections.filter((c) => c.manual).map(withLatest),

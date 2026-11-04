@@ -5,11 +5,16 @@ import { collectionState, dragMove, moveLabel } from "./collections-page.js";
 test("a collection's state in the list", () => {
   const c = (latest, extra = {}) => ({ id: "c", title: "Dresses", count: 40, tooLarge: false, latest, ...extra });
   assert.deepEqual(collectionState(c(null)), { text: "Not optimized yet", tone: "muted" });
-  assert.deepEqual(collectionState(c({ status: "applied", appliedAt: "2026-10-22T10:00:00Z", moved: 5 }), { timeZone: "UTC" }), { text: "Applied Oct 22 · 5 moved", tone: "good" });
-  assert.deepEqual(collectionState(c({ status: "undone", undoneAt: "2026-10-25T10:00:00Z", moved: 5 }), { timeZone: "UTC" }), { text: "Undone Oct 25", tone: "muted" });
+  const opts = { locale: "en-US", timeZone: "UTC" };
+  assert.deepEqual(collectionState(c({ status: "applied", appliedAt: "2026-10-22T10:00:00Z", moved: 5 }), opts), { text: "Applied Oct 22 · 5 moved", tone: "good" });
+  assert.deepEqual(collectionState(c({ status: "applied", appliedAt: "2026-10-22T10:00:00Z", moved: 5, error: "Interrupted" }), opts), { text: "Applied with a problem · open to check", tone: "warn" });
+  assert.deepEqual(collectionState(c({ status: "undone", undoneAt: "2026-10-25T10:00:00Z", moved: 5 }), opts), { text: "Undone Oct 25", tone: "muted" });
   assert.deepEqual(collectionState(c({ status: "failed", moved: 5 })), { text: "Last save failed", tone: "bad" });
-  assert.equal(collectionState(c({ status: "applying", moved: 5 })).text, "Saving…");
-  assert.equal(collectionState(c({ status: "undoing", moved: 5 })).text, "Undoing…");
+  // Running: saving or undoing, unless it has run for more than 2 minutes (it crashed).
+  const now = Date.parse("2026-11-04T12:00:00Z");
+  assert.equal(collectionState(c({ status: "applying", moved: 5, claimedAt: "2026-11-04T11:59:30Z" }), { now }).text, "Saving…");
+  assert.equal(collectionState(c({ status: "undoing", moved: 5, claimedAt: "2026-11-04T11:59:30Z" }), { now }).text, "Undoing…");
+  assert.deepEqual(collectionState(c({ status: "applying", moved: 5, claimedAt: "2026-11-04T11:50:00Z" }), { now }), { text: "Interrupted · open to check", tone: "warn" });
   assert.deepEqual(collectionState(c(null, { tooLarge: true })), { text: "Too many products to reorder here", tone: "warn" });
 });
 

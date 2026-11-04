@@ -36,13 +36,14 @@ export function CollectionOrderView() {
   }, [loadList]);
 
   const showUpgrade = useCallback((text) => setUpgrade(text), []);
-  const pick = (id) => router.replace(id ? `/collections?c=${id}` : "/collections");
+  // The page doesn't jump to the top; on a phone the editor scrolls itself into view.
+  const pick = (id) => router.replace(id ? `/collections?c=${id}` : "/collections", { scroll: false });
   const choosable = (list?.collections ?? []).filter((c) => !c.tooLarge);
-  // "Skip": on to the next collection that can be reordered.
+  // "Skip": on to the next collection that can be reordered (after the last, back to the first).
   const skip = () => {
     const i = choosable.findIndex((c) => numericId(c.id) === picked);
-    const next = choosable[i + 1] ?? null;
-    pick(next ? numericId(next.id) : "");
+    const next = choosable[(i + 1) % choosable.length];
+    pick(numericId(next.id));
   };
 
   return (
@@ -52,8 +53,9 @@ export function CollectionOrderView() {
       {error && <Notice tone="bad">{error}</Notice>}
       {!list && !error && <p className="m-0 text-muted">Loading collections…</p>}
       {list && (
-        <div className="flex flex-wrap items-start gap-4">
-          <section aria-labelledby="cols" className={`${CARD} flex min-w-0 flex-[1_1_260px] flex-col gap-1 p-3.5`}>
+        // The list and the proposal side by side; the saved orders span both below (as in the design).
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(240px,1fr)_minmax(0,2.6fr)]">
+          <section aria-labelledby="cols" className={`${CARD} flex min-w-0 flex-col gap-1 p-3.5`}>
             <h2 id="cols" className={`${H2} mx-1.5 mb-1.5`}>
               Collections
             </h2>
@@ -94,25 +96,26 @@ export function CollectionOrderView() {
             ))}
             {list.automatic > (list.automaticCollections ?? []).length && (
               <p className="m-0 px-2.5 pt-1 text-xs text-muted">
-                {list.automatic - (list.automaticCollections ?? []).length} more collections are sorted automatically.
+                {list.automatic - (list.automaticCollections ?? []).length} more{" "}
+                {list.automatic - (list.automaticCollections ?? []).length === 1 ? "collection is" : "collections are"} sorted automatically.
               </p>
             )}
             {list.truncated && <p className="m-0 px-2.5 pt-1 text-xs text-muted">Only the first 2,500 collections are listed.</p>}
           </section>
 
-          <div className="flex min-w-0 flex-[999_1_520px] flex-col gap-4">
-            {picked ? (
-              <CollectionOrderEditor key={picked} collectionId={picked} onUpgrade={showUpgrade} onSkip={choosable.length > 1 ? skip : null} onChanged={loadList} />
-            ) : (
-              list.collections.length > 0 && (
-                <section className={`${CARD} px-5 py-[18px]`}>
-                  <p className="m-0 text-[13px] text-muted">
-                    Pick a collection to see the order the app proposes: best sellers first, then hidden gems and products that need sales, sold-out products last.
-                  </p>
-                </section>
-              )
-            )}
-          </div>
+          {picked ? (
+            <CollectionOrderEditor key={picked} collectionId={picked} onUpgrade={showUpgrade} onSkip={choosable.length > 1 ? skip : null} onChanged={loadList} />
+          ) : (
+            list.collections.length > 0 && (
+              <section className={`${CARD} min-w-0 px-5 py-[18px]`}>
+                <p className="m-0 text-[13px] text-muted">
+                  {upgrade
+                    ? "Pick a collection to see its saved orders and undo them."
+                    : "Pick a collection to see the order the app proposes: best sellers first, then hidden gems and products that need sales, sold-out products last."}
+                </p>
+              </section>
+            )
+          )}
         </div>
       )}
     </>

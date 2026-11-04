@@ -222,15 +222,21 @@ export async function reorderHistory(shopId, gid) {
   return rows.map(({ before, after, ...r }) => ({ ...r, moved: movedCount(before, after) }));
 }
 
-/** Each collection's latest saved order (by collection GID): `{ status, moved, appliedAt, undoneAt, createdAt }`. */
+/**
+ * Each collection's latest saved order (by collection GID): `{ status, error, moved, appliedAt, undoneAt,
+ * createdAt, claimedAt }`. Only the newest row per collection is read, and the moved count (places that
+ * changed, as `movedCount`) is worked out in the database, so old saves and their product lists stay there.
+ */
 export async function latestSaves(shopId) {
-  const rows = await db().collectionReorder.findMany({
-    where: { shopId },
-    distinct: ["collectionGid"],
-    orderBy: [{ collectionGid: "asc" }, { createdAt: "desc" }],
-    select: { collectionGid: true, status: true, before: true, after: true, appliedAt: true, undoneAt: true, createdAt: true },
-  });
-  return new Map(rows.map(({ collectionGid, before, after, ...r }) => [collectionGid, { ...r, moved: movedCount(before, after) }]));
+  const rows = await db().$queryRaw`
+    SELECT DISTINCT ON ("collection_gid")
+      "collection_gid" AS "collectionGid", "status", "error", "applied_at" AS "appliedAt", "undone_at" AS "undoneAt",
+      "created_at" AS "createdAt", "claimed_at" AS "claimedAt",
+      (SELECT count(*)::int FROM unnest("before", "after") AS t(b, a) WHERE a IS NOT NULL AND b IS DISTINCT FROM a) AS "moved"
+    FROM "collection_reorders"
+    WHERE "shop_id" = ${shopId}
+    ORDER BY "collection_gid", "created_at" DESC`;
+  return new Map(rows.map(({ collectionGid, ...r }) => [collectionGid, r]));
 }
 
 /** Collections with saved orders (for a plan without the optimizer: their saves can still be undone). */

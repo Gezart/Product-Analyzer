@@ -1,19 +1,26 @@
 // The Collection Optimizer page (the owner's design): each collection's state in the list, each row's
 // move, and moving a row by dragging. Pure (no imports) so node:test can load it.
 
-const day = (iso, timeZone) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone });
+const day = (iso, locale, timeZone) => new Date(iso).toLocaleDateString(locale, { month: "short", day: "numeric", timeZone });
+/** A save or undo running longer than this has crashed (as the optimizer decides). */
+const RUNNING_MS = 2 * 60_000;
 
 /**
  * A collection's line in the list: `{ text, tone }` (tone: accent, good, warn, bad, muted). `c` is a
  * listed collection with its latest saved order (`latest`, or null).
  */
-export function collectionState(c, { timeZone } = {}) {
+export function collectionState(c, { locale, timeZone, now = Date.now() } = {}) {
   if (c.tooLarge) return { text: "Too many products to reorder here", tone: "warn" };
   const s = c.latest;
   if (!s) return { text: "Not optimized yet", tone: "muted" };
-  if (s.status === "applied") return { text: `Applied ${day(s.appliedAt ?? s.createdAt, timeZone)} · ${s.moved} moved`, tone: "good" };
-  if (s.status === "undone") return { text: `Undone ${day(s.undoneAt ?? s.createdAt, timeZone)}`, tone: "muted" };
+  if (s.status === "applied") {
+    // Kept as applied after a problem (e.g. interrupted, partly saved): worth a look.
+    if (s.error) return { text: "Applied with a problem · open to check", tone: "warn" };
+    return { text: `Applied ${day(s.appliedAt ?? s.createdAt, locale, timeZone)} · ${s.moved} moved`, tone: "good" };
+  }
+  if (s.status === "undone") return { text: `Undone ${day(s.undoneAt ?? s.createdAt, locale, timeZone)}`, tone: "muted" };
   if (s.status === "failed") return { text: "Last save failed", tone: "bad" };
+  if (now - Date.parse(s.claimedAt ?? s.createdAt) > RUNNING_MS) return { text: "Interrupted · open to check", tone: "warn" };
   return { text: s.status === "undoing" ? "Undoing…" : "Saving…", tone: "accent" };
 }
 
