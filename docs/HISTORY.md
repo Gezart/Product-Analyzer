@@ -5,6 +5,7 @@
 - Design tokens in Tailwind (`globals.css`): Inter, the light grey ground, ink and muted text, border and line colors, indigo links and the soft indigo panels; shared pieces in `src/app/ui/kit.jsx` (page header with back link and actions, card, buttons, the design's status pills and table classes)
 - Pages keep working inside the new frame; each is redone to the design in its own task (docs/TASKS.md, Phase 3a), and the Polaris components go at the end
 - The menu rule is pure and tested (`src/lib/nav.js`)
+- The Inbox links to the weekly plan until the two are one page (design-inbox); at phone width the current page scrolls into view in the menu row
 - Checked in a browser at 1280 px and 390 px
 
 ## 2026-11-04 · rising-effect

@@ -10,7 +10,8 @@ import { NavLinks } from "./nav-links";
 export function AppShell({ children }) {
   return (
     <div className="flex min-h-screen flex-col items-stretch bg-canvas md:flex-row md:items-start">
-      <nav aria-label="Unstuck" className="flex shrink-0 flex-col gap-0.5 px-3 pt-5 md:sticky md:top-0 md:w-[232px] md:pb-5">
+      {/* As in the design: the menu takes 200–232px, the page the rest (up to 1060px). */}
+      <nav aria-label="Unstuck" className="flex shrink-0 flex-col gap-0.5 px-3 pt-5 md:sticky md:top-0 md:max-w-[232px] md:flex-[1_1_200px] md:pb-5">
         <div className="flex items-center gap-2 px-2.5 pt-1 pb-4">
           <span aria-hidden="true" className="grid h-[26px] w-[26px] place-items-center rounded-[7px] bg-ink text-sm font-bold text-white">
             U
@@ -34,7 +35,7 @@ export function AppShell({ children }) {
           <NavLinks />
         </Suspense>
       </nav>
-      <main className="flex min-w-0 flex-1 flex-col gap-4 px-4 pt-4 pb-14 md:max-w-[1060px] md:px-7 md:pt-6">{children}</main>
+      <main className="flex min-w-0 flex-1 flex-col gap-4 px-4 pt-4 pb-14 md:max-w-[1060px] md:flex-[999_1_560px] md:px-7 md:pt-6">{children}</main>
     </div>
   );
 }

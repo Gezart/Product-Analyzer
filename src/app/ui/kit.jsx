@@ -6,13 +6,13 @@ import Link from "next/link";
 /** Buttons and button-like links (the design: 8px corners, 600 weight). */
 export const BTN = {
   primary:
-    "inline-flex items-center justify-center gap-2 rounded-lg border border-ink bg-ink px-3.5 py-[9px] text-sm font-semibold text-white no-underline hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-50",
+    "inline-flex items-center justify-center gap-2 rounded-lg border-0 bg-ink px-3.5 py-[9px] text-sm font-semibold text-white no-underline hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-50",
   secondary:
     "inline-flex items-center justify-center gap-2 rounded-lg border border-line-strong bg-white px-3.5 py-[9px] text-sm font-semibold text-ink no-underline hover:bg-head hover:text-ink disabled:cursor-not-allowed disabled:opacity-50",
   small:
     "inline-flex items-center justify-center gap-1.5 rounded-lg border border-line-strong bg-white px-3 py-[7px] text-[13px] font-semibold text-ink no-underline whitespace-nowrap hover:bg-head hover:text-ink disabled:cursor-not-allowed disabled:opacity-50",
   smallPrimary:
-    "inline-flex items-center justify-center gap-1.5 rounded-lg border border-ink bg-ink px-3 py-[7px] text-[13px] font-semibold text-white no-underline whitespace-nowrap hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-50",
+    "inline-flex items-center justify-center gap-1.5 rounded-lg border-0 bg-ink px-3 py-[7px] text-[13px] font-semibold text-white no-underline whitespace-nowrap hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-50",
 };
 
 /** A white card with the design's border and 12px corners. */
