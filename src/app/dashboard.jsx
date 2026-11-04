@@ -6,7 +6,7 @@ import { BTN, CARD, H2, PageHeader, Pill, TROW } from "@/app/ui/kit";
 import { stuckSplit } from "@/lib/dashboard";
 import { hasFeature, PLANS } from "@/lib/plans";
 import { growthLabel } from "@/lib/rising";
-import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
+import { daysPhrase, formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
 // The browser's locale, like the money amounts.
 const percent = new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 0 });
@@ -121,7 +121,15 @@ export function DashboardView({ data }) {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
         <MoneyStuck data={data} money={money} />
-        <NextMove item={data.top[0]} facts={data.nextMove} upNext={data.top.slice(1, 4)} of={data.top.length} attention={attention} money={money} />
+        <NextMove
+          item={data.top[0]}
+          facts={data.nextMove}
+          upNext={data.top.slice(1, 4)}
+          of={data.top.length}
+          attention={attention}
+          newCount={data.byStatus.find((s) => s.status === "new")?.count ?? 0}
+          money={money}
+        />
       </div>
 
       {showStarter && (
@@ -281,7 +289,7 @@ function nextStep(item) {
 }
 
 /** The single product to start with (the first of the top 10), and the three after it. */
-function NextMove({ item, facts, upNext, of, attention, money }) {
+function NextMove({ item, facts, upNext, of, attention, newCount, money }) {
   if (!item) {
     return (
       <section aria-labelledby="nbm" className={`${CARD} flex min-w-0 flex-col justify-center gap-2 px-6 py-[22px]`}>
@@ -291,7 +299,7 @@ function NextMove({ item, facts, upNext, of, attention, money }) {
         <p className="m-0 text-[15px] font-bold">{attention === 0 ? "Nothing needs attention" : "No money at stake right now"}</p>
         <p className="m-0 text-[13px] text-muted">
           {attention === 0
-            ? "Every analyzed product is healthy. New problems show up here and in your inbox."
+            ? `${newCount > 0 ? `Every analyzed product is healthy, apart from ${count.format(newCount)} too new to judge.` : "Every analyzed product is healthy."} New problems show up here and in your inbox.`
             : "The products that need attention hold no stock value; see them in the product list."}
         </p>
       </section>
@@ -299,7 +307,7 @@ function NextMove({ item, facts, upNext, of, attention, money }) {
   }
   const step = nextStep(item);
   const detail = [
-    item.status === "stockout_risk" ? `${formatDays(item.daysOfCover)} days of stock left` : "at stake",
+    item.status === "stockout_risk" ? `${daysPhrase(item.daysOfCover)} of stock left` : "at stake",
     item.status !== "stockout_risk" ? noSaleFact(facts?.daysSinceSale) : null,
     facts?.imageCount != null ? `${facts.imageCount} photo${facts.imageCount === 1 ? "" : "s"}` : null,
   ].filter(Boolean);
@@ -339,7 +347,7 @@ function NextMove({ item, facts, upNext, of, attention, money }) {
                 <Link href={`/products/${u.productId}`} className="min-w-0 flex-1 truncate text-ink no-underline hover:text-ink hover:underline">
                   {u.title}
                 </Link>
-                <span className="font-semibold tabular-nums">{u.status === "stockout_risk" ? `${formatDays(u.daysOfCover)} days left` : money.format(u.moneyAtStake)}</span>
+                <span className="font-semibold tabular-nums">{u.status === "stockout_risk" ? `${daysPhrase(u.daysOfCover)} left` : money.format(u.moneyAtStake)}</span>
               </li>
             ))}
           </ol>
@@ -408,7 +416,7 @@ function RunningOut({ items, total }) {
               <Link href={`/products/${r.productId}#variants`} className="min-w-0 flex-1 truncate font-semibold text-ink no-underline hover:text-ink hover:underline">
                 {r.title}
               </Link>
-              <span className="text-[13px] font-semibold text-[#B91C1C]">{formatDays(r.daysOfCover)} days left</span>
+              <span className="text-[13px] font-semibold text-[#B91C1C]">{daysPhrase(r.daysOfCover)} left</span>
             </li>
           ))}
         </ul>
