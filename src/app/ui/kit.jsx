@@ -92,3 +92,24 @@ export const PILL_TONES = {
 export function Pill({ tone = "neutral", children, className = "" }) {
   return <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${PILL_TONES[tone] ?? PILL_TONES.neutral} ${className}`}>{children}</span>;
 }
+
+/** A message card: `tone` "bad" (an error), "warn" or plain. */
+export function Notice({ tone, children, className = "" }) {
+  const tones = {
+    bad: "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C]",
+    warn: "border-[#FDE68A] bg-[#FFFBEB] text-[#92400E]",
+  };
+  return <div className={`m-0 rounded-xl border px-5 py-4 ${tones[tone] ?? "border-line bg-white text-ink-2"} ${className}`}>{children}</div>;
+}
+
+/** "Included from the X plan" with a link to the plans page (the design's style). */
+export function UpgradeNotice({ children }) {
+  return (
+    <Notice tone="warn" className="px-4 py-3 text-[13px]">
+      {children}{" "}
+      <Link href="/plans" className="font-semibold text-[#92400E] underline hover:text-[#78350F]">
+        See plans
+      </Link>
+    </Notice>
+  );
+}

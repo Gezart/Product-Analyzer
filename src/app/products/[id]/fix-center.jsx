@@ -12,7 +12,7 @@ const LABELS = { title: "Title", description: "Description", seo: "SEO", images:
 const HISTORY_LABELS = { ...LABELS, photo: "Photo added", position: "Collection position" };
 
 /** Edit, apply and undo fixes. Every apply saves the old version first; undo restores it exactly. */
-export function FixCenter({ productId, onChanged }) {
+export function FixCenter({ productId, onChanged, onTitle }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(null);
@@ -36,6 +36,7 @@ export function FixCenter({ productId, onChanged }) {
       if (!res.ok) return setError(res.status === 404 ? "Product not found in Shopify" : (await apiError(res)).message);
       const d = await res.json();
       setData(d);
+      onTitle?.(d.title);
       if (!d.live) return;
       if (!hadLive.current) reset = Object.keys(LABELS);
       hadLive.current = true;
@@ -48,7 +49,7 @@ export function FixCenter({ productId, onChanged }) {
       if (reset.includes("images")) setMediaIds(d.live.media.map((m) => m.id));
       if (reset.includes("collection")) setCollectionIds(d.live.collections.filter((c) => c.manual).map((c) => c.id));
     },
-    [productId],
+    [productId, onTitle],
   );
 
   useEffect(() => {
@@ -84,7 +85,7 @@ export function FixCenter({ productId, onChanged }) {
     if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
     const note = body.pending ? " Shopify is still finishing it; it can take a minute to show." : "";
     setMessage({ tone: "success", text: `${LABELS[type]} updated in Shopify. The old version is saved; you can undo it below.${note}` });
-    onChanged();
+    onChanged?.();
   }
 
   async function undo(fixId, force = false) {
@@ -107,7 +108,7 @@ export function FixCenter({ productId, onChanged }) {
     if (!res.ok) return setMessage({ tone: "critical", text: body.error ?? `Failed (${res.status})` });
     const note = body.pending ? " Shopify is still finishing it; it can take a minute to show." : "";
     setMessage({ tone: "success", text: `Undone: the product is back to how it was before the fix.${note}` });
-    onChanged();
+    onChanged?.();
   }
 
   /** "Write with AI": fills the description and SEO drafts; nothing goes to Shopify until Apply. */
@@ -157,7 +158,7 @@ export function FixCenter({ productId, onChanged }) {
   async function photoAdded(text) {
     await load(["images"]);
     setMessage({ tone: "success", text });
-    onChanged();
+    onChanged?.();
   }
 
   function restoreText() {
@@ -196,13 +197,13 @@ export function FixCenter({ productId, onChanged }) {
 
         {data.live && (
           <>
-            <s-stack gap="small">
+            <s-stack gap="small" id="title">
               <s-text-field label="Title" value={title} ref={listen("input", (el) => setTitle(el.value))} />
               {hintFor("title")}
               <div>{button("title", { title }, title.trim() !== data.live.title && title.trim().length > 0 && title.trim().length <= 255)}</div>
             </s-stack>
 
-            <s-stack gap="small">
+            <s-stack gap="small" id="description">
               <s-text-area label="Description (HTML)" rows={8} value={description} ref={listen("input", (el) => setDescription(el.value))} />
               {hintFor("description")}
               {ai?.upgrade && <s-text tone="neutral">Writing the description with AI is included from the Starter plan.</s-text>}
@@ -231,7 +232,7 @@ export function FixCenter({ productId, onChanged }) {
               <div>{button("description", { descriptionHtml: description }, description !== data.live.descriptionHtml && descriptionFillIns.length === 0)}</div>
             </s-stack>
 
-            <s-stack gap="small">
+            <s-stack gap="small" id="seo">
               <s-text-field label="SEO title" details={`${seoTitle.length}/70`} value={seoTitle} ref={listen("input", (el) => setSeoTitle(el.value))} />
               <s-text-area
                 label="Meta description"
@@ -254,7 +255,7 @@ export function FixCenter({ productId, onChanged }) {
               </div>
             </s-stack>
 
-            <s-stack gap="small">
+            <s-stack gap="small" id="photos">
               <s-text>Image order (first image shows in collections and search)</s-text>
               {hintFor("images")}
               <ol className="m-0 flex list-none flex-wrap gap-3 p-0">
@@ -297,7 +298,7 @@ export function FixCenter({ productId, onChanged }) {
               />
             </s-stack>
 
-            <s-stack gap="small">
+            <s-stack gap="small" id="collections">
               <s-text>Collections</s-text>
               {hintFor("collection")}
               {smart.length > 0 && <s-text tone="neutral">Also in automated collections (by their rules): {smart.map((c) => c.title).join(", ")}.</s-text>}

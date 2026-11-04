@@ -59,6 +59,8 @@ export const GET = appRoute(async ({ shop, session, params }) => {
     photos: photos ? { configured: openaiConfigured(), ...photos } : { upgrade: FEATURE_PLAN.aiPhotos },
   };
   return Response.json({
+    // The page title (the product's name), also when the live product couldn't be read.
+    title: product.title,
     live,
     liveError,
     manualCollections: collections,
