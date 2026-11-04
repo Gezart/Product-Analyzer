@@ -142,7 +142,7 @@ The owner's design (Unstuck App Design canvas) is followed as closely as possibl
 | `design-collections` | Collection Optimizer as in the design | Matches the design | done |
 | `design-markdown-compare` | Markdown and Compare as in the design | Match the design | done |
 | `design-results` | Results page (rescue plans and how the verdict is made), new in the menu | Matches the design | done |
-| `design-account` | Monthly report, Plans, Settings and the first import as in the design; Polaris components removed | Match the design; no Polaris left | todo |
+| `design-account` | Monthly report, Plans, Settings and the first import as in the design; Polaris components removed | Match the design; no Polaris left | done |
 
 ## v2 (not in v1)
 

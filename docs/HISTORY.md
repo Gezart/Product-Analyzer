@@ -1,5 +1,13 @@
 # History
 
+## 2026-11-04 · design-account
+- Monthly report redone to the owner's design: the month as the title with a month picker; "Revenue recovered", "Stock value cleared", "Products rescued" and "Fixes applied" as big numbers with their formula under each; "Where the revenue came from" with the formula per row and a total; returns; the fixes applied with their effect
+- Plans redone to the design: the four plans as cards (current plan and the recommended next one marked, products analyzed, what each adds, the trial) and "Limits each month" (products, diagnoses, AI descriptions, AI photos); plan feature texts describe what each plan includes
+- Settings redone to the design with Save at the top and the bottom: statuses, prices and discounts (with what happens when a markdown ends), market price (the Google Merchant Center connection as one row with its state and Read now / Disconnect, and when to flag a price above the market), seasonal products, and what isn't analyzed (products and collections)
+- The first import as in the design's onboarding: "Analyzing your store" with the import steps (done, importing, next, or stopped with Try again) and "While you wait" links to the settings that help
+- Polaris is gone: every screen follows the design in Tailwind; the Polaris script, `upgrade-banner.jsx`, `polaris-events.js` and `status-style.js` are removed (App Bridge stays for sign-in, the product picker and Shopify's billing page)
+- Checked in a browser at 1280 px and 390 px
+
 ## 2026-11-04 · design-results
 - New Results page in the menu (after Inbox), as in the owner's design: "Every fix and collection order is measured. Here is what worked."; how many are measuring now and the last 90 days' Improved, No change and Worse; the rescue plans with the product, what changed and when, the window as a bar (day and visits so far, or when it finished and how long), conversion before → now (or units expected → sold without visit data), the verdict, and what's next while it still applies ("Undo the change" while a fix is in place, "Start markdown" when none started since, or "+€300 extra sales"); measuring plans show conversion so far against as many days before; "How the verdict is made", matching the app's rules
 - The product page's "Rescue plan · Not started" card leads here ("How it's measured")
