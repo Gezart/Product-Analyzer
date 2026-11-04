@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BTN, CARD, H2, Notice, PageHeader, Pill, THEAD, TROW } from "@/app/ui/kit";
-import { resultRow, resultSummary } from "@/lib/results";
+import { resultRow } from "@/lib/results";
 import { moneyFormatter } from "@/lib/status-info";
 
-const BAR = { info: "bg-accent", good: "bg-[#059669]", neutral: "bg-[#9CA3AF]", bad: "bg-[#DC2626]" };
+const BAR = { rising: "bg-accent", good: "bg-[#059669]", neutral: "bg-[#9CA3AF]", bad: "bg-[#DC2626]" };
 
 /** Results (the owner's design): every rescue plan, measuring or finished, and how its verdict is made. */
 export function ResultsView() {
@@ -28,7 +28,8 @@ export function ResultsView() {
   if (!data) return <>{header}<p className="m-0 text-muted">Loading the results…</p></>;
 
   const money = moneyFormatter(data.currency);
-  const summary = resultSummary(data.plans, data.today);
+  // Counted in full on the server (the list below shows the newest plans).
+  const summary = data.summary;
   const tiles = [
     { label: "Measuring now", value: summary.measuring, color: "text-accent" },
     { label: "Improved · 90 days", value: summary.improved, color: "text-[#047857]" },
@@ -86,7 +87,7 @@ export function ResultsView() {
                   const r = resultRow(p, { today: data.today, money });
                   return (
                     <tr key={p.id} className={TROW}>
-                      <td className="py-2.5 pr-3 pl-5">
+                      <td className="px-5 py-2.5">
                         <Link href={`/products/${p.productId}`} className="font-semibold text-ink no-underline hover:text-ink hover:underline">
                           {p.title}
                         </Link>
@@ -130,9 +131,12 @@ export function ResultsView() {
         <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-ink-2">
           <li>The window starts the day a change goes live and ends at 150 visits or 30 days, never before 14 days.</li>
           <li>The baseline is the same number of days before the change, adjusted for your whole store&apos;s traffic (between 0.5× and 2×), so seasons and ads don&apos;t skew it.</li>
-          <li>Conversion up 20% or more, with more sold: Improved. Down 20% or more: Worse. Otherwise: No change. Under 50 visits, the window is extended once.</li>
-          <li>Without visit data, units sold are compared against what was expected, in the same way.</li>
-          <li>After Worse, undo the change in one click. After No change, the app suggests a markdown.</li>
+          <li>Conversion up 20% or more, with more sold than expected: Improved. Down 20% or more: Worse. Otherwise: No change.</li>
+          <li>
+            Under 50 visits the window is extended once, to 60 days; still under 50, or less than 7 days of history before the change: Not enough data. Without visit data,
+            units sold are compared against what was expected, in the same way.
+          </li>
+          <li>After Worse, undo the change on the product&apos;s page in one click (a collection order on the Collections page). After No change, the app suggests a markdown.</li>
         </ol>
       </section>
     </>

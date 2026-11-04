@@ -1,9 +1,9 @@
 # History
 
 ## 2026-11-04 · design-results
-- New Results page in the menu (after Inbox), as in the owner's design: "Every fix and collection order is measured. Here is what worked."; how many are measuring now and the last 90 days' Improved, No change and Worse; the rescue plans with the product, what changed and when, the window as a bar (day and visits so far, or when it finished and how long), conversion before → now (or units expected → sold without visit data), the verdict, and what's next ("Undo the change", "Start markdown", or "+€300 recovered"); "How the verdict is made", matching the app's rules
+- New Results page in the menu (after Inbox), as in the owner's design: "Every fix and collection order is measured. Here is what worked."; how many are measuring now and the last 90 days' Improved, No change and Worse; the rescue plans with the product, what changed and when, the window as a bar (day and visits so far, or when it finished and how long), conversion before → now (or units expected → sold without visit data), the verdict, and what's next while it still applies ("Undo the change" while a fix is in place, "Start markdown" when none started since, or "+€300 extra sales"); measuring plans show conversion so far against as many days before; "How the verdict is made", matching the app's rules
 - The product page's "Rescue plan · Not started" card leads here ("How it's measured")
-- `/api/results` lists the shop's rescue plans (measuring, and those of the last 150 days) with their changes and visits so far; helpers are pure and tested (`src/lib/results.js`)
+- `/api/results` lists every measuring rescue plan and the newest 100 finished ones of the last 150 days, with their changes, visits and purchases so far and what can still be done, and counts measuring and the last 90 days' verdicts in full; helpers are pure and tested (`src/lib/results.js`)
 - Checked in a browser at 1280 px and 390 px, and the API against a local database
 
 ## 2026-11-04 · design-markdown-compare

@@ -1,50 +1,83 @@
 import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
+import { liveTotals } from "@/lib/results";
+import { WINDOW } from "@/lib/rescue";
 import { appRoute } from "@/lib/route";
 
 const DAY_MS = 86_400_000;
 const dayKey = (d) => d.toISOString().slice(0, 10);
+const FINISHED = ["improved", "no_change", "worse"];
 
-// The Results page: the shop's rescue plans (measuring, and those that started in the last 150 days)
-// with what changed in each, the visits so far of the ones measuring, and the store's day.
+// The Results page: every measuring rescue plan of the shop and the finished ones that started in the
+// last 150 days (newest 100), with what changed, the window so far, and what can still be done; plus
+// the counts (measuring now, verdicts of windows that ended in the last 90 days), counted in full.
 export const GET = appRoute(async ({ shop }) => {
   const today = localDateKey(new Date(), shop.timezone);
-  const since = new Date(Date.parse(`${today}T00:00:00Z`) - 150 * DAY_MS);
-  const plans = await db().rescuePlan.findMany({
-    where: { product: { shopId: shop.id }, OR: [{ verdict: null }, { startedAt: { gte: since } }] },
-    orderBy: { startedAt: "desc" },
-    take: 100,
-    include: { product: { select: { id: true, title: true, price: true } } },
-  });
+  const todayDate = new Date(`${today}T00:00:00Z`);
+  const ofShop = { product: { shopId: shop.id } };
+  const include = { product: { select: { id: true, title: true, price: true, status: true } } };
+  const [measuring, finished, measuringCount, verdictCounts] = await Promise.all([
+    db().rescuePlan.findMany({ where: { ...ofShop, verdict: null }, orderBy: { startedAt: "desc" }, include }),
+    db().rescuePlan.findMany({
+      where: { ...ofShop, verdict: { not: null }, startedAt: { gte: new Date(todayDate.getTime() - 150 * DAY_MS) } },
+      orderBy: { startedAt: "desc" },
+      take: 100,
+      include,
+    }),
+    db().rescuePlan.count({ where: { ...ofShop, verdict: null } }),
+    // A finished plan's `endsAt` is the day after its window's last day.
+    db().rescuePlan.groupBy({ by: ["verdict"], where: { ...ofShop, verdict: { in: FINISHED }, endsAt: { gt: new Date(todayDate.getTime() - 90 * DAY_MS) } }, _count: { _all: true } }),
+  ]);
+  const plans = [...measuring, ...finished].sort((a, b) => b.startedAt - a.startedAt);
+  const productIds = [...new Set(plans.map((p) => p.productId))];
   const fixIds = plans.flatMap((p) => p.fixIds);
-  const measuring = plans.filter((p) => !p.verdict);
-  const earliest = measuring.length ? new Date(Math.min(...measuring.map((p) => p.startedAt.getTime()))) : null;
-  const [fixes, metrics] = await Promise.all([
-    fixIds.length ? db().fix.findMany({ where: { id: { in: fixIds } }, select: { id: true, type: true } }) : [],
-    // Visits since each measuring plan started (from the earliest start; each plan sums its own days).
+  // Visits and purchases around each measuring plan: the days since it started, and as many before it.
+  const earliest = measuring.length
+    ? new Date(Math.min(...measuring.map((p) => p.startedAt.getTime())) - 2 * WINDOW.maxDays * DAY_MS)
+    : null;
+  const [fixes, metrics, markdowns] = await Promise.all([
+    fixIds.length ? db().fix.findMany({ where: { id: { in: fixIds } }, select: { id: true, type: true, status: true } }) : [],
     earliest
       ? db().productDailyMetric.findMany({
-          where: { productId: { in: [...new Set(measuring.map((p) => p.productId))] }, date: { gte: earliest }, viewSessions: { gt: 0 } },
-          select: { productId: true, date: true, viewSessions: true },
+          where: { productId: { in: [...new Set(measuring.map((p) => p.productId))] }, date: { gte: earliest, lt: todayDate } },
+          select: { productId: true, date: true, viewSessions: true, purchaseSessions: true },
         })
       : [],
+    productIds.length ? db().markdownPlan.findMany({ where: { productId: { in: productIds } }, select: { productId: true, startedAt: true } }) : [],
   ]);
-  const typeOf = new Map(fixes.map((f) => [f.id, f.type]));
+  const fixById = new Map(fixes.map((f) => [f.id, f]));
+  // Each product's newest plan: only it is shown (and can be acted on) on the product page.
+  const newest = new Map();
+  for (const p of plans) if (!newest.has(p.productId)) newest.set(p.productId, p.id);
+  const counts = Object.fromEntries(verdictCounts.map((r) => [r.verdict, r._count._all]));
+
   return Response.json({
     currency: shop.currency,
     today,
-    plans: plans.map((p) => ({
-      id: p.id,
-      productId: p.product.id,
-      title: p.product.title,
-      price: Number(p.product.price),
-      startedAt: dayKey(p.startedAt),
-      endsAt: p.endsAt ? dayKey(p.endsAt) : null,
-      verdict: p.verdict,
-      result: p.result,
-      extended: Boolean(p.baseline?.extended),
-      fixTypes: p.fixIds.map((id) => typeOf.get(id)).filter(Boolean),
-      viewsSoFar: p.verdict ? null : metrics.filter((m) => m.productId === p.productId && m.date >= p.startedAt && dayKey(m.date) < today).reduce((n, m) => n + m.viewSessions, 0),
-    })),
+    summary: { measuring: measuringCount, improved: counts.improved ?? 0, noChange: counts.no_change ?? 0, worse: counts.worse ?? 0 },
+    plans: plans.map((p) => {
+      const planFixes = p.fixIds.map((id) => fixById.get(id)).filter(Boolean);
+      const latest = newest.get(p.productId) === p.id;
+      const live = p.product.status !== "DELETED";
+      const rows = p.verdict
+        ? []
+        : metrics.filter((m) => m.productId === p.productId).map((m) => ({ date: dayKey(m.date), views: m.viewSessions, purchases: m.purchaseSessions }));
+      return {
+        id: p.id,
+        productId: p.product.id,
+        title: p.product.title,
+        price: Number(p.product.price),
+        startedAt: dayKey(p.startedAt),
+        endsAt: p.endsAt ? dayKey(p.endsAt) : null,
+        verdict: p.verdict,
+        result: p.result,
+        extended: Boolean(p.baseline?.extended),
+        fixTypes: planFixes.map((f) => f.type),
+        live: p.verdict ? null : liveTotals(rows, { start: dayKey(p.startedAt), baselineEnd: p.baseline?.baselineEnd ?? dayKey(p.startedAt), today }),
+        // What's next, only while it still applies: a fix still in place to undo, or a markdown not started since.
+        undoable: latest && live && planFixes.some((f) => f.status === "applied"),
+        markdownable: latest && p.product.status === "ACTIVE" && !markdowns.some((m) => m.productId === p.productId && m.startedAt && m.startedAt >= p.startedAt),
+      };
+    }),
   });
 });
