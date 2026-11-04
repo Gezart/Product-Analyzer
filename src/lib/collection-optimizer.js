@@ -222,6 +222,36 @@ export async function reorderHistory(shopId, gid) {
   return rows.map(({ before, after, ...r }) => ({ ...r, moved: movedCount(before, after) }));
 }
 
+/**
+ * Each collection's latest saved order (by collection GID): `{ status, error, moved, appliedAt, undoneAt,
+ * createdAt, interrupted }`. Only the newest row per collection is read, and its moved count (places that
+ * changed, as `movedCount`) is worked out in the database, so old saves and their product lists stay there.
+ * `interrupted`: still saving or undoing after the time a running change gets (it crashed).
+ */
+export async function latestSaves(shopId) {
+  const rows = await db().$queryRaw`
+    SELECT l."collection_gid" AS "collectionGid", l."status", l."error", l."applied_at" AS "appliedAt",
+      l."undone_at" AS "undoneAt", l."created_at" AS "createdAt", l."claimed_at" AS "claimedAt",
+      (SELECT count(*)::int FROM unnest(l."before", l."after") AS t(b, a) WHERE a IS NOT NULL AND b IS DISTINCT FROM a) AS "moved"
+    FROM (
+      SELECT DISTINCT ON ("collection_gid") * FROM "collection_reorders"
+      WHERE "shop_id" = ${shopId}
+      ORDER BY "collection_gid", "created_at" DESC
+    ) l`;
+  const stale = Date.now() - IN_PROGRESS_MS;
+  return new Map(
+    rows.map(({ collectionGid, claimedAt, error, ...r }) => [
+      collectionGid,
+      {
+        ...r,
+        // "Still finishing in Shopify" is a normal save, not a problem.
+        error: error === STILL_FINISHING ? null : error,
+        interrupted: (r.status === "applying" || r.status === "undoing") && new Date(claimedAt).getTime() < stale,
+      },
+    ]),
+  );
+}
+
 /** Collections with saved orders (for a plan without the optimizer: their saves can still be undone). */
 export async function savedCollections(shopId) {
   const rows = await db().collectionReorder.findMany({
