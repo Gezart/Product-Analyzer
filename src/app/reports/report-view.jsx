@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { listen } from "@/app/polaris-events";
-import { CARD, EYEBROW } from "@/app/status-style";
-import { UpgradeBanner } from "@/app/upgrade-banner";
+import { CARD, H2, Notice, PageHeader, Pill, THEAD, TROW, UpgradeNotice } from "@/app/ui/kit";
 import { returnPct } from "@/lib/diagnosis";
 import { monthRange } from "@/lib/report";
 import { moneyFormatter } from "@/lib/status-info";
@@ -13,6 +11,7 @@ import { moneyFormatter } from "@/lib/status-info";
 const monthName = (period) => new Date(`${period}-01T00:00:00Z`).toLocaleString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
 const FIX_LABEL = { title: "Title", description: "Description", seo: "SEO", images: "Image order", collection: "Collections", photo: "Photo added", position: "Collection position" };
 const EFFECT = { improved: "Improved", no_change: "No change", worse: "Worse", not_enough_data: "Not enough data", cancelled: "Undone", measuring: "Measuring" };
+const EFFECT_TONES = { improved: "good", worse: "bad", measuring: "rising" };
 
 /** A month's results, with the formula next to every number. */
 export function ReportView() {
@@ -57,206 +56,259 @@ export function ReportView() {
   const money = moneyFormatter(report?.currency ?? months?.currency);
   const money2 = moneyFormatter(report?.currency ?? months?.currency, 2);
 
-  return (
-    <s-page heading="Monthly report">
-      <s-stack gap="base">
-        <div>
-          <Link href="/" className="text-sm text-zinc-600 hover:underline">
-            ← Catalog health
-          </Link>
-        </div>
-        {months && (
-          <s-stack direction="inline" gap="small">
-            {months.months.map((m) => (
-              <s-button key={m} variant={m === period ? "secondary" : "tertiary"} ref={listen("click", () => router.replace(`/reports?period=${m}`))}>
-                {monthName(m)}
-                {m === months.current ? " (so far)" : ""}
-              </s-button>
-            ))}
-          </s-stack>
-        )}
-        {upgrade && <UpgradeBanner>{upgrade}</UpgradeBanner>}
-        {error && <s-banner tone="critical">Could not load the report ({error}).</s-banner>}
-        {months && months.months.length === 0 && <s-banner tone="info">Your first report appears tomorrow, after the first complete day.</s-banner>}
-        {!report && !error && !upgrade && months?.months.length !== 0 && <s-spinner accessibilityLabel="Loading report" />}
-
-        {report && (
+  const header = (
+    <PageHeader
+      title={period ? `${monthName(period)}${months?.current === period ? " (so far)" : ""}` : "Monthly report"}
+      subtitle="What Unstuck did for your store this month, with the formula under every number."
+      actions={
+        months?.months.length > 0 && (
           <>
-            {!report.complete && (
-              <s-banner tone="info">
-                {monthName(report.period)} so far: complete days up to {report.to}. Rescue plans count once their window ends.
-              </s-banner>
-            )}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Headline
-                label="Revenue recovered"
-                value={money.format(report.revenueRecovered)}
-                formula="Per product: actual revenue − baseline daily revenue × days, never below 0. Periods: the measurement window of each rescue plan that improved (counted in the month it ends; baseline = its window before the fix) and each markdown's days this month (baseline = the 30 days before it started)."
-              />
-              <Headline
-                label="Stock value cleared"
-                value={`${money.format(report.stockValueCleared)}${report.stockValueIsEstimate ? " (partly estimated)" : ""}`}
-                formula="Units sold in those same periods × unit cost (50% of the sale price where no cost is set in Shopify)."
-              />
-              <Headline label="Products rescued" value={String(report.productsRescued)} formula="Products whose rescue plan's measurement window ended this month with the verdict “improved”." />
-              <Headline
-                label="Fixes applied"
-                value={String(report.fixes.length)}
-                formula="Fixes applied to Shopify this month; the effect is the verdict of the rescue plan they belong to."
-              />
-            </div>
+            <label htmlFor="month" className="sr-only">
+              Month
+            </label>
+            <select
+              id="month"
+              value={period ?? ""}
+              onChange={(e) => router.replace(`/reports?period=${e.target.value}`)}
+              className="rounded-lg border border-line-strong bg-white px-2.5 py-[9px] font-[inherit]"
+            >
+              {(months.months.includes(period) ? months.months : [...months.months, period]).map((m) => (
+                <option key={m} value={m}>
+                  {monthName(m)}
+                  {m === months.current ? " (so far)" : ""}
+                </option>
+              ))}
+            </select>
+          </>
+        )
+      }
+    />
+  );
+  const total = (key) => (report?.rows ?? []).reduce((n, r) => n + (r[key] ?? 0), 0);
 
-            <s-section heading="Where the revenue came from">
-              {report.rows.length === 0 ? (
-                <s-paragraph>No rescue plan improved and no markdown ran in this month.</s-paragraph>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-left text-sm">
-                    <thead className="text-zinc-500">
-                      <tr>
-                        <th className="py-2 pr-4 font-medium">Product</th>
-                        <th className="py-2 pr-4 font-medium">Period</th>
-                        <th className="py-2 pr-4 text-right font-medium">Revenue recovered</th>
-                        <th className="py-2 pr-4 font-medium">= actual − baseline/day × days</th>
-                        <th className="py-2 pr-4 text-right font-medium">Stock value cleared</th>
-                        <th className="py-2 font-medium">= units × unit cost</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.rows.map((r) => (
-                        <tr key={`${r.productId}-${r.kind}-${r.from}`} className="border-t border-zinc-200 align-top">
-                          <td className="py-2 pr-4">
-                            <Link href={`/products/${r.productId}`} className="hover:underline">
-                              {r.title}
-                            </Link>
-                            <div className="text-xs text-zinc-500">{r.kind === "rescue" ? "Rescue plan (improved)" : "Markdown"}</div>
-                          </td>
-                          <td className="py-2 pr-4 whitespace-nowrap">
-                            {r.from} → {r.to}
-                            {r.skippedDays > 0 && <div className="text-xs text-zinc-500">{r.skippedDays} days already counted elsewhere</div>}
-                            <div className="text-xs text-zinc-500">
-                              {r.baselineFrom ? `Baseline ${r.baselineFrom} → ${r.baselineTo}` : "No baseline history"}
-                            </div>
-                          </td>
-                          <td className="py-2 pr-4 text-right font-semibold">{money2.format(r.recovered)}</td>
-                          <td className="py-2 pr-4 text-zinc-600">
-                            {r.expected == null ? (
-                              "No baseline known, so nothing counts as recovered"
-                            ) : (
-                              <>
-                                {money2.format(r.actual)} − {money2.format(r.baselineDaily)} × {r.days} days ({money2.format(r.expected)}) ={" "}
-                                {money2.format(r.actual - r.expected)}
-                                {r.actual < r.expected ? " → 0" : ""}
-                              </>
-                            )}
-                          </td>
-                          <td className="py-2 pr-4 text-right">{money2.format(r.stockValueCleared)}</td>
-                          <td className="py-2 text-zinc-600">
+  return (
+    <>
+      {header}
+      {upgrade && <UpgradeNotice>{upgrade}</UpgradeNotice>}
+      {error && <Notice tone="bad">Could not load the report ({error}).</Notice>}
+      {months && months.months.length === 0 && <Notice>Your first report appears tomorrow, after the first complete day.</Notice>}
+      {!report && !error && !upgrade && months?.months.length !== 0 && <p className="m-0 text-muted">Loading the report…</p>}
+
+      {report && (
+        <>
+          {!report.complete && (
+            <Notice tone="info" compact>
+              {monthName(report.period)} so far: complete days up to {report.to}. Rescue plans count once their window ends.
+            </Notice>
+          )}
+          <dl className="m-0 grid gap-4 sm:grid-cols-2">
+            <Headline
+              label="Revenue recovered"
+              value={money.format(report.revenueRecovered)}
+              color="text-[#047857]"
+              formula="Per product: actual revenue − baseline daily revenue × days, never below 0. Periods: the measurement window of each rescue plan that improved (counted in the month it ends; baseline = its window before the fix) and each markdown's days this month (baseline = the 30 days before it started)."
+            />
+            <Headline
+              label="Stock value cleared"
+              value={
+                <>
+                  {money.format(report.stockValueCleared)}
+                  {report.stockValueIsEstimate && <span className="ml-2 text-[13px] font-semibold tracking-normal text-muted">partly estimated</span>}
+                </>
+              }
+              formula="Units sold in those same periods × unit cost (50% of the sale price where no cost is set in Shopify)."
+            />
+            <Headline label="Products rescued" value={String(report.productsRescued)} formula="Products whose rescue plan's measurement window ended this month with the verdict “improved”." />
+            <Headline
+              label="Fixes applied"
+              value={String(report.fixes.length)}
+              formula={`Fixes applied to Shopify this month${report.fixes.some((f) => f.status === "undone") ? `, ${report.fixes.filter((f) => f.status === "undone").length} undone since` : ", none undone"}; the effect is the verdict of the rescue plan they belong to.`}
+            />
+          </dl>
+
+          <section aria-labelledby="rows" className={`${CARD} overflow-hidden`}>
+            <h2 id="rows" className={`${H2} px-5 pt-4 pb-2.5`}>
+              Where the revenue came from
+            </h2>
+            {report.rows.length === 0 ? (
+              <p className="m-0 px-5 pb-4 text-[13px] text-muted">No rescue plan improved and no markdown ran in this month.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] border-collapse text-[13px]">
+                  <thead>
+                    <tr className={`${THEAD} text-left`}>
+                      <th scope="col" className="py-2 pr-3 pl-5 font-semibold">
+                        Product
+                      </th>
+                      <th scope="col" className="px-3 py-2 font-semibold">
+                        Period
+                      </th>
+                      <th scope="col" className="px-3 py-2 font-semibold">
+                        = actual − baseline/day × days
+                      </th>
+                      <th scope="col" className="px-3 py-2 text-right font-semibold">
+                        Recovered
+                      </th>
+                      <th scope="col" className="py-2 pr-5 pl-3 text-right font-semibold">
+                        Stock cleared
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.rows.map((r) => (
+                      <tr key={`${r.productId}-${r.kind}-${r.from}`} className={`${TROW} align-top`}>
+                        <td className="py-2.5 pr-3 pl-5">
+                          <Link href={`/products/${r.productId}`} className="font-semibold text-ink no-underline hover:text-ink hover:underline">
+                            {r.title}
+                          </Link>
+                          <span className="block text-xs text-muted">{r.kind === "rescue" ? "Rescue plan (improved)" : "Markdown"}</span>
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          {r.from} → {r.to}
+                          {r.skippedDays > 0 && <span className="block text-xs text-muted">{r.skippedDays} days already counted elsewhere</span>}
+                          <span className="block text-xs text-muted">{r.baselineFrom ? `Baseline ${r.baselineFrom} → ${r.baselineTo}` : "No baseline history"}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-ink-2">
+                          {r.expected == null ? (
+                            "No baseline known, so nothing counts as recovered"
+                          ) : (
+                            <>
+                              {money2.format(r.actual)} − {money2.format(r.baselineDaily)} × {r.days} days ({money2.format(r.expected)}) = {money2.format(r.actual - r.expected)}
+                              {r.actual < r.expected ? " → 0" : ""}
+                            </>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-bold tabular-nums">{money2.format(r.recovered)}</td>
+                        <td className="py-2.5 pr-5 pl-3 text-right tabular-nums">
+                          {money2.format(r.stockValueCleared)}
+                          <span className="block text-xs text-muted">
                             {r.units} × {money2.format(r.unitCost)}
                             {r.costIsEstimate ? " (est.)" : ""}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </s-section>
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-ink">
+                      <th scope="row" colSpan={3} className="py-2.5 pr-3 pl-5 text-left">
+                        Total
+                      </th>
+                      <td className="px-3 py-2.5 text-right font-bold tabular-nums">{money2.format(total("recovered"))}</td>
+                      <td className="py-2.5 pr-5 pl-3 text-right font-bold tabular-nums">{money2.format(total("stockValueCleared"))}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="m-0 border-t border-hair px-5 pt-2.5 pb-3.5 text-xs text-muted">Each rescue plan counts in full in the month it ends.</p>
+          </section>
 
-            {report.returns && <ReturnsSection returns={report.returns} money={money2} />}
+          {report.returns && <ReturnsSection returns={report.returns} money={money2} />}
 
-            <s-section heading="Fixes applied">
-              {report.fixes.length === 0 ? (
-                <s-paragraph>No fixes were applied in this month.</s-paragraph>
-              ) : (
-                <ul className="m-0 list-none space-y-1 p-0 text-sm">
-                  {report.fixes.map((f) => (
-                    <li key={f.id} className="flex flex-wrap gap-2">
-                      <span className="text-zinc-500">{f.appliedOn}</span>
-                      <Link href={`/products/${f.productId}`} className="hover:underline">
-                        {f.title}
-                      </Link>
-                      <span>{FIX_LABEL[f.type] ?? f.type}</span>
-                      {f.status === "undone" && <s-badge>undone</s-badge>}
-                      <span className="text-zinc-600">Effect: {f.status === "undone" ? "Undone" : (EFFECT[f.effect] ?? "not measured")}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </s-section>
-          </>
-        )}
-      </s-stack>
-    </s-page>
+          <section aria-labelledby="fixes" className={`${CARD} overflow-hidden`}>
+            <h2 id="fixes" className={`${H2} px-5 pt-4 pb-2.5`}>
+              Fixes applied
+            </h2>
+            {report.fixes.length === 0 ? (
+              <p className="m-0 px-5 pb-4 text-[13px] text-muted">No fixes were applied in this month.</p>
+            ) : (
+              <ul className="m-0 list-none p-0 text-[13px]">
+                {report.fixes.map((f) => (
+                  <li key={f.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-hair px-5 py-2.5">
+                    <span className="w-24 flex-none text-muted tabular-nums">{f.appliedOn}</span>
+                    <Link href={`/products/${f.productId}`} className="font-semibold text-ink no-underline hover:text-ink hover:underline">
+                      {f.title}
+                    </Link>
+                    <span className="text-ink-2">{FIX_LABEL[f.type] ?? f.type}</span>
+                    <span className="ml-auto">
+                      <Pill tone={f.status === "undone" ? "neutral" : (EFFECT_TONES[f.effect] ?? "neutral")}>
+                        {f.status === "undone" ? "Undone" : (EFFECT[f.effect] ?? "Not measured")}
+                      </Pill>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
+    </>
   );
 }
 
 /** What returns cost this month: refunds for orders placed in it, the top reasons and products. */
 function ReturnsSection({ returns, money }) {
   return (
-    <s-section heading="Returns">
+    <section aria-labelledby="returns" className={`${CARD} overflow-hidden`}>
+      <h2 id="returns" className={`${H2} px-5 pt-4 pb-2.5`}>
+        Returns
+      </h2>
       {returns.returned === 0 ? (
-        <s-stack gap="small">
-          <s-paragraph>Nothing from this month&apos;s orders was refunded as a return.</s-paragraph>
-          {returns.reasons.length > 0 && (
-            <s-text tone="neutral">Return requests so far: {returns.reasons.map((r) => `${r.name} (${r.count})`).join(", ")}</s-text>
-          )}
-        </s-stack>
+        <div className="flex flex-col gap-1 px-5 pb-4 text-[13px]">
+          <p className="m-0 text-ink-2">Nothing from this month&apos;s orders was refunded as a return.</p>
+          {returns.reasons.length > 0 && <p className="m-0 text-muted">Return requests so far: {returns.reasons.map((r) => `${r.name} (${r.count})`).join(", ")}</p>}
+        </div>
       ) : (
-        <s-stack gap="base">
-          <s-paragraph>
-            <strong>{money.format(returns.refunded)}</strong> refunded for returns · {returns.returned} of {returns.sold} units came back ({returnPct(returns.rate ?? 0)}).
-          </s-paragraph>
-          {returns.reasons.length > 0 && (
-            <s-text tone="neutral">Most common reasons: {returns.reasons.map((r) => `${r.name} (${r.count})`).join(", ")}</s-text>
-          )}
+        <>
+          <div className="flex flex-col gap-1 px-5 pb-3 text-[13px]">
+            <p className="m-0 text-ink-2">
+              <strong>{money.format(returns.refunded)}</strong> refunded for returns · {returns.returned} of {returns.sold} units came back ({returnPct(returns.rate ?? 0)}).
+            </p>
+            {returns.reasons.length > 0 && <p className="m-0 text-muted">Most common reasons: {returns.reasons.map((r) => `${r.name} (${r.count})`).join(", ")}</p>}
+          </div>
           {returns.products.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="text-zinc-500">
-                  <tr>
-                    <th className="py-2 pr-4 font-medium">Product</th>
-                    <th className="py-2 pr-4 text-right font-medium">Came back</th>
-                    <th className="py-2 text-right font-medium">Refunded</th>
+              <table className="w-full min-w-[480px] border-collapse text-[13px]">
+                <thead>
+                  <tr className={`${THEAD} text-left`}>
+                    <th scope="col" className="py-2 pr-3 pl-5 font-semibold">
+                      Product
+                    </th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">
+                      Came back
+                    </th>
+                    <th scope="col" className="py-2 pr-5 pl-3 text-right font-semibold">
+                      Refunded
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {returns.products.map((p) => (
-                    <tr key={p.productGid} className="border-t border-zinc-200">
-                      <td className="py-2 pr-4">
+                    <tr key={p.productGid} className={TROW}>
+                      <td className="py-2.5 pr-3 pl-5 font-semibold">
                         {p.productId ? (
-                          <Link href={`/products/${p.productId}`} className="hover:underline">
+                          <Link href={`/products/${p.productId}`} className="text-ink no-underline hover:text-ink hover:underline">
                             {p.title}
                           </Link>
                         ) : (
                           p.title
                         )}
                       </td>
-                      <td className="py-2 pr-4 text-right">
+                      <td className="px-3 py-2.5 text-right tabular-nums">
                         {p.returned} of {p.sold} ({returnPct(p.rate ?? 0)})
                       </td>
-                      <td className="py-2 text-right">{money.format(p.refunded)}</td>
+                      <td className="py-2.5 pr-5 pl-3 text-right tabular-nums">{money.format(p.refunded)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-          <s-text tone="neutral">
-            Orders placed this month whose items were refunded as returns (cancellations aren&apos;t counted); amounts are the items&apos; prices, without tax or shipping. Reasons come from Shopify returns, including requests not refunded yet.
-          </s-text>
-        </s-stack>
+        </>
       )}
-    </s-section>
+      <p className="m-0 border-t border-hair px-5 pt-2.5 pb-3.5 text-xs text-muted">
+        Orders placed this month whose items were refunded as returns (cancellations aren&apos;t counted); amounts are the items&apos; prices, without tax or shipping. Reasons
+        come from Shopify returns, including requests not refunded yet.
+      </p>
+    </section>
   );
 }
 
-function Headline({ label, value, formula }) {
+function Headline({ label, value, formula, color = "text-ink" }) {
   return (
-    <div className={`${CARD} flex flex-col p-5`}>
-      <div className={EYEBROW}>{label}</div>
-      <div className="mt-2 text-4xl font-bold tracking-tight text-zinc-900 tabular-nums">{value}</div>
-      <div className="mt-3 border-t border-zinc-100 pt-3 text-xs leading-relaxed text-zinc-500">{formula}</div>
+    <div className={`${CARD} flex flex-col gap-1 px-5 py-[18px]`}>
+      <dt className="text-[13px] font-semibold text-muted">{label}</dt>
+      <dd className={`m-0 text-[34px] font-bold tracking-[-0.01em] tabular-nums ${color}`}>{value}</dd>
+      <dd className="m-0 border-t border-hair pt-2 text-xs text-muted">{formula}</dd>
     </div>
   );
 }

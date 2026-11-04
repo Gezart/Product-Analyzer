@@ -94,7 +94,7 @@ export function Pill({ tone = "neutral", children, className = "" }) {
 }
 
 /** A message card: `tone` "bad" (an error), "warn", "good", "info" or plain; `compact` for one inside a card. */
-export function Notice({ tone, compact = false, children, className = "" }) {
+export function Notice({ tone, compact = false, role, children, className = "" }) {
   const tones = {
     bad: "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C]",
     warn: "border-[#FDE68A] bg-[#FFFBEB] text-[#92400E]",
@@ -102,7 +102,11 @@ export function Notice({ tone, compact = false, children, className = "" }) {
     info: "border-accent-line bg-accent-soft text-ink",
   };
   const size = compact ? "px-4 py-3 text-[13px]" : "px-5 py-4";
-  return <div className={`m-0 rounded-xl border ${size} ${tones[tone] ?? "border-line bg-white text-ink-2"} ${className}`}>{children}</div>;
+  return (
+    <div role={role} className={`m-0 rounded-xl border ${size} ${tones[tone] ?? "border-line bg-white text-ink-2"} ${className}`}>
+      {children}
+    </div>
+  );
 }
 
 /** "Included from the X plan" with a link to the plans page (the design's style). */

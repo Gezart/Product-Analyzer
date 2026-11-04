@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiError } from "@/app/api-error";
+import { CARD, H2, Notice, PageHeader } from "@/app/ui/kit";
 
 /** What ShopifyQL returns for product views on this store (copy the result to the developer). */
 export function ShopifyqlCheck() {
@@ -16,28 +16,25 @@ export function ShopifyqlCheck() {
   const best = result?.results.find((r) => r.ok && r.viewRows > 0);
 
   return (
-    <s-page heading="ShopifyQL check">
-      <s-stack gap="base">
-        <div>
-          <Link href="/settings" className="text-sm text-zinc-600 hover:underline">
-            ← Settings
-          </Link>
-        </div>
-        {error && <s-banner tone="critical">{error}</s-banner>}
-        {!result && !error && <s-spinner accessibilityLabel="Running ShopifyQL queries" />}
-        {result && (
-          <>
-            <s-banner tone={best ? "success" : "warning"}>
-              {best
-                ? `Views work: query “${best.id}” returned ${best.viewRows} daily rows for ${best.products} products (${best.from} → ${best.to}).`
-                : "No query returned views yet. Copy the result below and send it to the developer."}
-            </s-banner>
-            <s-section heading="Result (copy all of it)">
-              <pre className="m-0 max-h-[70vh] overflow-auto whitespace-pre-wrap break-all rounded bg-zinc-50 p-3 text-xs">{JSON.stringify(result, null, 2)}</pre>
-            </s-section>
-          </>
-        )}
-      </s-stack>
-    </s-page>
+    <>
+      <PageHeader back={{ href: "/settings", label: "Settings" }} title="ShopifyQL check" subtitle="What ShopifyQL returns for product views on this store." />
+      {error && <Notice tone="bad">{error}</Notice>}
+      {!result && !error && <p className="m-0 text-muted">Running ShopifyQL queries…</p>}
+      {result && (
+        <>
+          <Notice tone={best ? "good" : "warn"}>
+            {best
+              ? `Views work: query “${best.id}” returned ${best.viewRows} daily rows for ${best.products} products (${best.from} → ${best.to}).`
+              : "No query returned views yet. Copy the result below and send it to the developer."}
+          </Notice>
+          <section aria-labelledby="result" className={`${CARD} flex flex-col gap-2 px-5 py-[18px]`}>
+            <h2 id="result" className={H2}>
+              Result (copy all of it)
+            </h2>
+            <pre className="m-0 max-h-[70vh] overflow-auto rounded-lg bg-head p-3 text-xs break-all whitespace-pre-wrap">{JSON.stringify(result, null, 2)}</pre>
+          </section>
+        </>
+      )}
+    </>
   );
 }

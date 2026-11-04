@@ -3,24 +3,25 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { apiError } from "@/app/api-error";
-import { listen } from "@/app/polaris-events";
+import { BTN, CARD, H2, Notice, PageHeader } from "@/app/ui/kit";
+import { useHashScroll } from "@/app/ui/use-hash-scroll";
 
 // Shares are stored 0–1 and shown as percentages.
 const STATUS_FIELDS = [
-  { field: "thresholds.deadDays", label: "Dead stock after (days)", details: "Days without a sale while in stock." },
+  { field: "thresholds.deadDays", label: "Dead stock after", details: "Days without a sale while in stock.", suffix: "days" },
   { field: "thresholds.slowSellThrough", label: "Slow mover below", details: "Sell-through in the last 60 days.", percent: true },
-  { field: "thresholds.stockoutCoverDays", label: "Stock-out risk below (days)", details: "Days of stock left at the current sales rate." },
+  { field: "thresholds.stockoutCoverDays", label: "Stock-out risk below", details: "Days of stock left at the current sales rate.", suffix: "days" },
   { field: "thresholds.minViews", label: "Minimum views", details: "Views in 30 days before conversion is judged." },
   { field: "thresholds.pageProblemViewsTop", label: "Page problem: most viewed", details: "Top share of products by views.", percent: true },
   { field: "thresholds.pageProblemConversionRatio", label: "Page problem: conversion below", details: "Share of the store's median conversion.", percent: true },
   { field: "thresholds.hiddenGemViewsBottom", label: "Hidden gem: least viewed", details: "Bottom share of products by views.", percent: true },
 ];
 const DIAGNOSIS_FIELDS = [
-  { field: "thresholds.marketAbove", label: "Above the market price by", details: "How far above the market price before the diagnosis says so. Above 25% is high (or above this, if it's higher).", percent: true },
+  { field: "thresholds.marketAbove", label: "Flag when above market by", details: "High importance from 25% (or from this, if it's higher).", percent: true },
 ];
 const DISCOUNT_FIELDS = [
-  { field: "marginFloorPct", label: "Minimum margin (%)", details: "A markdown never prices below cost plus this margin." },
-  { field: "maxDiscountPct", label: "Maximum discount (%)", details: "The deepest markdown allowed." },
+  { field: "marginFloorPct", label: "Minimum margin", details: "Markdowns never go below cost + this margin.", suffix: "%" },
+  { field: "maxDiscountPct", label: "Maximum discount", details: "The deepest a markdown can go.", suffix: "%" },
 ];
 const ALL_FIELDS = [...STATUS_FIELDS, ...DIAGNOSIS_FIELDS, ...DISCOUNT_FIELDS];
 const LIST_LABELS = {
@@ -31,13 +32,16 @@ const LIST_LABELS = {
 };
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const selectClass = "rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm";
+const selectClass = "rounded-lg border border-line-strong bg-white px-2.5 py-2 font-[inherit] text-[13px]";
 
-/** A month picker (1–12). */
-function MonthSelect({ label, value, onChange }) {
+/** A month picker (1–12); `of` names what it's for, for screen readers ("From" · "Winter"). */
+function MonthSelect({ label, value, onChange, of }) {
   return (
-    <label className="flex flex-col gap-1 text-sm">
-      {label}
+    <label className="flex flex-col gap-1 text-[13px] font-semibold">
+      <span>
+        {label}
+        {of && <span className="sr-only"> ({of})</span>}
+      </span>
       <select className={selectClass} value={value} onChange={(e) => onChange(Number(e.target.value))}>
         {MONTHS.map((m, i) => (
           <option key={m} value={i + 1}>
@@ -67,7 +71,23 @@ function errorMessage(e) {
   return `${f.label}: enter ${e.integer ? "a whole number" : "a number"}${range}`;
 }
 
-export function SettingsForm() {
+/** A settings card (the design): a heading, then its fields. */
+function Section({ id, title, children }) {
+  return (
+    <section aria-labelledby={id} className={`${CARD} flex flex-col gap-3 px-5 py-[18px]`}>
+      <h2 id={id} className={H2}>
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Merchant rules (the owner's design): statuses, prices and discounts, market price (with Google
+ * Merchant Center, `googleMerchant`), seasonal products and what isn't analyzed.
+ */
+export function SettingsForm({ googleMerchant }) {
   const [settings, setSettings] = useState(null);
   const [drafts, setDrafts] = useState({});
   const [collections, setCollections] = useState(null);
@@ -77,6 +97,8 @@ export function SettingsForm() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const banner = useRef(null);
+  // A link to a section (e.g. #season from the first import) waits for the form to load.
+  useHashScroll(Boolean(settings));
   // Save is at the bottom of a long form: bring the result into view.
   useEffect(() => {
     if (message) banner.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -90,7 +112,7 @@ export function SettingsForm() {
   useEffect(() => {
     fetch("/api/settings")
       .then(async (res) => (res.ok ? load(await res.json()) : Promise.reject(await apiError(res))))
-      .catch((e) => setMessage({ tone: "critical", text: [`Could not load settings: ${e.message}`] }));
+      .catch((e) => setMessage({ tone: "bad", text: [`Could not load settings: ${e.message}`] }));
     fetch("/api/collections")
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
@@ -101,8 +123,16 @@ export function SettingsForm() {
       .catch(() => setCollectionsError(true));
   }, []);
 
+  const header = (actions) => <PageHeader title="Settings" subtitle="Changes re-score your products within a minute." actions={actions} />;
   if (!settings) {
-    return message ? <s-banner tone="critical">{message.text[0]}</s-banner> : <s-spinner accessibilityLabel="Loading settings" />;
+    return (
+      <>
+        {header()}
+        {message ? <Notice tone="bad" role="alert">{message.text[0]}</Notice> : <p className="m-0 text-muted">Loading settings…</p>}
+        {/* Google's connection loads on its own, so it can be disconnected even when settings can't load. */}
+        {message && <Section id="market" title="Market price">{googleMerchant}</Section>}
+      </>
+    );
   }
 
   function buildPayload(s) {
@@ -132,7 +162,7 @@ export function SettingsForm() {
   async function save() {
     if (!settings) return;
     const { payload, errors } = buildPayload(settings);
-    if (errors.length) return setMessage({ tone: "critical", text: errors });
+    if (errors.length) return setMessage({ tone: "bad", text: errors });
     setSaving(true);
     setMessage(null);
     try {
@@ -143,13 +173,13 @@ export function SettingsForm() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage({ tone: "critical", text: (body.errors ?? [{ field: "body" }]).map(errorMessage) });
+        setMessage({ tone: "bad", text: (body.errors ?? [{ field: "body" }]).map(errorMessage) });
         return;
       }
       load(body);
-      setMessage({ tone: "success", text: ["Saved. Your catalog is being re-scored."] });
+      setMessage({ tone: "good", text: ["Saved. Your catalog is being re-scored."] });
     } catch (e) {
-      setMessage({ tone: "critical", text: [e.message] });
+      setMessage({ tone: "bad", text: [e.message] });
     } finally {
       setSaving(false);
     }
@@ -197,141 +227,167 @@ export function SettingsForm() {
   }
 
   const numberField = (f) => (
-    <s-number-field
-      key={f.field}
-      label={f.label}
-      details={f.details}
-      suffix={f.percent ? "%" : undefined}
-      value={drafts[f.field]}
-      ref={listen("input", (el) => setDrafts((d) => ({ ...d, [f.field]: el.value })))}
-    />
+    <div key={f.field} className="flex flex-col gap-1">
+      <label htmlFor={f.field} className="text-[13px] font-semibold">
+        {f.label}
+      </label>
+      <span className="flex max-w-[180px] items-center gap-1.5">
+        <input
+          id={f.field}
+          aria-describedby={`${f.field}-hint`}
+          type="text"
+          inputMode="decimal"
+          value={drafts[f.field] ?? ""}
+          onChange={(e) => setDrafts((d) => ({ ...d, [f.field]: e.target.value }))}
+          className="w-full min-w-0 rounded-lg border border-line-strong px-2.5 py-2 font-[inherit]"
+        />
+        {(f.percent || f.suffix) && <span className="flex-none text-[13px] text-muted">{f.percent ? "%" : f.suffix}</span>}
+      </span>
+      <span id={`${f.field}-hint`} className="text-xs text-muted">
+        {f.details}
+      </span>
+    </div>
   );
+  const saveButton = (
+    <button type="button" disabled={saving} onClick={save} className={`${BTN.primary} cursor-pointer`}>
+      {saving ? "Saving…" : "Save"}
+    </button>
+  );
+  const REMOVE = "cursor-pointer border-0 bg-transparent p-0 font-[inherit] text-[13px] font-semibold text-muted hover:text-ink";
 
   return (
-    <s-stack gap="base">
+    <>
+      {header(saveButton)}
       {message && (
         <div ref={banner}>
-          <s-banner tone={message.tone}>
+          <Notice tone={message.tone} compact role={message.tone === "bad" ? "alert" : "status"}>
             {message.text.map((t) => (
               <div key={t}>{t}</div>
             ))}
-          </s-banner>
+          </Notice>
         </div>
       )}
 
-      <s-section heading="Product statuses">
-        <div className="grid gap-4 sm:grid-cols-2">{STATUS_FIELDS.map(numberField)}</div>
-      </s-section>
+      <Section id="statuses" title="Statuses">
+        <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2">{STATUS_FIELDS.map(numberField)}</div>
+      </Section>
 
-      <s-section heading="Diagnosis">
-        <div className="grid gap-4 sm:grid-cols-2">{DIAGNOSIS_FIELDS.map(numberField)}</div>
-      </s-section>
-
-      <s-section heading="Seasonal products">
-        <s-stack gap="base">
-          <s-text tone="neutral">
-            Products that sell in a season aren&apos;t called dead stock out of season. In Shopify, tag a product with its months, like{" "}
-            <code>season:nov-feb</code> or <code>season:jun-aug</code> (or <code>season:winter</code>: Dec–Feb, northern hemisphere). Or mark whole
-            collections here; a product&apos;s own tag wins.
-          </s-text>
-          {settings.seasonalCollections.length > 0 && (
-            <ul className="m-0 list-none divide-y divide-zinc-200 p-0">
-              {settings.seasonalCollections.map((c) => (
-                <li key={c.collectionId} className="flex flex-wrap items-end gap-3 py-2">
-                  <span className="min-w-0 flex-1 text-sm font-medium">{collectionTitle(c.collectionId)}</span>
-                  <MonthSelect label="From" value={c.from} onChange={(from) => setSeasons(settings.seasonalCollections.map((x) => (x === c ? { ...x, from } : x)))} />
-                  <MonthSelect label="To" value={c.to} onChange={(to) => setSeasons(settings.seasonalCollections.map((x) => (x === c ? { ...x, to } : x)))} />
-                  <s-button variant="tertiary" ref={listen("click", () => setSeasons(settings.seasonalCollections.filter((x) => x !== c)))}>
-                    Remove
-                  </s-button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {collectionsError && <s-banner tone="critical">Could not load collections from Shopify.</s-banner>}
-          {collections && (
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="flex min-w-0 flex-col gap-1 text-sm">
-                Seasonal collection
-                <select className={selectClass} value={newSeason.collectionId} onChange={(e) => setNewSeason({ ...newSeason, collectionId: e.target.value })}>
-                  <option value="">Choose…</option>
-                  {collections
-                    .filter((c) => !settings.seasonalCollections.some((s) => s.collectionId === c.id))
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.title}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <MonthSelect label="From" value={newSeason.from} onChange={(from) => setNewSeason({ ...newSeason, from })} />
-              <MonthSelect label="To" value={newSeason.to} onChange={(to) => setNewSeason({ ...newSeason, to })} />
-              <s-button disabled={!newSeason.collectionId || undefined} ref={listen("click", addSeason)}>
-                Add
-              </s-button>
-            </div>
-          )}
-          <s-text tone="neutral">Saved with the button at the bottom of the page.</s-text>
-        </s-stack>
-      </s-section>
-
-      <s-section heading="Discounts">
-        <div className="grid gap-4 sm:grid-cols-2">{DISCOUNT_FIELDS.map(numberField)}</div>
-        <fieldset className="mt-4 flex flex-col gap-1 border-0 p-0 text-sm">
-          <legend className="mb-1 font-medium">When a markdown ends (half the stock sold, or the last step done)</legend>
-          {(["restore", "hold"]).map((v) => (
+      <Section id="prices" title="Prices and discounts">
+        <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2">{DISCOUNT_FIELDS.map(numberField)}</div>
+        <fieldset className="m-0 flex flex-col gap-1 border-0 p-0 text-[13px]">
+          <legend className="mb-1 font-semibold">When a markdown ends (half the stock sold, or the last step done)</legend>
+          {["restore", "hold"].map((v) => (
             <label key={v} className="flex items-center gap-2">
               <input type="radio" name="endAction" checked={settings.markdownEndAction === v} onChange={() => setSettings({ ...settings, markdownEndAction: v })} />
               {v === "restore" ? "Restore the original price" : "Keep the last discounted price"}
             </label>
           ))}
         </fieldset>
-      </s-section>
+      </Section>
 
-      <s-section heading="Excluded products">
-        <s-stack gap="small">
-          <s-text tone="neutral">These products are not analyzed.</s-text>
-          {settings.excludedProducts.map((p) => (
-            <s-stack key={p.id} direction="inline" gap="small" alignItems="center">
-              <s-text>{p.title}</s-text>
-              <s-button variant="tertiary" ref={listen("click", () => removeProduct(p.id))}>
-                Remove
-              </s-button>
-            </s-stack>
-          ))}
-          <div>
-            <s-button ref={listen("click", pickProducts)}>Choose products</s-button>
+      <Section id="market" title="Market price">
+        {googleMerchant}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          {DIAGNOSIS_FIELDS.map(numberField)}
+          <p className="m-0 flex-[1_1_280px] text-[13px] text-muted">Competitor links are added on each product page and read every night. Only prices in your currency are compared.</p>
+        </div>
+      </Section>
+
+      <Section id="season" title="Seasonal products">
+        <p className="m-0 text-[13px] text-muted">
+          Off season, these are not called slow or dead; a markdown is only proposed right after a season ends, to clear what&apos;s left. In Shopify, tag a product with its months, like <code>season:nov-feb</code> or{" "}
+          <code>season:jun-aug</code> (or <code>season:winter</code>: Dec–Feb, northern hemisphere). Or mark whole collections here; a product&apos;s own tag wins.
+        </p>
+        {settings.seasonalCollections.length > 0 && (
+          <ul className="m-0 flex list-none flex-col p-0">
+            {settings.seasonalCollections.map((c) => (
+              <li key={c.collectionId} className="flex flex-wrap items-end gap-3 border-t border-hair py-2.5">
+                <span className="min-w-0 flex-1 self-center">
+                  <span className="rounded-full bg-[#CCFBF1] px-2.5 py-[5px] text-[13px] font-semibold text-[#115E59]">{collectionTitle(c.collectionId)}</span>
+                </span>
+                <MonthSelect label="From" of={collectionTitle(c.collectionId)} value={c.from} onChange={(from) => setSeasons(settings.seasonalCollections.map((x) => (x === c ? { ...x, from } : x)))} />
+                <MonthSelect label="To" of={collectionTitle(c.collectionId)} value={c.to} onChange={(to) => setSeasons(settings.seasonalCollections.map((x) => (x === c ? { ...x, to } : x)))} />
+                <button type="button" onClick={() => setSeasons(settings.seasonalCollections.filter((x) => x !== c))} className={`${REMOVE} self-center`}>
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {collectionsError && <Notice tone="bad" compact>Could not load collections from Shopify.</Notice>}
+        {collections && (
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex min-w-0 flex-col gap-1 text-[13px] font-semibold">
+              Seasonal collection
+              <select className={selectClass} value={newSeason.collectionId} onChange={(e) => setNewSeason({ ...newSeason, collectionId: e.target.value })}>
+                <option value="">Choose…</option>
+                {collections
+                  .filter((c) => !settings.seasonalCollections.some((x) => x.collectionId === c.id))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <MonthSelect label="From" value={newSeason.from} onChange={(from) => setNewSeason({ ...newSeason, from })} />
+            <MonthSelect label="To" value={newSeason.to} onChange={(to) => setNewSeason({ ...newSeason, to })} />
+            <button type="button" disabled={!newSeason.collectionId} onClick={addSeason} className={`${BTN.small} cursor-pointer`}>
+              Add
+            </button>
           </div>
-        </s-stack>
-      </s-section>
+        )}
+        <p className="m-0 text-xs text-muted">Saved with Save.</p>
+      </Section>
 
-      <s-section heading="Excluded collections">
-        <s-stack gap="small">
-          <s-text tone="neutral">Products in these collections are not analyzed.</s-text>
-          {collectionsError && <s-banner tone="critical">Could not load collections from Shopify.</s-banner>}
-          {!collections && !collectionsError && <s-spinner accessibilityLabel="Loading collections" />}
-          {collections?.length === 0 && <s-text>No collections found.</s-text>}
-          {collections?.map((c) => (
-            <s-checkbox
-              key={c.id}
-              label={c.title}
-              checked={settings.excludedCollectionIds.includes(c.id) || undefined}
-              ref={listen("change", (el) => toggleCollection(c.id, el.checked))}
-            />
-          ))}
-        </s-stack>
-      </s-section>
+      <Section id="excluded" title="Not analyzed">
+        <div className="flex flex-col gap-2">
+          <p className="m-0 text-[13px] font-semibold">Excluded products</p>
+          <p className="m-0 text-xs text-muted">Not analyzed and never changed.</p>
+          {settings.excludedProducts.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {settings.excludedProducts.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => removeProduct(p.id)}
+                  aria-label={`Analyze ${p.title} again`}
+                  className="cursor-pointer rounded-full border-0 bg-canvas px-2.5 py-[5px] font-[inherit] text-[13px] font-semibold text-ink"
+                >
+                  {p.title} ✕
+                </button>
+              ))}
+            </div>
+          )}
+          <button type="button" onClick={pickProducts} className={`${BTN.small} cursor-pointer self-start`}>
+            Choose products
+          </button>
+        </div>
+        <div className="flex flex-col gap-2 border-t border-hair pt-3">
+          <p className="m-0 text-[13px] font-semibold">Excluded collections</p>
+          <p className="m-0 text-xs text-muted">Products in these collections are not analyzed.</p>
+          {collectionsError && <Notice tone="bad" compact>Could not load collections from Shopify.</Notice>}
+          {!collections && !collectionsError && <p className="m-0 text-[13px] text-muted">Loading collections…</p>}
+          {collections?.length === 0 && <p className="m-0 text-[13px] text-muted">No collections found.</p>}
+          {collections?.length > 0 && (
+            <div className="grid max-h-72 gap-1 overflow-y-auto sm:grid-cols-2">
+              {collections.map((c) => (
+                <label key={c.id} className="flex items-center gap-2 text-[13px]">
+                  <input type="checkbox" checked={settings.excludedCollectionIds.includes(c.id)} onChange={(e) => toggleCollection(c.id, e.target.checked)} />
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{c.title}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      </Section>
 
-      <div>
-        <s-button variant="primary" loading={saving || undefined} ref={listen("click", save)}>
-          Save
-        </s-button>
-      </div>
+      <div className="flex justify-end">{saveButton}</div>
       {process.env.NODE_ENV !== "production" && (
-        <Link href="/dev/shopifyql" className="text-sm text-zinc-500 hover:underline">
+        <Link href="/dev/shopifyql" className="text-[13px] text-muted">
           Developer: ShopifyQL check (product views)
         </Link>
       )}
-    </s-stack>
+    </>
   );
 }
