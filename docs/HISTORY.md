@@ -1,5 +1,10 @@
 # History
 
+## 2026-11-04 · design-products
+- Products list redone to the owner's design: "Products" with "Compare products"; one card with a search field, the sort (money at stake, stock value, days of stock, price vs market) and the status filter pills with counts (one filter at a time: a status, "Rising stars", or all); the table with a thumbnail, the status pill plus "Rising star" or "Markdown · step N", money at stake, stock value, days of stock ("over a year" with stock and no sales), sell-through, vs market (above in amber) and the last change; the footnote about the market and products not analyzed yet
+- The products API adds each product's last change (the latest applied fix, judged by its rescue plan: "Title changed · Improved", or its day: "Photo added · Oct 12"; pure, tested) and a running markdown's step
+- Checked in a browser with design-like data at 1280 px and 390 px
+
 ## 2026-11-04 · design-dashboard
 - Dashboard redone to the owner's design: "Catalog health" with when it was analyzed and how many products, "All products" and "This week's plan"; "This week · N moves worth €X" (the first three of the week's plan); "Money stuck in stock" with the three key numbers, the status bar and a tile per status (the design's dot colors) plus the dashed "Seasonal · off season" tile; "Next best move" (status, money at stake, days since the last sale, photos, the right button for its status) with "Up next"; "Rising stars" (growth, conversion, "Move to top"); "Running out" (fewest days of stock); "Top 10 to act on today"
 - The dashboard API adds what these need: the week's first moves, the next move's facts, the rising stars' conversion over 30 days and the products running out
