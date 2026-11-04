@@ -93,11 +93,13 @@ export function Pill({ tone = "neutral", children, className = "" }) {
   return <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${PILL_TONES[tone] ?? PILL_TONES.neutral} ${className}`}>{children}</span>;
 }
 
-/** A message card: `tone` "bad" (an error), "warn" or plain. */
+/** A message card: `tone` "bad" (an error), "warn", "good", "info" or plain. */
 export function Notice({ tone, children, className = "" }) {
   const tones = {
     bad: "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C]",
     warn: "border-[#FDE68A] bg-[#FFFBEB] text-[#92400E]",
+    good: "border-[#A7F3D0] bg-[#ECFDF5] text-[#065F46]",
+    info: "border-accent-line bg-accent-soft text-ink",
   };
   return <div className={`m-0 rounded-xl border px-5 py-4 ${tones[tone] ?? "border-line bg-white text-ink-2"} ${className}`}>{children}</div>;
 }

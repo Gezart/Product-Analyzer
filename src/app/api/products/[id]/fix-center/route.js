@@ -72,5 +72,7 @@ export const GET = appRoute(async ({ shop, session, params }) => {
     ai,
     aiMediaIds: aiMedia,
     reasonCodes: reasons.map((r) => r.code),
+    // The diagnosis's reasons with their numbers (the page's checklist).
+    reasons: reasons.map((r) => ({ code: r.code, data: r.data ?? {} })),
   });
 });

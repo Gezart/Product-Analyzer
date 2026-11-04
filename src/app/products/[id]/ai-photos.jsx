@@ -1,120 +1,48 @@
 "use client";
 
 import { useState } from "react";
-import { listen } from "@/app/polaris-events";
+import { BTN } from "@/app/ui/kit";
 import { MAX_SCENE_LENGTH } from "@/lib/ai-photo";
 
-const NO_PHOTO = "This product has no photo yet. Add one first: the AI starts from a real photo of the product.";
+/** A request from the photo section: the answer's JSON, or null after showing its error. */
+async function call(kind, url, init, { busy, setBusy, setMessage }) {
+  if (busy) return null;
+  setBusy(kind);
+  setMessage(null);
+  const res = await fetch(url, init).catch(() => null);
+  const body = res ? await res.json().catch(() => ({})) : {};
+  setBusy(null);
+  if (!res?.ok) {
+    setMessage({ tone: "bad", text: body.error ?? `Failed (${res?.status ?? "network"})` });
+    return null;
+  }
+  return body;
+}
 
 /**
- * "Create photo with AI" in the fix center's photo section: pick one of the product's photos and a
- * white background or a scene; the AI's photo is shown first and only goes to Shopify when the merchant
- * adds it (undoable from the history). A product without a photo asks for one to be uploaded.
+ * "Create more with AI": pick one of the product's photos and a white background or a scene. The AI's
+ * photo joins the suggestions (`onCreated({ id, image, label }, ai)`); it only goes to Shopify when the
+ * merchant picks it and applies.
  */
-export function AiPhotos({ productId, media, ai, primary, diagnosisId, locked, busy, setBusy, setMessage, onAdded }) {
-  const photos = media.filter((m) => m.type === "IMAGE" && m.previewUrl);
+export function AiPhotoMaker({ productId, photos, ai, primary, locked, busy, setBusy, setMessage, onCreated }) {
   const [sourceId, setSourceId] = useState(null);
   const [style, setStyle] = useState("white");
   const [scene, setScene] = useState("");
-  const [draft, setDraft] = useState(null);
-  const [left, setLeft] = useState(null);
   const source = photos.find((m) => m.id === sourceId) ?? photos[0];
-  const remaining = left ?? ai?.left;
-
-  async function call(kind, url, init) {
-    if (busy) return null;
-    setBusy(kind);
-    setMessage(null);
-    const res = await fetch(url, init).catch(() => null);
-    const body = res ? await res.json().catch(() => ({})) : {};
-    setBusy(null);
-    if (!res?.ok) {
-      setMessage({ tone: "critical", text: body.error ?? `Failed (${res?.status ?? "network"})` });
-      return null;
-    }
-    return body;
-  }
 
   async function create() {
-    const body = await call("ai-photo", `/api/products/${productId}/ai-photo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mediaId: source.id, style, scene: style === "scene" ? scene : undefined }),
-    });
-    if (!body) return;
-    setDraft(body.draft);
-    setLeft(body.ai.left);
-  }
-
-  async function add() {
-    const body = await call("ai-photo-add", `/api/ai-photos/${draft.id}/add`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ diagnosisId }),
-    });
-    if (!body) return;
-    setDraft(null);
-    await onAdded("AI photo added to the product in Shopify, after its other photos. Its alt text says it's AI-made; you can undo it below.");
-  }
-
-  async function discard() {
-    const id = draft.id;
-    setDraft(null);
-    await fetch(`/api/ai-photos/${id}`, { method: "DELETE" }).catch(() => {});
-  }
-
-  async function upload(input) {
-    const file = input.files?.[0];
-    if (!file) return;
-    const form = new FormData();
-    form.append("file", file);
-    const body = await call("photo-upload", `/api/products/${productId}/photo`, { method: "POST", body: form });
-    input.value = "";
-    if (body) await onAdded("Photo added to the product in Shopify. Shopify may take a moment to process it; you can undo it below.");
-  }
-
-  if (!photos.length) {
-    return (
-      <s-stack gap="small">
-        <s-text tone="caution">{NO_PHOTO}</s-text>
-        <label className="flex flex-wrap items-center gap-2 text-sm">
-          <span>Upload a photo (JPEG, PNG or WebP, up to 20 MB):</span>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            disabled={locked || busy !== null}
-            onChange={(e) => upload(e.target)}
-          />
-        </label>
-        {busy === "photo-upload" && <s-text tone="neutral">Uploading…</s-text>}
-      </s-stack>
+    const body = await call(
+      "ai-photo",
+      `/api/products/${productId}/ai-photo`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mediaId: source.id, style, scene: style === "scene" ? scene : undefined }) },
+      { busy, setBusy, setMessage },
     );
-  }
-  if (!ai) return null;
-  if (ai.upgrade) return <s-text tone="neutral">Making photos with AI is included from the Growth plan.</s-text>;
-  if (!ai.configured) return <s-text tone="neutral">Photos with AI aren&apos;t set up for this app yet.</s-text>;
-
-  if (draft) {
-    return (
-      <s-stack gap="small">
-        <s-text>Photo made with AI. Check that the product looks exactly like the real one before adding it.</s-text>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={draft.image} alt="Photo made with AI (preview)" className="max-h-80 w-auto max-w-full self-start rounded border border-zinc-200" />
-        <s-stack direction="inline" gap="small">
-          <s-button variant="primary" disabled={locked || busy !== null || undefined} loading={busy === "ai-photo-add" || undefined} ref={listen("click", add)}>
-            Add to product
-          </s-button>
-          <s-button variant="secondary" disabled={busy !== null || undefined} ref={listen("click", discard)}>
-            Discard
-          </s-button>
-        </s-stack>
-      </s-stack>
-    );
+    if (body) onCreated({ id: body.draft.id, image: body.draft.image, label: style === "white" ? "White background" : scene.trim() || "In a scene" }, body.ai);
   }
 
   return (
-    <s-stack gap="small">
-      <s-text>Create a photo with AI from one of the product&apos;s photos</s-text>
+    <div className="flex flex-col gap-2.5 rounded-[10px] border border-line bg-head px-4 py-3.5">
+      <p className="m-0 text-[13px] font-semibold">Start from</p>
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Photo to start from">
         {photos.map((m) => (
           <button
@@ -123,47 +51,79 @@ export function AiPhotos({ productId, media, ai, primary, diagnosisId, locked, b
             role="radio"
             aria-checked={m.id === source.id}
             onClick={() => setSourceId(m.id)}
-            className={`rounded border-2 p-0.5 ${m.id === source.id ? "border-zinc-900" : "border-transparent"}`}
+            className={`cursor-pointer rounded-lg border-2 bg-white p-0.5 ${m.id === source.id ? "border-ink" : "border-transparent"}`}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={m.previewUrl} alt={m.alt ?? ""} className="h-14 w-14 object-cover" />
+            <img src={m.previewUrl} alt={m.alt ?? ""} className="block h-14 w-14 rounded-md object-cover" />
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-4 text-sm">
-        <label className="flex items-center gap-2">
+      <div className="flex flex-wrap gap-4 text-[13px]">
+        <label className="flex items-center gap-1.5">
           <input type="radio" name="ai-photo-style" checked={style === "white"} onChange={() => setStyle("white")} />
           White background (best as the main photo)
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex items-center gap-1.5">
           <input type="radio" name="ai-photo-style" checked={style === "scene"} onChange={() => setStyle("scene")} />
           In a scene
         </label>
       </div>
       {style === "scene" && (
-        <s-text-field
-          label="Scene (optional)"
-          placeholder="e.g. on a wooden kitchen table in morning light"
-          details={`${scene.length}/${MAX_SCENE_LENGTH}`}
-          value={scene}
-          ref={listen("input", (el) => setScene(el.value))}
-        />
+        <div className="flex flex-col gap-1">
+          <label htmlFor="ai-scene" className="text-[13px] font-semibold">
+            Scene (optional)
+          </label>
+          <input
+            id="ai-scene"
+            type="text"
+            placeholder="e.g. on a wooden kitchen table in morning light"
+            value={scene}
+            onChange={(e) => setScene(e.target.value)}
+            className="rounded-lg border border-line-strong bg-white px-[11px] py-[9px] font-[inherit]"
+          />
+          <span className={`text-xs ${scene.length > MAX_SCENE_LENGTH ? "text-[#B91C1C]" : "text-muted"}`}>
+            {scene.length} of {MAX_SCENE_LENGTH} characters
+          </span>
+        </div>
       )}
-      <s-stack direction="inline" gap="small" alignItems="center">
-        <s-button
-          variant={primary ? "primary" : "secondary"}
-          disabled={locked || busy !== null || remaining === 0 || scene.length > MAX_SCENE_LENGTH || undefined}
-          loading={busy === "ai-photo" || undefined}
-          ref={listen("click", create)}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <button
+          type="button"
+          disabled={locked || busy !== null || ai.left === 0 || scene.length > MAX_SCENE_LENGTH}
+          onClick={create}
+          className={`${primary ? BTN.smallPrimary : BTN.small} cursor-pointer`}
         >
-          Create photo with AI
-        </s-button>
-        <s-text tone="neutral">
-          {remaining} of {ai.limit} AI photos left this month{remaining === 0 ? " (they renew on the 1st)" : ""}
-        </s-text>
-      </s-stack>
-      {busy === "ai-photo" && <s-text tone="neutral">Making the photo, this can take up to a minute…</s-text>}
-      {primary && <s-text tone="neutral">Shoppers trust a product more with several photos: a white-background photo first, then two or three in a scene.</s-text>}
-    </s-stack>
+          {busy === "ai-photo" ? "Making the photo…" : "Create photo"}
+        </button>
+        <span className="text-[13px] text-muted">
+          {ai.left} of {ai.limit} AI photos left this month{ai.left === 0 ? " (they renew on the 1st)" : ""}
+        </span>
+      </div>
+      {busy === "ai-photo" && <p className="m-0 text-[13px] text-muted">This can take up to a minute.</p>}
+      {primary && <p className="m-0 text-[13px] text-muted">Shoppers trust a product more with several photos: a white-background photo first, then two or three in a scene.</p>}
+    </div>
+  );
+}
+
+/** A product without a photo: the AI needs one real photo first, so the merchant uploads one (it goes to Shopify now). */
+export function PhotoUpload({ productId, locked, busy, setBusy, setMessage, onAdded }) {
+  async function upload(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append("file", file);
+    const body = await call("photo-upload", `/api/products/${productId}/photo`, { method: "POST", body: form }, { busy, setBusy, setMessage });
+    input.value = "";
+    if (body) await onAdded("Photo added to the product in Shopify. Shopify may take a moment to process it; you can undo it in the history.");
+  }
+  return (
+    <div className="flex flex-col gap-2 rounded-[10px] border border-dashed border-line-strong px-4 py-3.5">
+      <p className="m-0 text-[13px] font-semibold text-[#92400E]">This product has no photo yet. Add one first: the AI starts from a real photo of the product.</p>
+      <label className="flex flex-wrap items-center gap-2 text-[13px]">
+        <span>Upload a photo (JPEG, PNG or WebP, up to 20 MB):</span>
+        <input type="file" accept="image/jpeg,image/png,image/webp" disabled={locked || busy !== null} onChange={(e) => upload(e.target)} />
+      </label>
+      {busy === "photo-upload" && <p className="m-0 text-[13px] text-muted">Uploading…</p>}
+    </div>
   );
 }
