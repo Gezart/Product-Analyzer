@@ -106,10 +106,8 @@ export function PlanCards({ plans, current, trialDays, pending, confirmFree = fa
             <p className="m-0 rounded-lg bg-head px-2.5 py-2 text-[13px] font-semibold">
               {Number.isFinite(plan.products) && plan.products ? `${plan.products.toLocaleString("en-US")} products analyzed` : "Unlimited products"}
             </p>
-            <p className="m-0 text-xs text-muted">
-              {i === 0 ? "See what's stuck and why." : `Everything in ${plans[i - 1].name}, plus:`}
-              {plan.price > 0 && trialDays > 0 ? ` ${trialDays}-day free trial.` : ""}
-            </p>
+            {plan.price > 0 && trialDays > 0 && <p className="m-0 text-xs font-semibold text-[#047857]">{trialDays}-day free trial</p>}
+            <p className="m-0 text-xs text-muted">{i === 0 ? "See what's stuck and why." : `Everything in ${plans[i - 1].name}, plus:`}</p>
             <ul className="m-0 flex flex-1 list-none flex-col gap-1.5 p-0">
               {plan.features.map((f) => (
                 <li key={f} className="flex gap-2 text-[13px]">
@@ -127,7 +125,9 @@ export function PlanCards({ plans, current, trialDays, pending, confirmFree = fa
               {isCurrent
                 ? "Your plan"
                 : pending === plan.id
-                  ? "Opening Shopify…"
+                  ? plan.price === 0
+                    ? "Cancelling…"
+                    : "Opening Shopify…"
                   : plan.price === 0
                     ? confirmFree
                       ? "Yes, cancel my paid plan"
@@ -150,7 +150,6 @@ function Limits({ plans }) {
   const rows = [
     // The API sends no limit (null) for unlimited products.
     ["Products analyzed", (p) => (p.products == null ? "Unlimited" : count(p.products))],
-    ["Diagnoses", (p) => count(p.diagnoses)],
     ["AI descriptions", (p) => count(p.aiTexts)],
     ["AI photos", (p) => count(p.aiPhotos)],
   ];

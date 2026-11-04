@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BTN, CARD, H2 } from "@/app/ui/kit";
+import { hasFeature } from "@/lib/plans";
 
 const STEPS = [
   { resource: "products", label: "Products and stock" },
@@ -18,9 +19,15 @@ function friendlyError(error) {
 
 const statusOf = (sync, resource) => sync.states.find((x) => x.resource === resource)?.status ?? "pending";
 
-/** Shows the initial import step by step; polls until done or a step fails, then offers a retry. */
-export function SyncProgress() {
+/**
+ * The first import (the owner's design): shown on its own, step by step, until it's done (then
+ * `children`, the dashboard); polls until done or a step fails, then offers a retry.
+ */
+export function SyncProgress({ children }) {
   const [sync, setSync] = useState(null);
+  // The import's state couldn't be read: the dashboard shows meanwhile (it has its own notices).
+  const [unknown, setUnknown] = useState(false);
+  const [plan, setPlan] = useState(null);
   const [retrying, setRetrying] = useState(false);
   const timer = useRef(undefined);
 
@@ -30,14 +37,20 @@ export function SyncProgress() {
     if (res?.ok) {
       const data = await res.json();
       setSync(data);
+      setUnknown(false);
       const statuses = STEPS.map((s) => statusOf(data, s.resource));
       if (statuses.every((s) => s === "done") || statuses.includes("error")) return;
-    }
+    } else setUnknown(true);
     timer.current = setTimeout(load, 3000);
   }, []);
 
   useEffect(() => {
     load();
+    // Which settings help while waiting depends on the plan.
+    fetch("/api/shop")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((shop) => shop && setPlan(shop.plan))
+      .catch(() => {});
     return () => clearTimeout(timer.current);
   }, [load]);
 
@@ -48,9 +61,9 @@ export function SyncProgress() {
     load();
   }
 
-  if (!sync) return null;
+  if (!sync) return unknown ? children : null;
   const statuses = STEPS.map((s) => statusOf(sync, s.resource));
-  if (statuses.every((s) => s === "done")) return null;
+  if (statuses.every((s) => s === "done")) return children;
   const doneCount = statuses.filter((s) => s === "done").length;
   const failed = statuses.includes("error");
   const running = statuses.findIndex((s) => s !== "done");
@@ -133,11 +146,18 @@ export function SyncProgress() {
             While you wait (optional)
           </h2>
           <ul className="m-0 grid list-none gap-2.5 p-0 sm:grid-cols-3">
-            {[
-              { title: "Connect Google Merchant Center", body: "See the market price for your products and how far above it you are.", cta: "Connect", href: "/settings#google" },
-              { title: "Seasonal products", body: "Mark winter or summer collections so they aren't called dead stock off season.", cta: "Set seasons", href: "/settings#season" },
-              { title: "Your minimum margin", body: "Markdowns never go below cost + this margin.", cta: "Set margin", href: "/settings#prices" },
-            ].map((s) => (
+            {(hasFeature(plan, "marketPrice")
+              ? [
+                  { title: "Connect Google Merchant Center", body: "See the market price for your products and how far above it you are.", cta: "Connect", href: "/settings#google" },
+                  { title: "Seasonal products", body: "Mark winter or summer collections so they aren't called dead stock off season.", cta: "Set seasons", href: "/settings#season" },
+                  { title: "Your minimum margin", body: "Markdowns never go below cost + this margin.", cta: "Set margin", href: "/settings#prices" },
+                ]
+              : [
+                  { title: "Seasonal products", body: "Mark winter or summer collections so they aren't called dead stock off season.", cta: "Set seasons", href: "/settings#season" },
+                  { title: "What isn't for sale", body: "Leave out gift cards or archived collections, so they aren't analyzed.", cta: "Choose what to leave out", href: "/settings#excluded" },
+                  { title: "Fix what's stuck", body: "The Fix center, rescue plans and markdowns come with the Starter plan.", cta: "See plans", href: "/plans" },
+                ]
+            ).map((s) => (
               <li key={s.title} className="flex flex-col gap-1.5 rounded-[10px] border border-line px-3.5 py-3">
                 <span className="font-semibold">{s.title}</span>
                 <span className="flex-1 text-[13px] text-muted">{s.body}</span>

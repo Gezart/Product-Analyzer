@@ -72,7 +72,7 @@ export function ReportView() {
               onChange={(e) => router.replace(`/reports?period=${e.target.value}`)}
               className="rounded-lg border border-line-strong bg-white px-2.5 py-[9px] font-[inherit]"
             >
-              {months.months.map((m) => (
+              {(months.months.includes(period) ? months.months : [...months.months, period]).map((m) => (
                 <option key={m} value={m}>
                   {monthName(m)}
                   {m === months.current ? " (so far)" : ""}

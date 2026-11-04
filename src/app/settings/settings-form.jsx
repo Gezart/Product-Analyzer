@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { apiError } from "@/app/api-error";
 import { BTN, CARD, H2, Notice, PageHeader } from "@/app/ui/kit";
+import { useHashScroll } from "@/app/ui/use-hash-scroll";
 
 // Shares are stored 0–1 and shown as percentages.
 const STATUS_FIELDS = [
@@ -33,11 +34,14 @@ const LIST_LABELS = {
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const selectClass = "rounded-lg border border-line-strong bg-white px-2.5 py-2 font-[inherit] text-[13px]";
 
-/** A month picker (1–12). */
-function MonthSelect({ label, value, onChange }) {
+/** A month picker (1–12); `of` names what it's for, for screen readers ("From" · "Winter"). */
+function MonthSelect({ label, value, onChange, of }) {
   return (
     <label className="flex flex-col gap-1 text-[13px] font-semibold">
-      {label}
+      <span>
+        {label}
+        {of && <span className="sr-only"> ({of})</span>}
+      </span>
       <select className={selectClass} value={value} onChange={(e) => onChange(Number(e.target.value))}>
         {MONTHS.map((m, i) => (
           <option key={m} value={i + 1}>
@@ -93,6 +97,8 @@ export function SettingsForm({ googleMerchant }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const banner = useRef(null);
+  // A link to a section (e.g. #season from the first import) waits for the form to load.
+  useHashScroll(Boolean(settings));
   // Save is at the bottom of a long form: bring the result into view.
   useEffect(() => {
     if (message) banner.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -122,7 +128,9 @@ export function SettingsForm({ googleMerchant }) {
     return (
       <>
         {header()}
-        {message ? <Notice tone="bad">{message.text[0]}</Notice> : <p className="m-0 text-muted">Loading settings…</p>}
+        {message ? <Notice tone="bad" role="alert">{message.text[0]}</Notice> : <p className="m-0 text-muted">Loading settings…</p>}
+        {/* Google's connection loads on its own, so it can be disconnected even when settings can't load. */}
+        {message && <Section id="market" title="Market price">{googleMerchant}</Section>}
       </>
     );
   }
@@ -226,6 +234,7 @@ export function SettingsForm({ googleMerchant }) {
       <span className="flex max-w-[180px] items-center gap-1.5">
         <input
           id={f.field}
+          aria-describedby={`${f.field}-hint`}
           type="text"
           inputMode="decimal"
           value={drafts[f.field] ?? ""}
@@ -234,7 +243,9 @@ export function SettingsForm({ googleMerchant }) {
         />
         {(f.percent || f.suffix) && <span className="flex-none text-[13px] text-muted">{f.percent ? "%" : f.suffix}</span>}
       </span>
-      <span className="text-xs text-muted">{f.details}</span>
+      <span id={`${f.field}-hint`} className="text-xs text-muted">
+        {f.details}
+      </span>
     </div>
   );
   const saveButton = (
@@ -249,7 +260,7 @@ export function SettingsForm({ googleMerchant }) {
       {header(saveButton)}
       {message && (
         <div ref={banner}>
-          <Notice tone={message.tone} compact>
+          <Notice tone={message.tone} compact role={message.tone === "bad" ? "alert" : "status"}>
             {message.text.map((t) => (
               <div key={t}>{t}</div>
             ))}
@@ -284,7 +295,7 @@ export function SettingsForm({ googleMerchant }) {
 
       <Section id="season" title="Seasonal products">
         <p className="m-0 text-[13px] text-muted">
-          Off season, these are not called slow or dead and no markdown starts. In Shopify, tag a product with its months, like <code>season:nov-feb</code> or{" "}
+          Off season, these are not called slow or dead; a markdown is only proposed right after a season ends, to clear what&apos;s left. In Shopify, tag a product with its months, like <code>season:nov-feb</code> or{" "}
           <code>season:jun-aug</code> (or <code>season:winter</code>: Dec–Feb, northern hemisphere). Or mark whole collections here; a product&apos;s own tag wins.
         </p>
         {settings.seasonalCollections.length > 0 && (
@@ -294,8 +305,8 @@ export function SettingsForm({ googleMerchant }) {
                 <span className="min-w-0 flex-1 self-center">
                   <span className="rounded-full bg-[#CCFBF1] px-2.5 py-[5px] text-[13px] font-semibold text-[#115E59]">{collectionTitle(c.collectionId)}</span>
                 </span>
-                <MonthSelect label="From" value={c.from} onChange={(from) => setSeasons(settings.seasonalCollections.map((x) => (x === c ? { ...x, from } : x)))} />
-                <MonthSelect label="To" value={c.to} onChange={(to) => setSeasons(settings.seasonalCollections.map((x) => (x === c ? { ...x, to } : x)))} />
+                <MonthSelect label="From" of={collectionTitle(c.collectionId)} value={c.from} onChange={(from) => setSeasons(settings.seasonalCollections.map((x) => (x === c ? { ...x, from } : x)))} />
+                <MonthSelect label="To" of={collectionTitle(c.collectionId)} value={c.to} onChange={(to) => setSeasons(settings.seasonalCollections.map((x) => (x === c ? { ...x, to } : x)))} />
                 <button type="button" onClick={() => setSeasons(settings.seasonalCollections.filter((x) => x !== c))} className={`${REMOVE} self-center`}>
                   Remove
                 </button>

@@ -68,7 +68,7 @@ export function GoogleMerchant() {
   if (!data) return <p className="m-0 text-[13px] text-muted">Loading the Google connection…</p>;
 
   const disconnect = (
-    <button type="button" disabled={busy !== null} onClick={() => update("DELETE", null, "disconnect")} className={`${BTN.small} cursor-pointer text-[#B91C1C] hover:text-[#B91C1C]`}>
+    <button type="button" disabled={busy !== null} onClick={() => update("DELETE", null, "disconnect")} className={`${BTN.small} cursor-pointer`}>
       {busy === "disconnect" ? "Disconnecting…" : "Disconnect"}
     </button>
   );
@@ -78,11 +78,11 @@ export function GoogleMerchant() {
   const state =
     data.status === "connected" ? "connected" : data.status === "failed" ? "needs attention" : data.status === "choose_account" ? "choose an account" : "not connected";
   const detail = data.upgrade
-    ? "Google's benchmark prices are included from the Starter plan."
+    ? "Not read on your plan."
     : !data.configured
       ? "Not available yet: the app's Google access is still being set up."
       : data.status === "connected"
-        ? `${data.accountName ? `Account "${data.accountName}" · ` : ""}${
+        ? `${data.accountName ? `Account "${data.accountName}"${data.accountId ? ` (${data.accountId})` : ""} · ` : ""}${
             data.syncedAt ? `read ${day(data.syncedAt)} · ${data.benchmarks} product price${data.benchmarks === 1 ? "" : "s"} with a Google benchmark` : "the benchmarks are being read; this can take a few minutes"
           }`
         : data.status === "failed"

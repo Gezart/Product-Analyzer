@@ -9,7 +9,7 @@ Status: `todo` · `doing` · `done` · `blocked`.
 | --- | --- | --- |
 | D1 | Hosting: Fly.io (app + worker process) | tentative |
 | D2 | Background jobs: cron + jobs table in Postgres, no Redis | decided |
-| D3 | UI: Polaris web components from Shopify CDN (no npm package) + Tailwind for layout gaps | decided |
+| D3 | UI: the owner's design in Tailwind (Polaris web components removed in Phase 3a); App Bridge for sign-in, the resource picker and billing | decided |
 | D4 | Weekly email digest | moved to v2 |
 | D5 | Unit tests: `node:test` | decided |
 | D6 | No AI in v1: diagnosis is rule-based; fix center has merchant-written edits with rule hints, snapshot and undo | decided |
