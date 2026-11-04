@@ -1,16 +1,19 @@
-import Link from "next/link";
-import { InboxList } from "./inbox-list";
+import { Suspense } from "react";
+import { PageHeader } from "@/app/ui/kit";
+import { InboxPage } from "./inbox-page";
 
-export default function InboxPage() {
+// The plan's week is read from the URL on the client (useSearchParams), so it streams in.
+export default function Inbox() {
   return (
-    <s-page heading="Inbox">
-      {/* The weekly plan has its own page until the inbox follows the design (it then sits on top here). */}
-      <p className="mt-0 mb-3">
-        <Link href="/plan" className="font-semibold">
-          This week&apos;s plan →
-        </Link>
-      </p>
-      <InboxList />
-    </s-page>
+    <Suspense
+      fallback={
+        <>
+          <PageHeader title="Inbox" subtitle="Your weekly plan and everything the app did or found." />
+          <p className="m-0 text-muted">Loading the inbox…</p>
+        </>
+      }
+    >
+      <InboxPage />
+    </Suspense>
   );
 }
