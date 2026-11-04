@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyBlocker, changedTypes, checklist, fillInParts, wordCount } from "./fix-page.js";
+import { applyBlocker, changedTypes, checklist, fillInParts, plainText, wordCount } from "./fix-page.js";
 
 const live = {
   title: "Linen Shirt",
@@ -15,6 +15,7 @@ test("words in a description's HTML", () => {
   assert.equal(wordCount("<p>A relaxed <strong>shirt</strong> &amp; more.</p><ul><li>S – XL</li></ul>"), 6);
   assert.equal(wordCount(""), 0);
   assert.equal(wordCount(null), 0);
+  assert.equal(plainText('<p style="width: 10px">Made <b>of</b>&nbsp;linen</p>'), "Made of linen");
 });
 
 test("fill-in placeholders are picked out of the text", () => {
@@ -72,4 +73,11 @@ test("the checklist from the diagnosis ticks what the drafts fix", () => {
   );
   assert.deepEqual(after.map((c) => c.done), [true, true, true, true, true, false, false, false]);
   assert.equal(checklist(null, drafts(), live).length, 0);
+  // The word lists read the text, not the tags: "font-weight" in a style isn't a size, "made <strong>of</strong>" is a material.
+  const styled = '<p><span style="font-weight: 400;">A cotton shirt to wash cold.</span></p>';
+  assert.equal(checklist([{ code: "missing_details" }], drafts({ description: styled }), { ...live, descriptionHtml: styled })[0].done, false);
+  assert.equal(checklist([{ code: "missing_details" }], drafts({ description: "<p>Size M, made <strong>of</strong> it, wash cold.</p>" }), live)[0].done, true);
+  // Automated collections count for "in at least one collection".
+  assert.equal(checklist([{ code: "no_collection" }], drafts({ collectionIds: [] }), live)[0].done, true);
+  assert.equal(checklist([{ code: "no_collection" }], drafts({ collectionIds: [] }), { ...live, collections: [] })[0].done, false);
 });

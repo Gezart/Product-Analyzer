@@ -6,12 +6,18 @@ import { FILL_IN, fillInsLeft } from "./ai-text.js";
 import { MATERIAL_WORDS, SIZE_WORDS, USE_WORDS } from "./diagnosis.js";
 import { REASON_TITLES } from "./diagnosis-titles.js";
 
-/** Words in a description's HTML (tags and entities left out). */
-export function wordCount(html) {
-  const text = String(html ?? "")
+/** A description's HTML as plain text: tags (and their attributes) and entities left out. */
+export function plainText(html) {
+  return String(html ?? "")
     .replace(/<[^>]*>/g, " ")
-    .replace(/&[a-z0-9#]+;/gi, " ");
-  return text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+    .replace(/&[a-z0-9#]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Words in a description's HTML. */
+export function wordCount(html) {
+  return plainText(html).split(" ").filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
 }
 
 /** A text split into plain parts and `[fill in: …]` placeholders: `[{ text, fillIn }]`. */
@@ -83,8 +89,9 @@ export function checklist(reasons, d, live) {
         return { code, text: `Description of ${min} words or more`, done: wordCount(d.description) >= min };
       }
       case "missing_details": {
-        // The diagnosis's own word lists decide.
-        const done = SIZE_WORDS.test(d.description) && MATERIAL_WORDS.test(d.description) && USE_WORDS.test(d.description);
+        // The diagnosis's own word lists decide, on the text shoppers read (not the tags' attributes).
+        const text = plainText(d.description);
+        const done = SIZE_WORDS.test(text) && MATERIAL_WORDS.test(text) && USE_WORDS.test(text);
         return { code, text: "Size, material and use or care mentioned", done };
       }
       case "duplicate_description":
@@ -92,7 +99,8 @@ export function checklist(reasons, d, live) {
       case "missing_seo":
         return { code, text: "SEO title and meta description", done: d.seoTitle.trim() !== "" && d.seoDescription.trim() !== "" };
       case "no_collection":
-        return { code, text: "In at least one collection", done: d.collectionIds.length > 0 };
+        // Automated collections count too (the product is in them by their rules).
+        return { code, text: "In at least one collection", done: d.collectionIds.length > 0 || (live?.collections ?? []).some((c) => !c.manual) };
       case "low_traffic_collections": {
         const before = new Set(live ? manualIds(live) : []);
         return { code, text: "In a busier collection too", done: d.collectionIds.some((id) => !before.has(id)) };

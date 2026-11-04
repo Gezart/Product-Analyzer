@@ -74,7 +74,7 @@ export function MarketPrice({ productId, onChanged }) {
     }
   }
 
-  if (error) return <Shell><Notice tone="bad" className="px-4 py-3 text-[13px]">Could not load competitor prices: {error}</Notice></Shell>;
+  if (error) return <Shell><Notice tone="bad" compact>Could not load competitor prices: {error}</Notice></Shell>;
   if (!data) return <Shell><p className="m-0 text-[13px] text-muted">Loading competitor prices…</p></Shell>;
   if (data.upgrade) return <Shell><UpgradeNotice>Comparing your price with competitors is included from the Starter plan.</UpgradeNotice></Shell>;
 
@@ -154,7 +154,7 @@ export function MarketPrice({ productId, onChanged }) {
         )}
       </div>
 
-      {message && <Notice tone="bad" className="px-4 py-3 text-[13px]">{message}</Notice>}
+      {message && <Notice tone="bad" compact>{message}</Notice>}
       {full ? (
         <p className="m-0 text-[13px] text-muted">This product has the maximum of {data.max} links. Remove one to add another.</p>
       ) : (

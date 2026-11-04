@@ -37,7 +37,7 @@ export function Diagnosis({ productId, diagnosis }) {
       {diagnosis?.sellingWell && reasons?.length > 0 && (
         <p className="m-0 mb-1 text-[13px] text-muted">This product sells well; these are page improvements, not reasons it isn&apos;t selling.</p>
       )}
-      {diagnosis?.error && <Notice tone="bad" className="px-4 py-3 text-[13px]">Could not run the diagnosis.</Notice>}
+      {diagnosis?.error && <Notice tone="bad" compact>Could not run the diagnosis.</Notice>}
       {diagnosis?.upgrade && <UpgradeNotice>{diagnosis.upgrade}</UpgradeNotice>}
       {!diagnosis && <p className="m-0 text-[13px] text-muted">Diagnosing…</p>}
       {reasons?.length === 0 && <p className="m-0 text-[13px] text-muted">No problems found on this product&apos;s page or price.</p>}

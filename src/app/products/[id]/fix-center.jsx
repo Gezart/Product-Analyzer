@@ -45,13 +45,21 @@ export function FixCenter({ productId }) {
   const [allCollections, setAllCollections] = useState(false);
   // Drafts are filled from the live product the first time it loads (it may not on the first try).
   const hadLive = useRef(false);
+  const loadedOnce = useRef(false);
 
   /** Refreshes live data and history; drafts are reset only for the listed types (unsaved edits stay). */
   const load = useCallback(
     async (reset) => {
-      const res = await fetch(`/api/products/${productId}/fix-center`);
-      if (!res.ok) return setError(res.status === 404 ? "Product not found in Shopify" : (await apiError(res)).message);
+      const res = await fetch(`/api/products/${productId}/fix-center`).catch(() => null);
+      if (!res?.ok) {
+        const text = !res ? "Could not reach the app. Check your connection and reload." : res.status === 404 ? "Product not found in Shopify" : (await apiError(res)).message;
+        // A failed reload keeps the page as it was; only the first load shows the error instead.
+        if (loadedOnce.current) setMessage({ tone: "bad", text: `Couldn't refresh the page: ${text}` });
+        else setError(text);
+        return false;
+      }
       const d = await res.json();
+      loadedOnce.current = true;
       setData(d);
       if (!d.live) return;
       if (!hadLive.current) reset = Object.keys(LABELS);
@@ -151,18 +159,22 @@ export function FixCenter({ productId }) {
       }
     }
     setPhotoDrafts((list) => list.filter((p) => !added.includes(p.id)));
-    // Only what went to Shopify is read again; the other drafts keep the merchant's edits.
-    await load(added.length ? [...appliedTypes, "images"] : appliedTypes);
-    if (appliedTypes.includes("description") || appliedTypes.includes("seo")) {
-      setAiDraft(null);
-      setMine(null);
-      setVersion("current");
-    }
+    if (appliedTypes.includes("description") || appliedTypes.includes("seo")) resetAiDraft();
     setBusy(null);
     const applied = [...appliedTypes.map((t) => LABELS[t]), ...(added.length ? [`${added.length} AI photo${added.length === 1 ? "" : "s"}`] : [])];
     const done = applied.length ? `Applied to Shopify: ${applied.join(", ")}. The old versions are saved; you can undo them in the history.` : "";
     const note = pending ? " Shopify is still finishing a change; it can take a minute to show." : "";
     setMessage(failure ? { tone: "bad", text: `${done} Not applied: ${failure}`.trim() } : { tone: "good", text: done + note });
+    // Only what went to Shopify is read again; the other drafts keep the merchant's edits.
+    await load(added.length ? [...appliedTypes, "images"] : appliedTypes);
+  }
+
+  /** The AI draft is over once the description or SEO is reset to the live product (applied or undone). */
+  function resetAiDraft() {
+    setAiDraft(null);
+    setMine(null);
+    setVersion("current");
+    setEditing(false);
   }
 
   async function undo(fixId, force = false) {
@@ -179,12 +191,18 @@ export function FixCenter({ productId }) {
     if (res?.status === 409 && !force && /changed since/.test(body.error ?? "")) {
       return setMessage({ tone: "bad", text: body.error, forceFix: fixId });
     }
+    if (!res?.ok) {
+      setMessage({ tone: "bad", text: body.error ?? `Failed (${res?.status ?? "network"})` });
+      // The fix's state may have moved on (e.g. undone elsewhere): the history is read again.
+      await load([]);
+      return;
+    }
     const undone = data.fixes.find((f) => f.id === fixId)?.type;
-    // Undoing an added photo changes the photo list.
-    await load(res?.ok && undone ? [undone === "photo" ? "images" : undone] : []);
-    if (!res?.ok) return setMessage({ tone: "bad", text: body.error ?? `Failed (${res?.status ?? "network"})` });
+    if (undone === "description" || undone === "seo") resetAiDraft();
     const note = body.pending ? " Shopify is still finishing it; it can take a minute to show." : "";
     setMessage({ tone: "good", text: `Undone: the product is back to how it was before the fix.${note}` });
+    // Undoing an added photo changes the photo list.
+    if (undone) await load([undone === "photo" ? "images" : undone]);
   }
 
   /** "Write with AI": fills the description and SEO drafts; nothing goes to Shopify until Apply. */
@@ -230,10 +248,7 @@ export function FixCenter({ productId }) {
     setMediaIds(live.media.map((m) => m.id));
     setCollectionIds(live.collections.filter((c) => c.manual).map((c) => c.id));
     setPhotoDrafts((list) => list.map((p) => ({ ...p, picked: false })));
-    setAiDraft(null);
-    setMine(null);
-    setVersion("current");
-    setEditing(false);
+    resetAiDraft();
     setMessage(null);
   }
 
@@ -243,8 +258,8 @@ export function FixCenter({ productId }) {
   }
 
   async function photoUploaded(text) {
-    await load(["images"]);
     setMessage({ tone: "good", text });
+    await load(["images"]);
   }
 
   const move = (i, delta) => {
@@ -279,7 +294,7 @@ export function FixCenter({ productId }) {
     <>
       {header(usagePill)}
       {data.upgrade && (
-        <Notice tone="warn" className="px-4 py-3 text-[13px]">
+        <Notice tone="warn" compact>
           {data.upgrade.reason}{" "}
           <Link href="/plans" className="font-semibold text-[#92400E] underline">
             See plans
@@ -287,12 +302,12 @@ export function FixCenter({ productId }) {
         </Notice>
       )}
       {data.liveError && (
-        <Notice tone="warn" className="px-4 py-3 text-[13px]">
+        <Notice tone="warn" compact>
           {data.liveError} Editing needs the live product{data.fixes.length > 0 ? "; your fix history and undo are beside it" : ""}.
         </Notice>
       )}
       {message && (
-        <Notice tone={message.tone} className="px-4 py-3 text-[13px]">
+        <Notice tone={message.tone} compact>
           {message.text}{" "}
           {message.forceFix && (
             <button type="button" disabled={busy !== null} onClick={() => undo(message.forceFix, true)} className="cursor-pointer border-0 bg-transparent p-0 font-[inherit] font-semibold underline">
@@ -303,7 +318,8 @@ export function FixCenter({ productId }) {
       )}
 
       <div className="flex flex-wrap items-start gap-4">
-        <div className="flex min-w-0 flex-[999_1_520px] flex-col gap-4">
+        {/* While changes go to Shopify the editors are locked: the page reloads from Shopify afterwards. */}
+        <fieldset disabled={busy === "apply"} className="m-0 flex min-w-0 flex-[999_1_520px] flex-col gap-4 border-0 p-0">
           {live && (
             <>
               <section id="description" aria-labelledby="desc" className={`${CARD} flex scroll-mt-4 flex-col gap-3 px-5 py-[18px]`}>
@@ -444,7 +460,7 @@ export function FixCenter({ productId }) {
                             <input type="checkbox" checked={p.picked} onChange={(e) => setPhotoDrafts((list) => list.map((x) => (x.id === p.id ? { ...x, picked: e.target.checked } : x)))} />
                             <span className="min-w-0 truncate">{p.label}</span>
                           </label>
-                          <button type="button" onClick={() => removePhotoDraft(p.id)} className="cursor-pointer self-start border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-muted hover:text-ink">
+                          <button type="button" disabled={busy !== null} onClick={() => removePhotoDraft(p.id)} className="cursor-pointer self-start border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-muted hover:text-ink">
                             Remove
                           </button>
                         </li>
@@ -524,7 +540,7 @@ export function FixCenter({ productId }) {
               </section>
             </>
           )}
-        </div>
+        </fieldset>
 
         <aside className="flex min-w-0 flex-[1_1_280px] flex-col gap-4">
           <section aria-labelledby="todo" className={`${CARD} flex flex-col gap-1.5 px-[18px] py-4`}>
