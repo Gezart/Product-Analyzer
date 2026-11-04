@@ -260,11 +260,32 @@ async function latestPlan(productId) {
 /** Markdown state for the product page: the latest plan, eligibility and a live preview. */
 export async function markdownOverview(shopId, productId, { preview: withPreview = true } = {}) {
   const { product, session, settings } = await context(shopId, productId);
-  const [plan, eligible, priceChanges] = await Promise.all([
+  const [plan, eligible, priceChanges, score, variants] = await Promise.all([
     latestPlan(productId),
     eligibility(product),
     db().priceChange.findMany({ where: { productId }, orderBy: { changedAt: "desc" }, take: 30 }),
+    db().productScore.findFirst({ where: { productId }, orderBy: { computedAt: "desc" }, select: { status: true } }),
+    db().variant.findMany({ where: { productId }, select: { shopifyGid: true, inventoryQty: true, cost: true } }),
   ]);
+  // What the plan did so far: units and revenue since it started (until it ended), against the 30 days before.
+  let results = null;
+  if (plan?.startedAt) {
+    const start = plan.startedAt;
+    const [since, before] = await Promise.all([
+      db().productDailyMetric.aggregate({
+        // Until the day it ended, in the store's calendar (sales dates are the store's days).
+        where: { productId, date: { gte: start, ...(plan.endedAt ? { lte: new Date(`${localDateKey(plan.endedAt, product.shop.timezone)}T00:00:00Z`) } : {}) } },
+        _sum: { units: true, revenue: true },
+      }),
+      db().productDailyMetric.aggregate({ where: { productId, date: { gte: new Date(start.getTime() - 30 * DAY_MS), lt: start } }, _sum: { units: true } }),
+    ]);
+    results = {
+      soldSince: since._sum.units ?? 0,
+      revenueSince: Number(since._sum.revenue ?? 0),
+      soldBefore: before._sum.units ?? 0,
+      stockNow: variants.reduce((n, v) => n + Math.max(0, v.inventoryQty), 0),
+    };
+  }
   const running = plan && ["active", "paused"].includes(plan.status);
   let preview = null;
   let previewError = null;
@@ -281,6 +302,12 @@ export async function markdownOverview(shopId, productId, { preview: withPreview
   return {
     title: product.title,
     currency: product.shop.currency,
+    scoreStatus: score?.status ?? null,
+    // Unit costs by variant (the rules card), as the app has them from Shopify.
+    costs: Object.fromEntries(variants.map((v) => [v.shopifyGid, v.cost == null ? null : Number(v.cost)])),
+    results,
+    // The store's rules (the rules card), also while a plan runs.
+    rules: { marginFloorPct: settings.marginFloorPct, maxDiscountPct: settings.maxDiscountPct, endAction: settings.endAction },
     plan,
     eligible: eligible?.reason ?? null,
     preview,

@@ -1,5 +1,11 @@
 # History
 
+## 2026-11-04 · design-markdown-compare
+- Markdown redone to the owner's design (`/products/[id]/markdown`): "Markdown · product" with its state ("Running · step 2 of 3", Paused, Ready to start, Ended) and status, "Cancel and restore prices"; "The ladder" as bars (start and each step, done, live and next) with the floor as a dashed red line and when each step goes live, plus each variant's prices when there are several; "Approve schedule" before a plan; what it did ("Sold since the start" against the 30 days before, "Stock left", "Revenue from the plan"); "Rules for this product" and "Never below the floor"; the price log with each change's status
+- Compare redone to the design: "Compare" with the 30/60/90 days switch; products as columns (status pill, Remove, "+ Add product"); rows for units, revenue, views, conversion, price vs market, margin, stock (with the variants out of stock), stock value, days since last sale and page quality (photos and words, with what's missing); the best value in each row highlighted
+- The markdown API adds what the plan did, the product's status, unit costs and the store's rules; the compare API adds each product's market gap, its variants out of stock, photos and words
+- Checked in a browser at 1280 px and 390 px, and the markdown numbers against a local database
+
 ## 2026-11-04 · design-collections
 - Collection Optimizer redone to the owner's design: "Collection Optimizer" with "The app proposes a better order for each collection. You confirm, then it writes the order to Shopify."
 - Left: the collections with their product count and state ("Applied Oct 22 · 3 moved", "Undone Oct 12", "Last save failed", "Not optimized yet", too many products), and automatically sorted ones greyed out with "switch to Manually in Shopify to optimize"

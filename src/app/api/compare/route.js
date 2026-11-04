@@ -1,4 +1,5 @@
-import { grossMargin, pageQuality, parseCompareIds, stockAge } from "@/lib/compare";
+import { grossMargin, outOfStockNames, pageQuality, parseCompareIds, stockAge } from "@/lib/compare";
+import { marketGaps } from "@/lib/competitor-prices";
 import { db } from "@/lib/db";
 import { requireFeature } from "@/lib/feature-gate";
 import { localDateKey } from "@/lib/jobs/schedule";
@@ -23,18 +24,19 @@ export const GET = appRoute(async ({ request, shop }) => {
   const products = await db().product.findMany({
     where: { shopId: shop.id, OR: [{ id: { in: ids } }, { shopifyGid: { in: ids } }] },
     include: {
-      variants: { select: { price: true, cost: true, inventoryQty: true } },
+      variants: { select: { shopifyGid: true, price: true, cost: true, inventoryQty: true, sellsWhenOut: true, options: true } },
       scores: { orderBy: { computedAt: "desc" }, take: 1, select: { status: true } },
     },
   });
   const productIds = products.map((p) => p.id);
   const today = localDateKey(new Date(), shop.timezone);
   const since = new Date(Date.parse(`${today}T00:00:00Z`) - days * 86_400_000);
-  const [metrics, lastSales, ordersSync, webhooks] = await Promise.all([
+  const [metrics, lastSales, ordersSync, webhooks, gaps] = await Promise.all([
     db().productDailyMetric.findMany({ where: { productId: { in: productIds }, date: { gte: since } } }),
     db().productDailyMetric.groupBy({ by: ["productId"], where: { productId: { in: productIds }, units: { gt: 0 } }, _max: { date: true } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "orders" } } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "webhooks" } } }),
+    marketGaps(shop, { productIds }),
   ]);
   const knownDays = knownOrderDays({
     windowStart: ordersSync?.status === "done" ? ordersSync.lastCursor : null,
@@ -74,12 +76,17 @@ export const GET = appRoute(async ({ request, shop }) => {
         scoreStatus: p.scores[0]?.status ?? null,
         price: Number(p.price),
         compareAtPrice: p.compareAtPrice == null ? null : Number(p.compareAtPrice),
+        // How far the price is from the market price (null without one).
+        marketGap: gaps.get(p.id) ?? null,
         units: totals.units,
         revenue: totals.revenue,
         views: totals.views,
         conversion: totals.viewToPurchase,
         ...grossMargin(variants),
         stock: stock.stock,
+        // Variants that can't be bought (no stock, not sold when out), by name: "S, M".
+        outOfStock: outOfStockNames([...p.variants].sort((a, b) => a.shopifyGid.localeCompare(b.shopifyGid, "en", { numeric: true }))),
+        variantCount: p.variants.length,
         stockValue: stock.stockValue,
         stockValueIsEstimate: stock.costIsEstimate,
         stockAge: stockAge({
@@ -90,6 +97,8 @@ export const GET = appRoute(async ({ request, shop }) => {
         }),
         // Rows synced before the text was stored have words but no text (same rule as the diagnosis).
         pageQuality: pageQuality({ ...p, collections: p.collections.length, pageDataKnown: p.description != null || p.descriptionWords === 0 }),
+        imageCount: p.imageCount,
+        descriptionWords: p.descriptionWords,
       };
     }),
   });
