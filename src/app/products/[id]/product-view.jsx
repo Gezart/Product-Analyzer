@@ -95,7 +95,16 @@ export function ProductView() {
             </s-stack>
             {next && <s-text>Next: {next}</s-text>}
             {/* Sold without stock (e.g. gift cards): days of stock don't apply, so no reorder advice. */}
-            {data.score?.rising && <RisingStar trend={data.score.trend} daysOfCover={data.untracked ? null : data.daysOfCover} />}
+            {data.score?.rising && (
+              <RisingStar
+                productId={id}
+                trend={data.score.trend}
+                daysOfCover={data.untracked ? null : data.daysOfCover}
+                measuring={(data.risingActions ?? []).filter((a) => !a.done).map((a) => a.kind)}
+                onChanged={() => setVersion((v) => v + 1)}
+              />
+            )}
+            {(data.risingActions ?? []).length > 0 && <RisingEffects actions={data.risingActions} />}
             <div className="grid gap-4 sm:grid-cols-4">
               <Stat label="In stock" value={data.untracked ? "Sells without stock" : data.stock.toLocaleString()} />
               <Stat
@@ -259,14 +268,31 @@ function Stat({ label, value, note }) {
   );
 }
 
-/** A rising star: how fast it grows, and what to do so the growth lasts. */
-function RisingStar({ trend, daysOfCover }) {
+/** A rising star: how fast it grows, and what to do so the growth lasts ("Done" starts measuring it). */
+function RisingStar({ productId, trend, daysOfCover, measuring, onChanged }) {
+  const [busy, setBusy] = useState(null);
+  const [error, setError] = useState(null);
+  async function done(kind) {
+    setBusy(kind);
+    setError(null);
+    const res = await fetch(`/api/products/${productId}/rising-actions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind }) }).catch(() => null);
+    setBusy(null);
+    if (!res?.ok) return setError((await res?.json().catch(() => ({})))?.error ?? "It couldn't be saved. Try again.");
+    onChanged();
+  }
   return (
     <div className="rounded-lg bg-emerald-50 p-3 text-sm">
       <p className="m-0 font-medium text-emerald-800">Rising star: sales {growthLabel(trend)} over the 30 days before.</p>
       <ul className="m-0 mt-1 list-disc space-y-0.5 pl-5 text-emerald-900">
         {risingActions({ daysOfCover }).map((a) => (
           <li key={a.kind}>
+            {measuring.includes(a.kind) ? (
+              <span className="mr-2 text-xs font-medium text-emerald-700">Measuring</span>
+            ) : (
+              <button type="button" disabled={busy !== null} onClick={() => done(a.kind)} className="mr-2 rounded border border-emerald-300 bg-white px-1.5 text-xs disabled:opacity-50">
+                {busy === a.kind ? "Saving…" : "Done"}
+              </button>
+            )}
             {a.href.startsWith("/") ? (
               <Link href={a.href} className="underline">
                 {a.text}
@@ -280,6 +306,29 @@ function RisingStar({ trend, daysOfCover }) {
                 {a.text}
               </a>
             )}
+          </li>
+        ))}
+      </ul>
+      <p className="m-0 mt-1 text-xs text-emerald-900/70">Press &quot;Done&quot; when you&apos;ve done one: its sales since are measured against the 30 days before.</p>
+      {error && <p className="m-0 mt-1 text-xs text-red-700">{error}</p>}
+    </div>
+  );
+}
+
+/** What was done for it as a rising star, and its sales since (units a day) against the 30 days before. */
+function RisingEffects({ actions }) {
+  return (
+    <div className="rounded-lg bg-zinc-50 p-3 text-sm">
+      <p className="m-0 font-medium">Rising star actions</p>
+      <ul className="m-0 mt-1 list-none space-y-0.5 p-0">
+        {actions.map((a) => (
+          <li key={a.id}>
+            {a.label} on {a.startedOn}:{" "}
+            {a.change == null
+              ? a.days < 7
+                ? `measuring (day ${a.days + 1}; a result shows after 7 days).`
+                : `${a.after} a day since, no sales in the 30 days before to compare with.`
+              : `${a.after} a day since vs ${a.before} before (${a.change >= 0 ? "+" : ""}${Math.round(a.change * 100)}%)${a.done ? ", over 30 days." : `, ${a.days} days so far.`}`}
           </li>
         ))}
       </ul>

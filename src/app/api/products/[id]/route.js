@@ -3,6 +3,7 @@ import { localDateKey } from "@/lib/jobs/schedule";
 import { dailySeries, lastSaleDate, trend30, windowTotals } from "@/lib/product-metrics";
 import { appRoute } from "@/lib/route";
 import { returnRate, returnWindow, topReturnReasons } from "@/lib/returns";
+import { risingEffects } from "@/lib/rising-actions";
 import { formatSeason, seasonOf, seasonState } from "@/lib/season";
 import { seasonalCollectionsOf } from "@/lib/settings";
 import { stockFromVariants } from "@/lib/scoring";
@@ -36,6 +37,8 @@ export const GET = appRoute(async ({ shop, params }) => {
   const moves = planFixIds.length
     ? await db().fix.findMany({ where: { id: { in: planFixIds }, type: "position" }, select: { id: true, status: true, before: true, after: true } })
     : [];
+  // What was done for it as a rising star, and its sales since.
+  const rising = await risingEffects(shop, product.id);
   // Returns over the recent days: the product's rate, the store's, and the most common reasons.
   const recent = await returnWindow(shop.id, shop.timezone);
   const [productReturns, storeReturns, returnReasons] = await Promise.all([
@@ -87,6 +90,7 @@ export const GET = appRoute(async ({ shop, params }) => {
       season,
     },
     returns,
+    risingActions: rising,
     score: score
       ? {
           status: score.status,

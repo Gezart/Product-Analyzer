@@ -111,6 +111,7 @@ model Product {
   competitorLinks  CompetitorLink[]
   googleBenchmarks GoogleBenchmark[]
   aiPhotoDrafts    AiPhotoDraft[]
+  risingActions    RisingAction[]
 
   @@unique([shopId, shopifyGid])
   @@index([shopId])
@@ -546,4 +547,24 @@ model CollectionReorder {
 
   @@index([shopId, collectionGid, createdAt])
   @@map("collection_reorders")
+}
+
+/// Something done for a rising star (moved up in a collection, featured on the home page, restocked),
+/// measured by its sales since (units per day) against the 30 days before. Never a rescue verdict.
+model RisingAction {
+  id        String   @id @default(cuid())
+  productId String   @map("product_id")
+  kind      String // collections | home | stock
+  /// The store's day the measurement starts (the day of the action).
+  startedOn DateTime @map("started_on") @db.Date
+  /// Recorded by a saved collection order (undone with it); null when the merchant pressed "Done".
+  reorderId String?  @map("reorder_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Two requests at once (double click, a save and a click) can't record the same action twice.
+  @@unique([productId, kind, startedOn])
+  @@index([productId, startedOn])
+  @@map("rising_actions")
 }
