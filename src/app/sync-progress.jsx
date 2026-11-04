@@ -27,7 +27,8 @@ export function SyncProgress({ children }) {
   const [sync, setSync] = useState(null);
   // The import's state couldn't be read: the dashboard shows meanwhile (it has its own notices).
   const [unknown, setUnknown] = useState(false);
-  const [plan, setPlan] = useState(null);
+  // The store's plan (undefined until known; null when it couldn't be read).
+  const [plan, setPlan] = useState(undefined);
   const [retrying, setRetrying] = useState(false);
   const timer = useRef(undefined);
 
@@ -49,8 +50,8 @@ export function SyncProgress({ children }) {
     // Which settings help while waiting depends on the plan.
     fetch("/api/shop")
       .then((res) => (res.ok ? res.json() : null))
-      .then((shop) => shop && setPlan(shop.plan))
-      .catch(() => {});
+      .then((shop) => setPlan(shop?.plan ?? null))
+      .catch(() => setPlan(null));
     return () => clearTimeout(timer.current);
   }, [load]);
 
@@ -140,7 +141,8 @@ export function SyncProgress({ children }) {
           </button>
         )}
       </section>
-      {!failed && (
+      {/* The tips wait for the plan, so a paid store doesn't first see the Free ones. */}
+      {!failed && plan !== undefined && (
         <section aria-labelledby="meanwhile" className={`${CARD} flex flex-col gap-3 px-[22px] py-5`}>
           <h2 id="meanwhile" className={H2}>
             While you wait (optional)
