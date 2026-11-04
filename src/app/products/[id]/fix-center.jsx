@@ -54,7 +54,7 @@ export function FixCenter({ productId }) {
       if (!res?.ok) {
         const text = !res ? "Could not reach the app. Check your connection and reload." : res.status === 404 ? "Product not found in Shopify" : (await apiError(res)).message;
         // A failed reload keeps the page as it was; only the first load shows the error instead.
-        if (loadedOnce.current) setMessage({ tone: "bad", text: `Couldn't refresh the page: ${text}` });
+        if (loadedOnce.current) setMessage((m) => ({ tone: "bad", text: `${m?.text ? `${m.text} ` : ""}Couldn't refresh the page: ${text}` }));
         else setError(text);
         return false;
       }
@@ -160,13 +160,14 @@ export function FixCenter({ productId }) {
     }
     setPhotoDrafts((list) => list.filter((p) => !added.includes(p.id)));
     if (appliedTypes.includes("description") || appliedTypes.includes("seo")) resetAiDraft();
-    setBusy(null);
+    setBusy("reload");
     const applied = [...appliedTypes.map((t) => LABELS[t]), ...(added.length ? [`${added.length} AI photo${added.length === 1 ? "" : "s"}`] : [])];
     const done = applied.length ? `Applied to Shopify: ${applied.join(", ")}. The old versions are saved; you can undo them in the history.` : "";
     const note = pending ? " Shopify is still finishing a change; it can take a minute to show." : "";
     setMessage(failure ? { tone: "bad", text: `${done} Not applied: ${failure}`.trim() } : { tone: "good", text: done + note });
     // Only what went to Shopify is read again; the other drafts keep the merchant's edits.
     await load(added.length ? [...appliedTypes, "images"] : appliedTypes);
+    setBusy(null);
   }
 
   /** The AI draft is over once the description or SEO is reset to the live product (applied or undone). */
@@ -198,7 +199,15 @@ export function FixCenter({ productId }) {
       return;
     }
     const undone = data.fixes.find((f) => f.id === fixId)?.type;
-    if (undone === "description" || undone === "seo") resetAiDraft();
+    if ((undone === "description" || undone === "seo") && aiDraft) {
+      // The undone part is read from Shopify below; the other part goes back to the merchant's own text.
+      if (version === "ai" && mine) {
+        setDescription(mine.description);
+        setSeoTitle(mine.seoTitle);
+        setSeoDescription(mine.seoDescription);
+      }
+      resetAiDraft();
+    }
     const note = body.pending ? " Shopify is still finishing it; it can take a minute to show." : "";
     setMessage({ tone: "good", text: `Undone: the product is back to how it was before the fix.${note}` });
     // Undoing an added photo changes the photo list.
@@ -319,7 +328,7 @@ export function FixCenter({ productId }) {
 
       <div className="flex flex-wrap items-start gap-4">
         {/* While changes go to Shopify the editors are locked: the page reloads from Shopify afterwards. */}
-        <fieldset disabled={busy === "apply"} className="m-0 flex min-w-0 flex-[999_1_520px] flex-col gap-4 border-0 p-0">
+        <fieldset disabled={busy === "apply" || busy === "reload"} className="m-0 flex min-w-0 flex-[999_1_520px] flex-col gap-4 border-0 p-0">
           {live && (
             <>
               <section id="description" aria-labelledby="desc" className={`${CARD} flex scroll-mt-4 flex-col gap-3 px-5 py-[18px]`}>
