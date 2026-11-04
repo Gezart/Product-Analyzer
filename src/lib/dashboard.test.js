@@ -84,6 +84,17 @@ test("stuck split: dead stock share of the stuck value, and products with no sto
   assert.deepEqual(split([row({ productId: "a", status: "healthy", stockValue: 900 })]), { products: 0, value: 0, deadShare: 0 });
 });
 
+test("new products get their own status tile with count and stock value", () => {
+  const s = summarize([
+    row({ productId: "a", status: "new", stockValue: 120.5 }),
+    row({ productId: "b", status: "new", stockValue: 79.5 }),
+    row({ productId: "c", status: "healthy", stockValue: 900 }),
+  ]);
+  assert.deepEqual(s.byStatus.find((b) => b.status === "new"), { status: "new", count: 2, stockValue: 200, moneyAtStake: 0 });
+  assert.equal(s.productCount, 3);
+  assert.equal(s.moneyStuck, 0);
+});
+
 test("rising stars on the dashboard: count and the fastest-growing five", () => {
   const rows = Array.from({ length: 7 }, (_, i) => ({ productId: `r${i}`, status: "healthy", stockValue: 0, moneyAtStake: 0, rising: true, trend: 1.2 + i / 10 }));
   rows.push({ productId: "flat", status: "healthy", stockValue: 0, moneyAtStake: 0, rising: false, trend: 3 });
