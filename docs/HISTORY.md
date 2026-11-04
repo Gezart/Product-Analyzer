@@ -1,5 +1,11 @@
 # History
 
+## 2026-11-04 · design-dashboard
+- Dashboard redone to the owner's design: "Catalog health" with when it was analyzed and how many products, "All products" and "This week's plan"; "This week · N moves worth €X" (the first three of the week's plan); "Money stuck in stock" with the three key numbers, the status bar and a tile per status (the design's dot colors) plus the dashed "Seasonal · off season" tile; "Next best move" (status, money at stake, days since the last sale, photos, the right button for its status) with "Up next"; "Rising stars" (growth, conversion, "Move to top"); "Running out" (fewest days of stock); "Top 10 to act on today"
+- The dashboard API adds what these need: the week's first moves, the next move's facts, the rising stars' conversion over 30 days and the products running out
+- Upgrade notes keep their place in the design's soft panel style; the inbox banner is gone (the weekly plan and the menu lead there)
+- Checked in a browser with design-like data at 1280 px and 390 px (the table scrolls in its box on a phone)
+
 ## 2026-11-04 · design-shell
 - Start of the redesign to the owner's design (Unstuck App Design canvas): the app's own left menu as in the design ("Unstuck" mark, the current page white and bold; a scrolling row at phone width), only pages that are built (Dashboard, Products, Inbox, Collections, Compare, Reports, Plans, Settings; the weekly plan counts as Inbox); Shopify's sub-menu (`ui-nav-menu`) removed, as the owner chose
 - Design tokens in Tailwind (`globals.css`): Inter, the light grey ground, ink and muted text, border and line colors, indigo links and the soft indigo panels; shared pieces in `src/app/ui/kit.jsx` (page header with back link and actions, card, buttons, the design's status pills and table classes)
