@@ -7,7 +7,8 @@ const p = (productId, status, moneyAtStake, extra = {}) => ({ productId, title: 
 test("the action per product: reorder, markdown, visibility, what holds it back, diagnose, or nothing", () => {
   assert.equal(actionFor(p("a", "stockout_risk", 0, { daysOfCover: 4.4 })).text, "Reorder: about 4 days of stock left.");
   assert.equal(actionFor(p("a2", "stockout_risk", 0)).text, "Reorder before it sells out.");
-  assert.equal(actionFor(p("b", "dead_stock", 500, { markdownReason: "Dead stock: no sale for a long time.", topReason: { code: "few_images", label: "Too few images", link: "#page" } })).kind, "markdown");
+  const b = actionFor(p("b", "dead_stock", 500, { markdownReason: "Dead stock: no sale for a long time.", topReason: { code: "few_images", label: "Too few images", link: "#page" } }));
+  assert.deepEqual([b.kind, b.href], ["markdown", "/products/b/markdown"]);
   const c = actionFor(p("c", "slow_mover", 300, { diagnosed: true, topReason: { code: "store_checkout_issue", label: "Shoppers drop off at checkout", link: "#metrics" } }));
   assert.deepEqual([c.kind, c.text, c.href], ["fix_page", "What holds it back: shoppers drop off at checkout.", "/products/c#metrics"]);
   // A reason without a usable link goes to the diagnosis.

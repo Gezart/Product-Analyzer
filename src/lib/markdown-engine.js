@@ -278,7 +278,17 @@ export async function markdownOverview(shopId, productId, { preview: withPreview
       if (!previewError) throw error;
     }
   }
-  return { plan, eligible: eligible?.reason ?? null, preview, previewError, ladder: LADDER, priceChanges, today: localDateKey(new Date(), product.shop.timezone) };
+  return {
+    title: product.title,
+    currency: product.shop.currency,
+    plan,
+    eligible: eligible?.reason ?? null,
+    preview,
+    previewError,
+    ladder: LADDER,
+    priceChanges,
+    today: localDateKey(new Date(), product.shop.timezone),
+  };
 }
 
 const isProposal = (v) =>

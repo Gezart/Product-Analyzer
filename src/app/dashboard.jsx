@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BTN, CARD, H2, PageHeader, Pill, TROW } from "@/app/ui/kit";
+import { BTN, CARD, H2, Notice, PageHeader, Pill, TROW } from "@/app/ui/kit";
 import { stuckSplit } from "@/lib/dashboard";
 import { hasFeature, PLANS } from "@/lib/plans";
 import { growthLabel } from "@/lib/rising";
@@ -64,11 +64,6 @@ export function Dashboard() {
     );
   }
   return <DashboardView data={data} />;
-}
-
-/** A plain message card (or a red one for errors). */
-function Notice({ tone, children }) {
-  return <p className={`m-0 rounded-xl border px-5 py-4 ${tone === "bad" ? "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C]" : "border-line bg-white text-ink-2"}`}>{children}</p>;
 }
 
 /** "Analyzed today at 06:02 · 248 active products". */

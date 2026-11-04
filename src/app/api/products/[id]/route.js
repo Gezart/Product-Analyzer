@@ -1,3 +1,4 @@
+import { marketGaps } from "@/lib/competitor-prices";
 import { db } from "@/lib/db";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { dailySeries, lastSaleDate, trend30, windowTotals } from "@/lib/product-metrics";
@@ -6,7 +7,8 @@ import { returnRate, returnWindow, topReturnReasons } from "@/lib/returns";
 import { risingEffects } from "@/lib/rising-actions";
 import { formatSeason, seasonOf, seasonState } from "@/lib/season";
 import { seasonalCollectionsOf } from "@/lib/settings";
-import { stockFromVariants } from "@/lib/scoring";
+import { sanitizeThresholds, stockFromVariants } from "@/lib/scoring";
+import { LADDER, markdownReason } from "@/lib/markdown";
 import { knownOrderDays } from "@/lib/sync/constants";
 
 // One product's analysis: metrics for 30/60/90 days, daily sales, stock, latest score, variants.
@@ -15,10 +17,10 @@ export const GET = appRoute(async ({ shop, params }) => {
   const product = await db().product.findFirst({
     where: { id, shopId: shop.id },
     include: {
-      variants: { select: { id: true, sku: true, options: true, price: true, cost: true, inventoryQty: true, sellsWhenOut: true }, orderBy: { shopifyGid: "asc" } },
+      variants: { select: { id: true, shopifyGid: true, sku: true, options: true, price: true, cost: true, inventoryQty: true, sellsWhenOut: true }, orderBy: { shopifyGid: "asc" } },
       scores: { orderBy: { computedAt: "desc" }, take: 1 },
       rescuePlans: { orderBy: { startedAt: "desc" }, take: 1 },
-      markdownPlans: { where: { status: { in: ["active", "paused"] } }, take: 1, select: { status: true } },
+      markdownPlans: { where: { status: { in: ["active", "paused"] } }, take: 1, select: { status: true, currentStep: true, floorPrice: true } },
     },
   });
   if (!product) return Response.json({ error: "Not found" }, { status: 404 });
@@ -30,13 +32,31 @@ export const GET = appRoute(async ({ shop, params }) => {
     db().productDailyMetric.findFirst({ where: { productId: id, units: { gt: 0 } }, orderBy: { date: "desc" }, select: { date: true } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "orders" } } }),
     db().syncState.findUnique({ where: { shopId_resource: { shopId: shop.id, resource: "webhooks" } } }),
-    db().settings.findUnique({ where: { shopId: shop.id }, select: { seasonalCollections: true } }),
+    db().settings.findUnique({ where: { shopId: shop.id }, select: { seasonalCollections: true, thresholds: true, marginFloorPct: true } }),
   ]);
   // The plan's new places in collections (Collection Optimizer): shown with it, undone on the Collections page.
   const planFixIds = product.rescuePlans[0]?.fixIds ?? [];
   const moves = planFixIds.length
     ? await db().fix.findMany({ where: { id: { in: planFixIds }, type: "position" }, select: { id: true, status: true, before: true, after: true } })
     : [];
+  // Units sold per variant in the last 60 days (order lines name the variant), the market price gap, and
+  // the store's views and purchases over the last 30 days (its conversion, to compare with).
+  const from30 = new Date(Date.parse(`${today}T00:00:00Z`) - 30 * 86_400_000);
+  const [soldByVariant, gaps, store30] = await Promise.all([
+    db().orderLine.groupBy({
+      by: ["variantGid"],
+      // The 60 full days before today, as the 60-day window.
+      where: { shopId: shop.id, productGid: product.shopifyGid, date: { gte: new Date(Date.parse(`${today}T00:00:00Z`) - 60 * 86_400_000), lt: new Date(`${today}T00:00:00Z`) } },
+      _sum: { quantity: true },
+    }),
+    marketGaps(shop, { productId: product.id }),
+    db().productDailyMetric.aggregate({
+      where: { product: { shopId: shop.id }, date: { gte: from30, lt: new Date(`${today}T00:00:00Z`) } },
+      _sum: { viewSessions: true, purchaseSessions: true },
+    }),
+  ]);
+  const storeViews = store30._sum.viewSessions ?? 0;
+  const sold60 = new Map(soldByVariant.map((r) => [r.variantGid, r._sum.quantity ?? 0]));
   // What was done for it as a rising star, and its sales since.
   const rising = await risingEffects(shop, product.id);
   // Returns over the recent days: the product's rate, the store's, and the most common reasons.
@@ -71,9 +91,24 @@ export const GET = appRoute(async ({ shop, params }) => {
   );
   const daily30 = windows[0].units / 30;
 
+  // Why a markdown could start now (as the markdown page decides), only with stock to clear.
+  const units = product.variants.reduce((n, v) => n + Math.max(0, v.inventoryQty), 0);
+  const found =
+    units > 0 &&
+    markdownReason({
+      active: product.status === "ACTIVE",
+      status: score?.status ?? null,
+      rescueVerdict: product.rescuePlans[0]?.verdict ?? null,
+      stock: units,
+      season,
+    });
+  const markdownNow = { reason: found ? found.reason : null, reasonKind: found ? found.kind : null };
+
   const untracked = product.variants.length > 0 && product.variants.every((v) => v.sellsWhenOut) && stock.stock <= 0;
   return Response.json({
     currency: shop.currency,
+    // The store's day (the last sale is counted from it).
+    today,
     product: {
       id: product.id,
       title: product.title,
@@ -107,6 +142,22 @@ export const GET = appRoute(async ({ shop, params }) => {
     // Live stock, its value and days of stock (the score is from the last nightly run).
     stock: stock.stock,
     markdownRunning: product.markdownPlans.length > 0,
+    // The markdown card: the running plan (its live step, 1-based), else why one could start now; the ladder and floor rule.
+    markdown: {
+      running: product.markdownPlans[0]
+        ? {
+            status: product.markdownPlans[0].status,
+            step: product.markdownPlans[0].currentStep >= 0 ? product.markdownPlans[0].currentStep + 1 : null,
+            floor: Number(product.markdownPlans[0].floorPrice),
+          }
+        : null,
+      ...markdownNow,
+      steps: LADDER.steps,
+      stepDays: LADDER.stepDays,
+      marginFloorPct: settings ? Number(settings.marginFloorPct) : 10,
+    },
+    // The store's conversion over the last 30 days (all products), to compare the product's with.
+    storeConversion: storeViews > 0 ? (store30._sum.purchaseSessions ?? 0) / storeViews : null,
     // Sold without stock (inventory not tracked, e.g. a gift card, or selling past zero): stock numbers don't apply.
     untracked,
     stockValue: stock.stockValue,
@@ -140,6 +191,18 @@ export const GET = appRoute(async ({ shop, params }) => {
           })),
         }
       : null,
-    variants: product.variants.map((v) => ({ id: v.id, sku: v.sku, options: v.options, price: Number(v.price), stock: v.inventoryQty })),
+    variants: product.variants.map((v) => ({
+      id: v.id,
+      sku: v.sku,
+      options: v.options,
+      price: Number(v.price),
+      cost: v.cost == null ? null : Number(v.cost),
+      stock: v.inventoryQty,
+      sellsWhenOut: v.sellsWhenOut,
+      sold60: sold60.get(v.shopifyGid) ?? 0,
+    })),
+    // How far its price is from the market price (null without one), and the store's "above" threshold.
+    marketGap: gaps.get(product.id) ?? null,
+    marketAbove: sanitizeThresholds(settings?.thresholds).marketAbove,
   });
 });

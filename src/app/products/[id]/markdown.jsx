@@ -6,12 +6,16 @@ import { listen } from "@/app/polaris-events";
 import { UpgradeBanner } from "@/app/upgrade-banner";
 import { shiftDate } from "@/lib/dates";
 import { getPlan } from "@/lib/plans";
+import { moneyFormatter } from "@/lib/status-info";
 
 const addDays = (date, n) => shiftDate(date.slice(0, 10), n);
 const REASONS = { markdown: "Markdown step", restore: "Original price restored", guard_revert: "Raised to the price floor" };
 
-/** Markdown ladder: preview → approve; then the running plan, its next step, cancel; and the price log. */
-export function Markdown({ productId, money, onChanged }) {
+/**
+ * Markdown ladder: preview → approve; then the running plan, its next step, cancel; and the price log.
+ * `onTitle` receives the product's name once loaded (the page header).
+ */
+export function Markdown({ productId, onChanged, onTitle }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -20,10 +24,12 @@ export function Markdown({ productId, money, onChanged }) {
   const load = useCallback(async () => {
     const res = await fetch(`/api/products/${productId}/markdown`);
     if (res.ok) {
-      setData(await res.json());
+      const d = await res.json();
+      setData(d);
       setLoadError(null);
+      onTitle?.(d.title);
     } else setLoadError((await apiError(res)).message);
-  }, [productId]);
+  }, [productId, onTitle]);
   useEffect(() => {
     load();
   }, [load]);
@@ -37,7 +43,7 @@ export function Markdown({ productId, money, onChanged }) {
     setBusy(false);
     setMsg(res.ok ? ok(out) : { tone: "critical", text: out.error ?? `Failed (${res.status})` });
     await load();
-    if (res.ok) onChanged();
+    if (res.ok) onChanged?.();
   }
 
   if (loadError && !data) {
@@ -47,12 +53,19 @@ export function Markdown({ productId, money, onChanged }) {
       </s-section>
     );
   }
-  if (!data) return null;
+  if (!data) return <p className="m-0 text-muted">Loading the markdown…</p>;
   const running = data.plan && ["active", "paused"].includes(data.plan.status) ? data.plan : null;
   const locked = !running && data.upgrade && data.eligible;
   const unavailable = !running && !locked && data.eligible && data.previewError;
-  if (!running && !data.preview && !locked && !unavailable && data.priceChanges.length === 0) return null;
+  if (!running && !data.preview && !locked && !unavailable && data.priceChanges.length === 0) {
+    return (
+      <s-section heading="Markdown">
+        <s-text>No markdown for this product now. One is proposed for dead stock, when a rescue plan changes nothing, or right after its season ends.</s-text>
+      </s-section>
+    );
+  }
   const variantTitle = new Map((data.plan?.steps?.variants ?? []).map((v) => [v.id, v.title]));
+  const money = moneyFormatter(data.currency, 2);
   const p = (n) => money.format(n);
 
   return (
