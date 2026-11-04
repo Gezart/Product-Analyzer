@@ -65,7 +65,11 @@ export function InboxPage() {
   const markRead = (body) => fetch("/api/notifications/read", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
   async function open(item) {
-    if (!item.read) await markRead({ ids: [item.id] }).catch(() => {});
+    if (!item.read) {
+      await markRead({ ids: [item.id] }).catch(() => {});
+      // Shown as read at once: the weekly plan's own item leads to this same page, which stays mounted.
+      setInbox((d) => d && { ...d, unread: Math.max(0, d.unread - 1), items: d.items.map((x) => (x.id === item.id ? { ...x, read: true } : x)) });
+    }
     router.push(item.href);
   }
 
@@ -96,7 +100,7 @@ export function InboxPage() {
 /** This week's moves, ranked by money at stake, with last week's results underneath. */
 function WeeklyPlan({ data, error, week, onWeek }) {
   const shell = (children) => (
-    <section aria-labelledby="plan" className="flex flex-col gap-3.5 rounded-xl border border-accent-line bg-white px-[22px] py-5">
+    <section aria-label="Weekly plan" className="flex flex-col gap-3.5 rounded-xl border border-accent-line bg-white px-[22px] py-5">
       {children}
     </section>
   );
@@ -121,7 +125,9 @@ function WeeklyPlan({ data, error, week, onWeek }) {
       </>,
     );
   }
-  const rows = plan.actions.map((a) => ({ ...planRow(a, money), key: `${a.kind}-${a.productId}` }));
+  const rows = plan.actions.map((a, i) => ({ ...planRow(a, money), productId: a.productId, key: `${a.kind}-${a.productId}-${i}` }));
+  // An older week, picked in the list, isn't "this week".
+  const latest = plan.week === data.weeks[0];
   const lines = lastWeekLines(plan.lastWeek, money);
   return shell(
     <>
@@ -129,7 +135,7 @@ function WeeklyPlan({ data, error, week, onWeek }) {
         <div>
           <p className={KICKER}>Weekly plan · {mondayLabel(plan.week)}</p>
           <h2 id="plan" className="mt-1 mb-0 text-lg font-bold">
-            {rows.length === 0 ? "Nothing urgent this week" : `${rows.length} move${rows.length === 1 ? "" : "s"} for this week`}
+            {rows.length === 0 ? `Nothing urgent ${latest ? "this" : "that"} week` : `${rows.length} move${rows.length === 1 ? "" : "s"} for ${latest ? "this" : "that"} week`}
           </h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -153,7 +159,9 @@ function WeeklyPlan({ data, error, week, onWeek }) {
                 {i + 1}
               </span>
               <span className="flex min-w-0 flex-[1_1_180px] flex-col">
-                <span className="font-semibold">{r.title}</span>
+                <Link href={`/products/${r.productId}`} className="font-semibold text-ink no-underline hover:text-ink hover:underline">
+                  {r.title}
+                </Link>
                 {r.why && <span className="text-[13px] text-muted">{r.why}</span>}
               </span>
               <Link href={r.href} className={BTN.small}>
@@ -171,21 +179,22 @@ function WeeklyPlan({ data, error, week, onWeek }) {
               <li key={i}>
                 {l.before}
                 {l.strong && <strong>{l.strong}</strong>}
-                {l.product && <Link href={`/products/${l.product.productId}`}>{l.product.title}</Link>}
-                {l.after}
                 {l.products && (
                   <span className="text-muted">
                     {" "}
                     (
                     {l.products.map((p, j) => (
-                      <span key={p.productId}>
+                      <span key={`${p.productId}-${j}`}>
                         {j > 0 && ", "}
                         <Link href={`/products/${p.productId}`}>{p.title}</Link>
+                        {p.extra && ` ${p.extra}`}
                       </span>
                     ))}
                     )
                   </span>
                 )}
+                {l.product && <Link href={`/products/${l.product.productId}`}>{l.product.title}</Link>}
+                {l.after}
               </li>
             ))}
           </ul>
@@ -236,7 +245,9 @@ function Notifications({ data, error, onOpen }) {
                     </span>
                     {item.body && <span className="text-[13px] text-ink-2">{item.body}</span>}
                   </span>
-                  <span className="text-xs whitespace-nowrap text-muted">{whenLabel(item.createdAt)}</span>
+                  <time dateTime={item.createdAt} title={new Date(item.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} className="text-xs whitespace-nowrap text-muted">
+                    {whenLabel(item.createdAt)}
+                  </time>
                 </button>
               </li>
             );

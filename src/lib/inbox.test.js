@@ -20,6 +20,10 @@ test("each weekly plan move as a row: what to do, why, and its button", () => {
   });
   assert.equal(planRow(action("markdown", "Start the markdown. Dead stock: no sale for a long time."), money).why, "€1,800 at stake · Dead stock: no sale for a long time");
   assert.equal(planRow(action("visibility", "…"), money).cta, "Open Collections");
+  // A reason's own spelling comes back from the stored lower case; older plans' texts read well too.
+  assert.equal(planRow(action("fix_page", "What holds it back: seo is incomplete."), money).why, "€1,800 at stake · SEO is incomplete");
+  assert.equal(planRow(action("fix_page", "Fix the page: too few images."), money).why, "€1,800 at stake · Too few images");
+  assert.equal(planRow(action("reorder", "Reorder before it sells out.", { moneyAtStake: 0 }), money).why, "Before it sells out");
   assert.equal(planRow(action("diagnose", "…"), money).title, "Find out why Leather Jacket isn't selling");
   assert.deepEqual(planRow(action("future_kind", "Something new.", { moneyAtStake: 0 }), money), { title: "Leather Jacket", why: "Something new", cta: "Open", href: "/products/p1#page" });
 });
@@ -38,7 +42,15 @@ test("last week's lines: improved fixes together, then each other result and the
     },
     money,
   );
-  assert.deepEqual(lines[0], { before: "2 fixes came back ", strong: "Improved", after: ": about €420 in extra sales.", products: [{ productId: "a", title: "Slim Jeans" }, { productId: "b", title: "Tee" }] });
+  assert.deepEqual(lines[0], {
+    before: "2 fixes came back ",
+    strong: "Improved",
+    after: ": about €420 in extra sales.",
+    products: [
+      { productId: "a", title: "Slim Jeans", extra: "+€300" },
+      { productId: "b", title: "Tee", extra: "+€120" },
+    ],
+  });
   assert.deepEqual(lines[1], { before: "", product: { productId: "c", title: "Scarf" }, after: ": Worse. Undo the fixes on its page." });
   assert.equal(lines[2].before, "Markdown started for ");
   assert.equal(lines[3].after, " (the stock cleared).");
@@ -51,6 +63,7 @@ test("a notification's look, with a rescue verdict's tone following the verdict"
   assert.equal(kindOf("rescue_verdict", "worse").tone, "bad");
   assert.equal(kindOf("rescue_verdict", "improved").tone, "good");
   assert.equal(kindOf("rescue_verdict", "no_change").tone, "warn");
+  assert.equal(kindOf("rescue_verdict", "not_enough_data").tone, "info");
   assert.deepEqual(kindOf("something_new"), { icon: "bell", tone: "info", label: "Update" });
 });
 

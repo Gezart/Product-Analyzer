@@ -1,10 +1,18 @@
 // The inbox (the owner's design): the weekly plan's rows, last week's lines, and each notification's
-// icon, tone, kind and time. Pure (no imports) so node:test can load it.
+// icon, tone, kind and time. Pure (relative imports only) so node:test can load it.
+
+import { REASON_TITLES } from "./diagnosis-titles.js";
 
 const strip = (text, prefix) => (text?.startsWith(prefix) ? text.slice(prefix.length) : (text ?? ""));
 const sentence = (text) => {
   const t = text.trim().replace(/\.$/, "");
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
+};
+// Plans store a diagnosis reason's title in lower case ("seo is incomplete"): its own spelling comes back.
+const TITLES = new Map(Object.values(REASON_TITLES).map((t) => [t.toLowerCase(), t]));
+const reasonText = (text) => {
+  const t = text.trim().replace(/\.$/, "");
+  return TITLES.get(t.toLowerCase()) ?? sentence(t);
 };
 
 /**
@@ -16,13 +24,15 @@ export function planRow(a, money) {
   const why = (...parts) => parts.filter(Boolean).join(" · ");
   switch (a.kind) {
     case "reorder":
-      return { title: `Reorder ${a.title}`, why: sentence(strip(a.text, "Reorder: ")), cta: "See stock", href: a.href };
+      // "Reorder: about 6 days of stock left." (older plans: "Reorder before it sells out.")
+      return { title: `Reorder ${a.title}`, why: sentence(strip(strip(a.text, "Reorder: "), "Reorder ")), cta: "See stock", href: a.href };
     case "markdown":
       return { title: `Start the markdown for ${a.title}`, why: why(stake, sentence(strip(a.text, "Start the markdown. "))), cta: "Start markdown", href: a.href };
     case "visibility":
       return { title: `Give ${a.title} a better place in its collections`, why: why(stake, "It sells well to the few who see it"), cta: "Open Collections", href: a.href };
     case "fix_page":
-      return { title: `Fix what holds ${a.title} back`, why: why(stake, sentence(strip(a.text, "What holds it back: "))), cta: "See why", href: a.href };
+      // "What holds it back: too few images." (older plans: "Fix the page: too few images.")
+      return { title: `Fix what holds ${a.title} back`, why: why(stake, reasonText(strip(strip(a.text, "What holds it back: "), "Fix the page: "))), cta: "See why", href: a.href };
     case "diagnose":
       return { title: `Find out why ${a.title} isn't selling`, why: why(stake, "Run its diagnosis"), cta: "Diagnose", href: a.href };
     default:
@@ -47,7 +57,8 @@ export function lastWeekLines(recap, money) {
       before: `${n} fix${n === 1 ? "" : "es"} came back `,
       strong: "Improved",
       after: recap.extraSales > 0 ? `: about ${money.format(recap.extraSales)} in extra sales.` : ".",
-      products: improved.map((v) => ({ productId: v.productId, title: v.title })),
+      // Each with what it brought in ("Slim Jeans +€310"), shown right after "Improved".
+      products: improved.map((v) => ({ productId: v.productId, title: v.title, extra: v.extraSales > 0 ? `+${money.format(v.extraSales)}` : null })),
     });
   }
   for (const v of (recap.verdicts ?? []).filter((x) => x.verdict !== "improved")) {
