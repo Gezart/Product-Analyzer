@@ -1,5 +1,11 @@
 # History
 
+## 2026-11-04 · design-results
+- New Results page in the menu (after Inbox), as in the owner's design: "Every fix and collection order is measured. Here is what worked."; how many are measuring now and the last 90 days' Improved, No change and Worse; the rescue plans with the product, what changed and when, the window as a bar (day and visits so far, or when it finished and how long), conversion before → now (or units expected → sold without visit data), the verdict, and what's next ("Undo the change", "Start markdown", or "+€300 recovered"); "How the verdict is made", matching the app's rules
+- The product page's "Rescue plan · Not started" card leads here ("How it's measured")
+- `/api/results` lists the shop's rescue plans (measuring, and those of the last 150 days) with their changes and visits so far; helpers are pure and tested (`src/lib/results.js`)
+- Checked in a browser at 1280 px and 390 px, and the API against a local database
+
 ## 2026-11-04 · design-markdown-compare
 - Markdown redone to the owner's design (`/products/[id]/markdown`): "Markdown · product" with its state ("Running · step 2 of 3", Paused, Ready to start, Ended) and status, "Cancel and restore prices"; "The ladder" as bars (start and each step, done, live and next) with the floor as a dashed red line and when each step goes live, plus each variant's prices when there are several; "Approve schedule" before a plan; what it did ("Sold since the start" against the 30 days before, "Stock left", "Revenue from the plan"); "Rules for this product" and "Never below the floor"; the price log with each change's status
 - Compare redone to the design: "Compare" with the 30/60/90 days switch; products as columns (status pill, Remove, "+ Add product"); rows for units, revenue, views, conversion, price vs market, margin, stock (with the variants out of stock), stock value, days since last sale and page quality (photos and words, with what's missing); the best value in each row highlighted

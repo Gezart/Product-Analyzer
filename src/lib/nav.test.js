@@ -10,5 +10,5 @@ test("the menu item each page belongs to", () => {
   assert.equal(activeHref("/plans"), "/plans"); // not the weekly plan
   assert.equal(activeHref("/productsx"), null);
   assert.equal(activeHref("/dev/shopifyql"), null);
-  assert.deepEqual(NAV.map((n) => n.label), ["Dashboard", "Products", "Inbox", "Collections", "Compare", "Reports", "Plans", "Settings"]);
+  assert.deepEqual(NAV.map((n) => n.label), ["Dashboard", "Products", "Inbox", "Results", "Collections", "Compare", "Reports", "Plans", "Settings"]);
 });

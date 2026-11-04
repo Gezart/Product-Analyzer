@@ -141,7 +141,7 @@ The owner's design (Unstuck App Design canvas) is followed as closely as possibl
 | `design-inbox` | Inbox with the weekly plan on top, as in the design (the separate "This week" page goes into it) | The inbox matches the design | done |
 | `design-collections` | Collection Optimizer as in the design | Matches the design | done |
 | `design-markdown-compare` | Markdown and Compare as in the design | Match the design | done |
-| `design-results` | Results page (rescue plans and how the verdict is made), new in the menu | Matches the design | todo |
+| `design-results` | Results page (rescue plans and how the verdict is made), new in the menu | Matches the design | done |
 | `design-account` | Monthly report, Plans, Settings and the first import as in the design; Polaris components removed | Match the design; no Polaris left | todo |
 
 ## v2 (not in v1)

@@ -1,6 +1,7 @@
 // The product list's "Last change" column (the owner's design). Pure, so node:test can load it.
 
-const CHANGED = {
+/** What each kind of fix is called ("Title changed"), here and on the Results page. */
+export const CHANGED = {
   title: "Title changed",
   description: "Description changed",
   seo: "SEO changed",
