@@ -66,9 +66,9 @@ export function InboxPage() {
 
   async function open(item) {
     if (!item.read) {
-      await markRead({ ids: [item.id] }).catch(() => {});
+      const res = await markRead({ ids: [item.id] }).catch(() => null);
       // Shown as read at once: the weekly plan's own item leads to this same page, which stays mounted.
-      setInbox((d) => d && { ...d, unread: Math.max(0, d.unread - 1), items: d.items.map((x) => (x.id === item.id ? { ...x, read: true } : x)) });
+      if (res?.ok) setInbox((d) => d && { ...d, unread: Math.max(0, d.unread - 1), items: d.items.map((x) => (x.id === item.id ? { ...x, read: true } : x)) });
     }
     router.push(item.href);
   }
