@@ -30,8 +30,8 @@ export function RescuePlan({ plan, productId, onChanged }) {
     return (
       <ActionCard id="rescue" title="Rescue plan" state="Not started">
         <p className={BODY}>Starts when you apply a fix. Measures 14–30 days against your store&apos;s traffic and gives a verdict.</p>
-        <Link href={`/products/${productId}/fix`} className={`${BTN.small} mt-auto self-start`}>
-          Open Fix center
+        <Link href="/results" className={`${BTN.small} mt-auto self-start`}>
+          How it&apos;s measured
         </Link>
       </ActionCard>
     );
