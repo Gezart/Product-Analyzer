@@ -10,11 +10,10 @@ test("a collection's state in the list", () => {
   assert.deepEqual(collectionState(c({ status: "applied", appliedAt: "2026-10-22T10:00:00Z", moved: 5, error: "Interrupted" }), opts), { text: "Applied with a problem · open to check", tone: "warn" });
   assert.deepEqual(collectionState(c({ status: "undone", undoneAt: "2026-10-25T10:00:00Z", moved: 5 }), opts), { text: "Undone Oct 25", tone: "muted" });
   assert.deepEqual(collectionState(c({ status: "failed", moved: 5 })), { text: "Last save failed", tone: "bad" });
-  // Running: saving or undoing, unless it has run for more than 2 minutes (it crashed).
-  const now = Date.parse("2026-11-04T12:00:00Z");
-  assert.equal(collectionState(c({ status: "applying", moved: 5, claimedAt: "2026-11-04T11:59:30Z" }), { now }).text, "Saving…");
-  assert.equal(collectionState(c({ status: "undoing", moved: 5, claimedAt: "2026-11-04T11:59:30Z" }), { now }).text, "Undoing…");
-  assert.deepEqual(collectionState(c({ status: "applying", moved: 5, claimedAt: "2026-11-04T11:50:00Z" }), { now }), { text: "Interrupted · open to check", tone: "warn" });
+  // Running: saving or undoing, unless the optimizer says it crashed.
+  assert.equal(collectionState(c({ status: "applying", moved: 5, interrupted: false })).text, "Saving…");
+  assert.equal(collectionState(c({ status: "undoing", moved: 5, interrupted: false })).text, "Undoing…");
+  assert.deepEqual(collectionState(c({ status: "applying", moved: 5, interrupted: true })), { text: "Interrupted · open to check", tone: "warn" });
   assert.deepEqual(collectionState(c(null, { tooLarge: true })), { text: "Too many products to reorder here", tone: "warn" });
 });
 

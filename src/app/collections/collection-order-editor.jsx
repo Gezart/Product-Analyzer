@@ -51,11 +51,13 @@ export function CollectionOrderEditor({ collectionId, onUpgrade, onSkip, onChang
     load();
   }, [load]);
 
-  // On a phone the list sits above: once the order is shown, it scrolls into view.
+  // Once the order is shown, it scrolls into view when its top is off screen (on a phone the list sits
+  // above it; after Skip the page may be scrolled down).
   useEffect(() => {
     if (!data || scrolled.current || !top.current) return;
     scrolled.current = true;
-    if (window.matchMedia("(max-width: 1023px)").matches) top.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    const { top: y } = top.current.getBoundingClientRect();
+    if (y < 0 || y > window.innerHeight - 80) top.current.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [data]);
 
   if (error && !data) return <Notice tone="bad" className="min-w-0">{error}</Notice>;
@@ -105,7 +107,7 @@ export function CollectionOrderEditor({ collectionId, onUpgrade, onSkip, onChang
   // A plan without the optimizer: its saved orders can still be undone.
   if (!data.proposal) {
     return (
-      <div ref={top} className="flex min-w-0 scroll-mt-4 flex-col gap-4 lg:col-span-2">
+      <div ref={top} className="flex min-w-0 scroll-mt-4 flex-col gap-4 lg:col-start-2">
         {banner}
         {data.history.length > 0 ? saves : <p className="m-0 text-[13px] text-muted">No saved orders for this collection.</p>}
       </div>
@@ -256,7 +258,7 @@ function Saves({ history, title, busy, onUndo }) {
   const [latest, ...earlier] = history;
   const applied = latest.status === "applied";
   return (
-    <section aria-labelledby="meas" className={`${CARD} flex min-w-0 flex-col gap-3 px-5 py-4 lg:col-span-2`}>
+    <section aria-labelledby="meas" className={`${CARD} flex min-w-0 flex-col gap-3 px-5 py-4 lg:col-start-2`}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0 flex-[1_1_360px]">
           <h2 id="meas" className={H2}>

@@ -53,9 +53,9 @@ export function CollectionOrderView() {
       {error && <Notice tone="bad">{error}</Notice>}
       {!list && !error && <p className="m-0 text-muted">Loading collections…</p>}
       {list && (
-        // The list and the proposal side by side; the saved orders span both below (as in the design).
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(240px,1fr)_minmax(0,2.6fr)]">
-          <section aria-labelledby="cols" className={`${CARD} flex min-w-0 flex-col gap-1 p-3.5`}>
+        // The list beside the proposal, with the saved orders right under the proposal (however long the list).
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(240px,1fr)_minmax(0,2.6fr)] lg:grid-rows-[auto_1fr]">
+          <section aria-labelledby="cols" className={`${CARD} flex min-w-0 flex-col gap-1 p-3.5 lg:row-span-2`}>
             <h2 id="cols" className={`${H2} mx-1.5 mb-1.5`}>
               Collections
             </h2>
