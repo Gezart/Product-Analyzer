@@ -44,6 +44,7 @@ const VERDICTS = {
 export function describe(n) {
   const title = n.productTitle ?? "a product";
   const product = n.productId ? `/products/${n.productId}` : "/";
+  const markdown = n.productId ? `/products/${n.productId}/markdown` : "/";
   const d = n.data ?? {};
   switch (n.type) {
     case "analysis_ready": {
@@ -68,18 +69,18 @@ export function describe(n) {
       return { title: `${head}: ${title}`, body, href: product };
     }
     case "markdown_floor_reached":
-      return { title: `Markdown reached the price floor: ${title}`, body: "Some variants can't be discounted further within your margin floor.", href: product };
+      return { title: `Markdown reached the price floor: ${title}`, body: "Some variants can't be discounted further within your margin floor.", href: markdown };
     case "markdown_paused":
-      return { title: `Markdown paused: ${title}`, body: "See why on the product page.", href: product };
+      return { title: `Markdown paused: ${title}`, body: "See why on its markdown page.", href: markdown };
     case "markdown_unsold":
-      return { title: `Markdown finished, stock still unsold: ${title}`, body: "Consider a bundle or taking it off sale.", href: product };
+      return { title: `Markdown finished, stock still unsold: ${title}`, body: "Consider a bundle or taking it off sale.", href: markdown };
     case "markdown_restore_failed":
-      return { title: `Original prices couldn't be restored: ${title}`, body: "Shopify kept refusing the change. Check the product's prices.", href: product };
+      return { title: `Original prices couldn't be restored: ${title}`, body: "Shopify kept refusing the change. Check the product's prices.", href: markdown };
     case "price_guard":
       return {
         title: `Price below your margin floor: ${title}`,
         body: "The app raised its own price back to the floor, or the price was set by hand and needs a look.",
-        href: product,
+        href: markdown,
       };
     case "monthly_report": {
       const month = new Date(`${d.period}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });

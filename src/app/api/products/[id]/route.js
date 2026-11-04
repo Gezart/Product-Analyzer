@@ -91,6 +91,19 @@ export const GET = appRoute(async ({ shop, params }) => {
   );
   const daily30 = windows[0].units / 30;
 
+  // Why a markdown could start now (as the markdown page decides), only with stock to clear.
+  const units = product.variants.reduce((n, v) => n + Math.max(0, v.inventoryQty), 0);
+  const found =
+    units > 0 &&
+    markdownReason({
+      active: product.status === "ACTIVE",
+      status: score?.status ?? null,
+      rescueVerdict: product.rescuePlans[0]?.verdict ?? null,
+      stock: units,
+      season,
+    });
+  const markdownNow = { reason: found ? found.reason : null, reasonKind: found ? found.kind : null };
+
   const untracked = product.variants.length > 0 && product.variants.every((v) => v.sellsWhenOut) && stock.stock <= 0;
   return Response.json({
     currency: shop.currency,
@@ -138,14 +151,7 @@ export const GET = appRoute(async ({ shop, params }) => {
             floor: Number(product.markdownPlans[0].floorPrice),
           }
         : null,
-      reason:
-        markdownReason({
-          active: product.status === "ACTIVE",
-          status: score?.status ?? null,
-          rescueVerdict: product.rescuePlans[0]?.verdict ?? null,
-          stock: product.variants.reduce((n, v) => n + Math.max(0, v.inventoryQty), 0),
-          season,
-        })?.reason ?? null,
+      ...markdownNow,
       steps: LADDER.steps,
       stepDays: LADDER.stepDays,
       marginFloorPct: settings ? Number(settings.marginFloorPct) : 10,

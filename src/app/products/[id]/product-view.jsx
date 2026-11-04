@@ -6,17 +6,14 @@ import { useEffect, useState } from "react";
 import { BTN, CARD, H2, Notice, PageHeader, Pill, THEAD, TROW } from "@/app/ui/kit";
 import { useHashScroll } from "@/app/ui/use-hash-scroll";
 import { returnPct } from "@/lib/diagnosis";
-import { lastSaleLabel, markdownCard, nextFromReasons, salesBars, SECTION_ALIASES } from "@/lib/product-page";
+import { markdownCard, nextStep, productNumbers, salesBars, SECTION_ALIASES } from "@/lib/product-page";
 import { growthLabel, risingActions } from "@/lib/rising";
-import { seasonGraceDays, seasonWaiting } from "@/lib/scoring";
-import { justEnded } from "@/lib/season";
-import { formatDays, moneyFormatter, STATUS_INFO } from "@/lib/status-info";
+import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 import { ActionCard } from "./action-card";
 import { Diagnosis } from "./diagnosis";
 import { MarketPrice } from "./market-price";
 import { RescuePlan } from "./rescue-plan";
 
-const pct0 = (n) => (n == null ? "—" : `${Math.round(n * 100)}%`);
 const pct1 = (n) => (n == null ? "—" : `${(n * 100).toFixed(1)}%`);
 const shortDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
 // Shopify names the only variant of a simple product "Default Title".
@@ -28,8 +25,6 @@ export function ProductView() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [version, setVersion] = useState(0);
-  // Bumped when competitor prices change: only the diagnosis needs to run again.
-  const [marketVersion, setMarketVersion] = useState(0);
   const [diagnosis, setDiagnosis] = useState(null);
   const [period, setPeriod] = useState(30);
 
@@ -55,7 +50,7 @@ export function ProductView() {
     return () => {
       current = false;
     };
-  }, [id, version, marketVersion]);
+  }, [id, version]);
 
   // A link to a section (e.g. from the weekly plan) arrives before the page has loaded: scroll once it has.
   useHashScroll(Boolean(data), SECTION_ALIASES);
@@ -69,7 +64,7 @@ export function ProductView() {
   const status = data.score?.status ?? null;
   const info = status ? STATUS_INFO[status] : null;
   const season = data.product.season;
-  const next = nextStep(data, diagnosis, id);
+  const next = nextStep(data, diagnosis?.reasons);
   const aboveMarket = data.marketGap != null && data.marketGap > data.marketAbove;
   const refresh = () => setVersion((v) => v + 1);
 
@@ -121,11 +116,11 @@ export function ProductView() {
         </section>
       )}
 
-      <dl className="m-0 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
-        {numbers(data, money).map((k) => (
+      <dl className="m-0 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
+        {productNumbers(data, money).map((k) => (
           <div key={k.label} className="min-w-0 rounded-xl border border-line bg-white px-3.5 py-3">
             <dt className="text-xs text-muted">{k.label}</dt>
-            <dd className="mt-1 mb-0 text-[19px] font-bold tabular-nums">{k.value}</dd>
+            <dd className="mt-1 mb-0 text-[19px] font-bold tabular-nums [overflow-wrap:anywhere]">{k.value}</dd>
             <dd className="m-0 text-xs text-muted">{k.sub}</dd>
           </div>
         ))}
@@ -135,7 +130,8 @@ export function ProductView() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <Diagnosis productId={data.product.id} diagnosis={diagnosis} />
-        <MarketPrice productId={data.product.id} onChanged={() => setMarketVersion((v) => v + 1)} />
+        {/* A new market price changes the header's market pill and the diagnosis: both load again. */}
+        <MarketPrice productId={data.product.id} onChanged={refresh} />
       </div>
 
       <Variants data={data} money={money2} />
@@ -171,73 +167,6 @@ function Go({ href, className, children }) {
       {children}
     </Link>
   );
-}
-
-/**
- * What to do next: a running markdown or rescue plan first, then the season, then the diagnosis's
- * reasons, then the status's general advice. `{ text, cta: { label, href } | null }` or null.
- */
-function nextStep(data, diagnosis, id) {
-  const rescue = data.rescuePlan;
-  const season = data.product.season;
-  const status = data.score?.status;
-  const markdown = { label: "Open the markdown", href: `/products/${id}/markdown` };
-  const rescueCta = { label: "See the rescue plan", href: "#rescue" };
-  if (data.markdownRunning) return { text: "A markdown is running: its price steps down every 14 days until the stock sells.", cta: markdown };
-  if (rescue && !rescue.verdict) return { text: "Wait for the rescue plan's result: it's measuring the fixes.", cta: rescueCta };
-  if (rescue?.verdict === "worse" && rescue.fixIds.length > 0) {
-    const allMoves = (rescue.moves ?? []).length === rescue.fixIds.length;
-    return { text: allMoves ? "Sales fell after the new collection order: undo it." : "Sales fell after the fixes: undo them.", cta: rescueCta };
-  }
-  const canMarkDown = data.stock > 0 && data.product.status === "ACTIVE" && !["excluded", "over_limit"].includes(status);
-  if (justEnded(season) && canMarkDown) return { text: "Its season has ended: start an end-of-season markdown to clear the stock.", cta: { ...markdown, label: "Start markdown" } };
-  if (rescue?.verdict === "no_change" && !seasonWaiting(season)) return { text: "The fixes didn't move sales: start the markdown.", cta: { ...markdown, label: "Start markdown" } };
-  if (status === "seasonal" && season) return { text: seasonalNext(season), cta: null };
-  if (["dead_stock", "slow_mover", "page_problem"].includes(status)) {
-    const fromReasons = nextFromReasons(diagnosis?.reasons, id);
-    if (fromReasons) return fromReasons;
-    return { text: `${STATUS_INFO[status].action}.`, cta: { label: "Start in Fix center", href: `/products/${id}/fix` } };
-  }
-  if (status === "hidden_gem") return { text: "Give it a better place in its collections: it sells well to the few who see it.", cta: { label: "Open Collections", href: "/collections" } };
-  if (status === "stockout_risk") return { text: "Reorder before it sells out.", cta: { label: "See variants", href: "#variants" } };
-  if (status === "over_limit") return { text: `${STATUS_INFO.over_limit.action}.`, cta: { label: "See plans", href: "/plans" } };
-  return status && STATUS_INFO[status] ? { text: `${STATUS_INFO[status].action}.`, cta: null } : null;
-}
-
-/** The six numbers under the header. */
-function numbers(data, money) {
-  const s = data.score;
-  const analyzed = s && !["over_limit", "excluded", "unscored"].includes(s.status);
-  const season = data.product.season;
-  const w30 = data.windows[0];
-  const last = lastSaleLabel(data.lastSale, data.today);
-  const days = data.untracked
-    ? { value: "—", sub: "sells without stock" }
-    : data.daysOfCover != null
-      ? { value: formatDays(data.daysOfCover), sub: "at today's pace" }
-      : data.stock > 0
-        ? { value: "over a year", sub: "no sales in 30 days" }
-        : { value: "—", sub: "no stock" };
-  return [
-    {
-      label: "Money at stake",
-      value: analyzed ? money.format(s.moneyAtStake) : "—",
-      sub: analyzed && s.moneyAtStake > 0 && s.stockValue > 0 ? `${pct0(s.moneyAtStake / s.stockValue)} of stock value` : analyzed ? "" : "not analyzed",
-    },
-    {
-      label: "Stock",
-      value: data.untracked ? "—" : data.stock.toLocaleString(),
-      sub: data.untracked ? "sells without stock" : `${money.format(data.stockValue)} at cost${data.stockValueIsEstimate ? " (est.)" : ""}`,
-    },
-    { label: "Sell-through", value: pct0(s?.sellThrough ?? null), sub: season?.inSeason && season.daysIntoSeason < 60 ? "season so far" : "last 60 days" },
-    { label: "Days of stock", ...days },
-    {
-      label: "Conversion",
-      value: pct1(w30.viewToPurchase),
-      sub: w30.viewToPurchase != null && data.storeConversion != null ? `store average ${pct1(data.storeConversion)}` : w30.views > 0 ? `${w30.views.toLocaleString()} visits in 30 days` : "no visit data yet",
-    },
-    { label: "Last sale", value: last?.value ?? "None", sub: last ? last.sub : "in known history" },
-  ];
 }
 
 /** "Daily sales · N sold in 30 days" with the 30/60/90 toggle, and the window's totals underneath. */
@@ -341,6 +270,7 @@ function Variants({ data, money }) {
           </tbody>
         </table>
       </div>
+      {data.variants.length === 0 && <p className="m-0 border-t border-hair px-5 py-3 text-[13px] text-muted">No variants.</p>}
       {data.windows[1].partial && <p className="m-0 border-t border-hair px-5 pt-2.5 pb-3.5 text-xs text-muted">Only {data.knownDays} days of order history are known so far.</p>}
     </section>
   );
@@ -369,14 +299,6 @@ function Returns({ returns, money }) {
       {returns.reasons.length > 0 && <p className="m-0 text-[13px] text-muted">Reasons: {returns.reasons.map((r) => `${r.name} (${r.count})`).join(", ")}</p>}
     </ActionCard>
   );
-}
-
-/** What a seasonal product needs now: nothing until its season, or a little time early in it. */
-function seasonalNext(season) {
-  if (!season.inSeason) return `Nothing until its season (${season.label}) starts in ${season.daysToStart} day${season.daysToStart === 1 ? "" : "s"}; it isn't dead stock.`;
-  const left = seasonGraceDays(season.seasonDays) - season.daysIntoSeason;
-  if (left <= 0) return `Its season (${season.label}) is underway; it's judged at the next nightly analysis.`;
-  return `Its season (${season.label}) has just started; it's judged in ${left} day${left === 1 ? "" : "s"}.`;
 }
 
 /** "In season since 1 Nov" or "Starts 1 Nov (in 114 days)", and where the season comes from. */

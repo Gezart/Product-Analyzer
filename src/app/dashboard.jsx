@@ -66,7 +66,6 @@ export function Dashboard() {
   return <DashboardView data={data} />;
 }
 
-/** A plain message card (or a red one for errors). */
 /** "Analyzed today at 06:02 · 248 active products". */
 export function analyzedLine(scoredAt, productCount, now = new Date()) {
   if (!scoredAt) return `${count.format(productCount)} active products`;

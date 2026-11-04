@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { lastSaleLabel, markdownCard, nextFromReasons, reasonAction, salesBars } from "./product-page.js";
+import { lastSaleLabel, markdownCard, nextFromReasons, nextStep, productNumbers, reasonAction, salesBars, SECTION_ALIASES } from "./product-page.js";
 
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "EUR", maximumFractionDigits: 2 });
 
@@ -26,6 +26,10 @@ test("the next step names up to three things to do, and starts in the Fix center
   assert.deepEqual(nextFromReasons([{ code: "broken_size_run" }], "p1"), { text: "Restock the missing variants.", cta: { label: "See variants", href: "#variants" } });
   assert.equal(nextFromReasons([], "p1"), null);
   assert.equal(nextFromReasons([{ code: "unknown" }], "p1"), null);
+  // An unknown reason first: the button goes to the first reason with a place of its own.
+  assert.deepEqual(nextFromReasons([{ code: "unknown" }, { code: "returned_often" }], "p1").cta, { label: "See returns", href: "#returns" });
+  // Old section links land on today's sections.
+  assert.deepEqual(SECTION_ALIASES, { page: "diagnosis", overview: "diagnosis", metrics: "sales" });
 });
 
 test("the last sale in days from the store's today", () => {
@@ -65,4 +69,68 @@ test("the markdown card: running, ready, or not needed, with its floor", () => {
   });
   assert.equal(markdownCard({ ...md, running: { status: "active", step: null, floor: 33.6 } }, variants, money).state, "Starting");
   assert.equal(markdownCard({ ...md, running: { status: "paused", step: 1, floor: 33.6 } }, variants, money).state, "Paused");
+});
+
+const product = (over = {}) => ({
+  product: { id: "p1", season: null, status: "ACTIVE" },
+  score: { status: "slow_mover", moneyAtStake: 1260, stockValue: 1800, sellThrough: 0.14 },
+  rescuePlan: null,
+  markdown: { running: null, reason: null, reasonKind: null, steps: [0.1, 0.2, 0.3], stepDays: 14, marginFloorPct: 10 },
+  stock: 64,
+  stockValue: 1800,
+  stockValueIsEstimate: false,
+  untracked: false,
+  daysOfCover: 320,
+  lastSale: "2026-11-01",
+  today: "2026-11-04",
+  storeConversion: 0.014,
+  windows: [{ days: 30, views: 1000, viewToPurchase: 0.006 }],
+  ...over,
+});
+
+test("the next step: markdown and rescue plan first, then a due markdown, the season, the diagnosis, the status", () => {
+  const md = product().markdown;
+  assert.deepEqual(nextStep(product({ markdown: { ...md, running: { status: "active", step: 2, floor: 30 } } }), []), {
+    text: "A markdown is running: its price steps down every 14 days until the stock sells.",
+    cta: { label: "Open the markdown", href: "/products/p1/markdown" },
+  });
+  assert.equal(nextStep(product({ markdown: { ...md, running: { status: "paused", step: 2, floor: 30 } } }), []).cta.label, "See why");
+  const measuring = { fixIds: ["f1"], verdict: null, moves: [] };
+  assert.equal(nextStep(product({ rescuePlan: measuring }), []).cta.href, "#rescue");
+  assert.equal(nextStep(product({ rescuePlan: { ...measuring, verdict: "worse" } }), []).text, "Sales fell after the fixes: undo them.");
+  assert.equal(nextStep(product({ rescuePlan: { ...measuring, verdict: "worse", moves: [{ fixId: "f1" }] } }), []).text, "Sales fell after the new collection order: undo it.");
+  // A due markdown (dead stock, a rescue plan with no change, a season just ended) comes before the page fixes.
+  const due = nextStep(product({ score: { status: "dead_stock" }, markdown: { ...md, reason: "Dead stock: no sale for a long time.", reasonKind: "dead_stock" } }), [{ code: "few_images" }]);
+  assert.deepEqual(due, { text: "Dead stock: no sale for a long time. Clear the stock with a stepped markdown.", cta: { label: "Start markdown", href: "/products/p1/markdown" } });
+  assert.equal(nextStep(product({ markdown: { ...md, reason: "Its season ended today: …", reasonKind: "end_of_season" } }), []).text, "Its season ended today: …");
+  const season = { label: "May–Aug", inSeason: false, daysToStart: 1 };
+  assert.deepEqual(nextStep(product({ score: { status: "seasonal" }, product: { id: "p1", season } }), []), { text: "Nothing until its season (May–Aug) starts in 1 day; it isn't dead stock.", cta: null });
+  assert.equal(nextStep(product(), [{ code: "few_images" }]).text, "Add photos. A rescue plan then measures the result for 14–30 days.");
+  // The diagnosis still running (or finding nothing): the status's advice, in the Fix center.
+  assert.deepEqual(nextStep(product(), null), { text: "Diagnose, then rescue plan.", cta: { label: "Start in Fix center", href: "/products/p1/fix" } });
+  assert.equal(nextStep(product({ score: { status: "hidden_gem" } }), null).cta.href, "/collections");
+  assert.equal(nextStep(product({ score: { status: "stockout_risk" } }), null).cta.href, "#variants");
+  assert.equal(nextStep(product({ score: { status: "over_limit" } }), null).cta.href, "/plans");
+  assert.deepEqual(nextStep(product({ score: { status: "healthy" } }), null), { text: "Nothing to do.", cta: null });
+  assert.equal(nextStep(product({ score: null }), null), null);
+});
+
+test("the six numbers, also for products sold without stock, not analyzed, or without sales", () => {
+  const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  const values = (d) => productNumbers(d, money).map((k) => [k.value, k.sub]);
+  assert.deepEqual(values(product()), [
+    ["€1,260", "70% of stock value"],
+    ["64", "€1,800 at cost"],
+    ["14%", "last 60 days"],
+    ["320", "at today's pace"],
+    ["0.6%", "store average 1.4%"],
+    ["3 days", "ago"],
+  ]);
+  const untracked = values(product({ untracked: true, daysOfCover: null }));
+  assert.deepEqual([untracked[1], untracked[3]], [["—", "sells without stock"], ["—", "sells without stock"]]);
+  const quiet = values(product({ score: { status: "excluded" }, daysOfCover: null, lastSale: null, windows: [{ days: 30, views: 0, viewToPurchase: null }] }));
+  assert.deepEqual([quiet[0], quiet[3], quiet[4], quiet[5]], [["—", "not analyzed"], ["over a year", "no sales in 30 days"], ["—", "no visit data yet"], ["None", "in known history"]]);
+  assert.deepEqual(values(product({ stock: 0, daysOfCover: null, stockValueIsEstimate: true }))[3], ["—", "no stock"]);
+  assert.equal(values(product({ stockValueIsEstimate: true }))[1][1], "€1,800 at cost (est.)");
+  assert.equal(values(product({ score: null }))[2][0], "—");
 });

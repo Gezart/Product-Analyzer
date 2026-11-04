@@ -18,7 +18,7 @@ export function actionFor(p) {
     const days = p.daysOfCover == null ? null : Math.max(0, Math.round(p.daysOfCover));
     return { kind: "reorder", text: days == null ? "Reorder before it sells out." : `Reorder: about ${days} day${days === 1 ? "" : "s"} of stock left.`, href: at("#variants") };
   }
-  if (p.markdownReason) return { kind: "markdown", text: `Start the markdown. ${p.markdownReason}`, href: at("") };
+  if (p.markdownReason) return { kind: "markdown", text: `Start the markdown. ${p.markdownReason}`, href: at("/markdown") };
   // A hidden gem sells to whoever sees it: more eyes first, whatever its page says.
   if (p.status === "hidden_gem") return { kind: "visibility", text: "Give it a better place in its collections: it sells well to the few who see it.", href: "/collections" };
   if (!["dead_stock", "slow_mover", "page_problem"].includes(p.status)) return null;
