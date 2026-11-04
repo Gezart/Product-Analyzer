@@ -3,15 +3,20 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { listen } from "@/app/polaris-events";
-import { UpgradeBanner } from "@/app/upgrade-banner";
+import { BTN, CARD, Notice, PageHeader, Pill, UpgradeNotice } from "@/app/ui/kit";
 import { bestIndex, MAX_COMPARE } from "@/lib/compare";
 import { FEATURE_PLAN, getPlan, hasFeature } from "@/lib/plans";
 import { moneyFormatter, STATUS_INFO } from "@/lib/status-info";
 
 const pct = (n) => (n == null ? "—" : `${(n * 100).toFixed(1)}%`);
+const pct0 = (n) => `${Math.round(n * 100)}%`;
+/** "+18%" above the market, "−2%" below, "0%" within half a percent. */
+const gapLabel = (gap) => (Math.abs(gap) < 0.005 ? "0%" : `${gap > 0 ? "+" : "−"}${Math.round(Math.abs(gap) * 100)}%`);
+const PERIODS = [30, 60, 90];
+const TOGGLE = (on) =>
+  `cursor-pointer rounded-[7px] border px-2.5 py-[5px] font-[inherit] text-[13px] font-semibold disabled:cursor-default disabled:opacity-50 ${on ? "border-ink bg-ink text-white" : "border-line-strong bg-white text-ink"}`;
 
-/** 2–4 products side by side; the picked products and the window live in the URL. */
+/** 2–4 products side by side (the owner's design); the picked products and the window live in the URL. */
 export function CompareView() {
   const router = useRouter();
   const params = useSearchParams();
@@ -49,7 +54,7 @@ export function CompareView() {
     };
   }, [ids, days]);
 
-  const show = (nextIds, nextDays = days) => router.replace(`/compare?ids=${nextIds.join(",")}&days=${nextDays}`);
+  const show = (nextIds, nextDays = days) => router.replace(nextIds.length ? `/compare?ids=${nextIds.join(",")}&days=${nextDays}` : `/compare?days=${nextDays}`);
   const products = ids && data ? data.products : [];
 
   async function pick() {
@@ -65,128 +70,150 @@ export function CompareView() {
 
   const money = moneyFormatter(data?.currency ?? "USD");
   const money2 = moneyFormatter(data?.currency ?? "USD", 2);
+  const sold = (p) => (p.stockAge.sold ? p.stockAge.days : null);
   const rows = [
-    { label: "Units sold", values: products.map((p) => p.units), show: (v) => v.toLocaleString() },
-    { label: "Revenue", values: products.map((p) => p.revenue), show: (v) => money.format(v) },
-    { label: "Views", values: products.map((p) => p.views), show: (v) => v.toLocaleString() },
-    { label: "Conversion (view → purchase)", values: products.map((p) => p.conversion), show: pct },
+    { label: "Units sold", best: bestIndex(products.map((p) => p.units)), show: (p) => p.units.toLocaleString() },
+    { label: "Revenue", best: bestIndex(products.map((p) => p.revenue)), show: (p) => money.format(p.revenue) },
+    { label: "Views", best: bestIndex(products.map((p) => p.views)), show: (p) => p.views.toLocaleString() },
+    { label: "Conversion", best: bestIndex(products.map((p) => p.conversion)), show: (p) => pct(p.conversion) },
     {
-      label: "Price",
-      values: products.map((p) => p.price),
-      show: (v, p) => `${money2.format(v)}${p.compareAtPrice ? ` (was ${money2.format(p.compareAtPrice)})` : ""}`,
-      noBest: true,
+      label: "Price vs market",
+      // The price nearest below (or least above) the market is the best.
+      best: bestIndex(products.map((p) => p.marketGap), true),
+      show: (p) =>
+        `${money2.format(p.price)}${p.marketGap != null ? ` · ${gapLabel(p.marketGap)}` : ""}${p.compareAtPrice ? ` (was ${money2.format(p.compareAtPrice)})` : ""}`,
     },
     {
       label: "Margin",
-      values: products.map((p) => p.margin),
-      show: (v, p) => (v == null ? "— (no unit cost)" : `${pct(v)}${p.withCost < p.variants ? ` (${p.withCost} of ${p.variants} variants have a cost)` : ""}`),
+      best: bestIndex(products.map((p) => p.margin)),
+      show: (p) => (p.margin == null ? "— (no unit cost)" : pct0(p.margin)),
+      note: (p) => (p.margin != null && p.withCost < p.variants ? `${p.withCost} of ${p.variants} variants have a cost` : null),
     },
-    { label: "In stock", values: products.map((p) => p.stock), show: (v) => v.toLocaleString(), noBest: true },
+    {
+      label: "In stock",
+      // Everything can be bought, with the most stock.
+      best: bestIndex(products.map((p) => (p.outOfStock.length === 0 ? p.stock : null))),
+      show: (p) =>
+        `${p.stock.toLocaleString()} · ${
+          p.outOfStock.length === 0 ? (p.variantCount > 1 ? "all variants" : "in stock") : p.variantCount === 1 ? "out of stock" : `${p.outOfStock.join(", ")} out`
+        }`,
+    },
     {
       label: "Stock value",
-      values: products.map((p) => p.stockValue),
-      show: (v, p) => `${money.format(v)}${p.stockValueIsEstimate ? " (estimated)" : ""}`,
-      noBest: true,
+      // Less money tied up in stock.
+      best: bestIndex(products.map((p) => p.stockValue), true),
+      show: (p) => `${money.format(p.stockValue)}${p.stockValueIsEstimate ? " (est.)" : ""}`,
     },
     {
-      label: "Stock age (days since last sale)",
-      values: products.map((p) => p.stockAge.days),
+      label: "Days since last sale",
       // Products that never sold aren't "fresher" stock: they don't compete for best.
-      best: () => bestIndex(products.map((p) => (p.stockAge.sold ? p.stockAge.days : null)), true),
-      show: (v, p) => (v == null ? "—" : `${p.stockAge.atLeast ? "over " : ""}${v} day${v === 1 ? "" : "s"}${p.stockAge.sold ? "" : " (no sale yet)"}`),
+      best: bestIndex(products.map(sold), true),
+      show: (p) => (p.stockAge.days == null ? "—" : `${p.stockAge.atLeast ? "over " : ""}${p.stockAge.days.toLocaleString()}${p.stockAge.sold ? "" : " (no sale yet)"}`),
     },
-    { label: "Page quality", values: products.map((p) => p.pageQuality.score), show: (v) => `${v} / 100`, quality: true },
+    {
+      label: "Page quality",
+      best: bestIndex(products.map((p) => p.pageQuality.score)),
+      show: (p) => `${p.imageCount} photo${p.imageCount === 1 ? "" : "s"} · ${p.descriptionWords.toLocaleString()} words`,
+      note: (p) => {
+        const missing = p.pageQuality.checks.filter((c) => !c.ok).map((c) => c.label.toLowerCase());
+        return missing.length ? `Missing: ${missing.join(", ")}` : "All page checks pass";
+      },
+    },
   ];
 
+  const periods = (
+    <div role="group" aria-label="Period" className="flex gap-1">
+      {PERIODS.map((d) => (
+        <button key={d} type="button" aria-pressed={String(d) === days} disabled={!ids || upgrade != null} onClick={() => show(ids.split(","), d)} className={TOGGLE(String(d) === days)}>
+          {d} days
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <s-page heading="Compare products">
-      <s-stack gap="base">
-        <div>
-          <Link href="/" className="text-sm text-zinc-600 hover:underline">
-            ← Catalog health
-          </Link>
-        </div>
-        {!upgrade && (
-          <s-stack direction="inline" gap="small" alignItems="center">
-            <s-button variant="primary" ref={listen("click", pick)}>
-              {products.length ? "Change products" : "Pick products"}
-            </s-button>
-            {[30, 60, 90].map((d) => (
-              <s-button key={d} variant={String(d) === days ? "secondary" : "tertiary"} ref={listen("click", () => ids && show(ids.split(","), d))}>
-                Last {d} days
-              </s-button>
-            ))}
-          </s-stack>
-        )}
+    <>
+      <PageHeader title="Compare" subtitle="Why does one sell and the other not? The best value in each row is highlighted." actions={!upgrade && periods} />
+      {upgrade && <UpgradeNotice>{upgrade}</UpgradeNotice>}
+      {error && <Notice tone="bad">{error}</Notice>}
+      {!ids && !upgrade && (
+        <section className={`${CARD} flex flex-wrap items-center justify-between gap-3 px-5 py-[18px]`}>
+          <p className="m-0 text-[13px] text-muted">Pick 2 to {MAX_COMPARE} products to see them side by side: sales, views, price against the market, stock and page quality.</p>
+          <button type="button" onClick={pick} className={`${BTN.primary} cursor-pointer`}>
+            Pick products
+          </button>
+        </section>
+      )}
+      {ids && !data && !error && !upgrade && <p className="m-0 text-muted">Loading the comparison…</p>}
+      {data?.notFound > 0 && (
+        <Notice tone="warn" compact>
+          {data.notFound} picked product{data.notFound === 1 ? " isn't" : "s aren't"} synced yet and {data.notFound === 1 ? "is" : "are"} left out.
+        </Notice>
+      )}
+      {data && products.length === 1 && <Notice tone="info" compact>Add at least one more product to compare.</Notice>}
+      {data?.partial && <Notice tone="warn" compact>Order history is shorter than {data.days} days, so sales are undercounted.</Notice>}
 
-        {upgrade && <UpgradeBanner>{upgrade}</UpgradeBanner>}
-        {error && <s-banner tone="critical">{error}</s-banner>}
-        {!ids && !upgrade && <s-banner tone="info">Pick 2 to {MAX_COMPARE} products to see them side by side.</s-banner>}
-        {ids && !data && !error && !upgrade && <s-spinner accessibilityLabel="Loading comparison" />}
-        {data?.notFound > 0 && <s-banner tone="warning">{data.notFound} picked product(s) aren&apos;t synced yet and are left out.</s-banner>}
-        {data && products.length === 1 && <s-banner tone="info">Pick at least one more product to compare.</s-banner>}
-        {data?.partial && <s-banner tone="warning">Order history is shorter than {data.days} days, so sales are undercounted.</s-banner>}
-
-        {products.length > 0 && (
-          <s-section>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr>
-                    <th className="py-2 pr-4 font-medium text-zinc-500">Last {data.days} days</th>
-                    {products.map((p) => (
-                      <th key={p.id} className="min-w-40 py-2 pr-4 align-top font-medium">
-                        <Link href={`/products/${p.id}`} className="hover:underline">
-                          {p.title}
-                        </Link>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          {p.scoreStatus && STATUS_INFO[p.scoreStatus] && <s-badge tone={STATUS_INFO[p.scoreStatus].tone}>{STATUS_INFO[p.scoreStatus].label}</s-badge>}
-                          {p.status !== "ACTIVE" && <s-badge>{p.status.toLowerCase()}</s-badge>}
-                          <button
-                            type="button"
-                            className="text-xs text-zinc-500 hover:underline"
-                            onClick={() => show(products.filter((q) => q.id !== p.id).map((q) => q.id))}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </th>
+      {products.length > 0 && (
+        <section aria-label="Comparison" className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse text-[13px]">
+              <thead>
+                <tr className="align-bottom">
+                  <th scope="col" className="w-[170px] px-5 pt-4 pb-3 text-left text-xs font-semibold text-muted">
+                    Last {data.days} days
+                  </th>
+                  {products.map((p) => (
+                    <th key={p.id} scope="col" className="min-w-[170px] px-3 pt-4 pb-3 text-left align-bottom font-normal">
+                      <div aria-hidden="true" className="mb-2 h-12 w-12 rounded-lg bg-[#E9EBEF]" />
+                      <Link href={`/products/${p.id}`} className="block font-semibold text-ink no-underline hover:text-ink hover:underline">
+                        {p.title}
+                      </Link>
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                        {p.scoreStatus && STATUS_INFO[p.scoreStatus] && <Pill tone={p.scoreStatus}>{STATUS_INFO[p.scoreStatus].label}</Pill>}
+                        {p.status !== "ACTIVE" && <Pill tone="neutral">{p.status.toLowerCase()}</Pill>}
+                        <button
+                          type="button"
+                          onClick={() => show(products.filter((q) => q.id !== p.id).map((q) => q.id))}
+                          className="cursor-pointer border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-muted hover:text-ink"
+                        >
+                          Remove
+                        </button>
+                      </span>
+                    </th>
+                  ))}
+                  <th scope="col" className="px-3 pt-4 pr-5 pb-3 text-left align-bottom">
+                    {products.length < MAX_COMPARE && (
+                      <button type="button" onClick={pick} className="cursor-pointer rounded-lg border border-dashed border-accent bg-white px-3 py-[7px] font-[inherit] text-[13px] font-semibold whitespace-nowrap text-accent">
+                        + Add product
+                      </button>
+                    )}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.label} className="border-t border-hair">
+                    <th scope="row" className="px-5 py-2 text-left align-top font-semibold text-ink-2">
+                      {r.label}
+                    </th>
+                    {products.map((p, i) => (
+                      <td key={p.id} className="px-3 py-2 align-top">
+                        <span className={`inline-block rounded-md px-2 py-1 tabular-nums ${i === r.best ? "bg-[#D1FAE5] font-bold text-[#065F46]" : ""}`}>{r.show(p)}</span>
+                        {r.note?.(p) && <span className="block px-2 text-xs text-muted">{r.note(p)}</span>}
+                      </td>
                     ))}
+                    <td />
                   </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => {
-                    const best = r.noBest ? null : r.best ? r.best() : bestIndex(r.values, r.lowerIsBetter);
-                    return (
-                      <tr key={r.label} className="border-t border-zinc-200">
-                        <td className="py-2 pr-4 align-top text-zinc-600">{r.label}</td>
-                        {products.map((p, i) => (
-                          <td key={p.id} className={`py-2 pr-4 align-top ${i === best ? "font-semibold text-green-700" : ""}`}>
-                            {r.show(r.values[i], p)}
-                            {r.quality && (
-                              <ul className="m-0 mt-1 list-none p-0 text-xs font-normal text-zinc-500">
-                                {p.pageQuality.checks
-                                  .filter((c) => !c.ok)
-                                  .map((c) => (
-                                    <li key={c.key}>✗ {c.label}</li>
-                                  ))}
-                              </ul>
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <s-text tone="neutral">
-              Best value in each row is highlighted.{products.some((p) => p.views > 0) ? "" : " Views and conversion appear once view sync is connected."} Margin uses the unit cost
-              in Shopify; page quality counts the diagnosis&apos;s per-product page checks.
-            </s-text>
-          </s-section>
-        )}
-      </s-stack>
-    </s-page>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="m-0 border-t border-hair px-5 pt-2.5 pb-3.5 text-xs text-muted">
+            {products.some((p) => p.views > 0) ? "" : "Views and conversion appear once view sync is connected. "}Margin uses the unit cost in Shopify; price vs market uses your
+            competitor links and Google Shopping&apos;s benchmark; page quality counts the diagnosis&apos;s page checks.
+          </p>
+        </section>
+      )}
+    </>
   );
 }

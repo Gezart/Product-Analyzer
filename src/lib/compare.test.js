@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bestIndex, grossMargin, pageQuality, parseCompareIds, stockAge } from "./compare.js";
+import { bestIndex, grossMargin, outOfStockNames, pageQuality, parseCompareIds, stockAge } from "./compare.js";
 
 test("ids: 1–4 distinct, trimmed; otherwise null", () => {
   assert.deepEqual(parseCompareIds(" a, b ,a,"), ["a", "b"]);
@@ -48,4 +48,12 @@ test("best in row: highest (or lowest); none on a tie or with one value", () => 
   assert.equal(bestIndex([30, 12, 50], true), 1);
   assert.equal(bestIndex([5, 5, 1]), null);
   assert.equal(bestIndex([5, null]), null);
+});
+
+test("variants that can't be bought, by name", () => {
+  const v = (options, inventoryQty, sellsWhenOut = false) => ({ options, inventoryQty, sellsWhenOut });
+  assert.deepEqual(outOfStockNames([v({ Size: "S" }, 0), v({ Size: "M" }, -2), v({ Size: "L" }, 4), v({ Size: "XL" }, 0, true)]), ["S", "M"]);
+  assert.deepEqual(outOfStockNames([v({ Title: "Default Title" }, 0)]), ["Default"]);
+  assert.deepEqual(outOfStockNames([v({ Size: "S", Color: "Red" }, 0)]), ["S / Red"]);
+  assert.deepEqual(outOfStockNames([]), []);
 });

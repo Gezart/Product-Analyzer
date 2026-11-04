@@ -100,11 +100,11 @@ export async function refreshShopLinks(shopId, signal, { fetchPage = fetchPublic
 /**
  * For the product list: each product's gap to its market price in the shop's currency (the competitors'
  * median, or else Google's benchmark), as a share above (positive) or below. Products without a
- * comparable price are left out. `productId` limits it to one product (the product page).
+ * comparable price are left out. `productId` (the product page) or `productIds` (Compare) limits it.
  */
-export async function marketGaps(shop, { productId } = {}) {
+export async function marketGaps(shop, { productId, productIds } = {}) {
   if (!shop.currency || !hasFeature(shop.plan, "marketPrice")) return new Map();
-  const one = productId ? { productId } : {};
+  const one = productId ? { productId } : productIds ? { productId: { in: productIds } } : {};
   const links = await db().competitorLink.findMany({
     where: { shopId: shop.id, ...one, status: "ok", currency: shop.currency, product: { status: { not: "DELETED" } } },
     select: { productId: true, price: true, currency: true, status: true, product: { select: { price: true } } },

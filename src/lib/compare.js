@@ -56,6 +56,13 @@ export function stockAge({ today, lastSale, createdAt, knownDays }) {
 }
 
 /** Index of the best value in a row (highest, or lowest with `lowerIsBetter`); null on a tie or with fewer than 2 values. */
+/** Names of the variants that can't be bought (no stock and not sold when out): `["S", "M"]`. */
+export function outOfStockNames(variants) {
+  return variants
+    .filter((v) => v.inventoryQty <= 0 && !v.sellsWhenOut)
+    .map((v) => Object.values(v.options ?? {}).filter((o) => o !== "Default Title").join(" / ") || "Default");
+}
+
 export function bestIndex(values, lowerIsBetter = false) {
   const known = values.map((v, i) => [v, i]).filter(([v]) => v != null && Number.isFinite(v));
   if (known.length < 2) return null;
