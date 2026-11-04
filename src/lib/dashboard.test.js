@@ -94,3 +94,11 @@ test("new products get their own status tile with count and stock value", () => 
   assert.equal(s.productCount, 3);
   assert.equal(s.moneyStuck, 0);
 });
+
+test("rising stars on the dashboard: count and the fastest-growing five", () => {
+  const rows = Array.from({ length: 7 }, (_, i) => ({ productId: `r${i}`, status: "healthy", stockValue: 0, moneyAtStake: 0, rising: true, trend: 1.2 + i / 10 }));
+  rows.push({ productId: "flat", status: "healthy", stockValue: 0, moneyAtStake: 0, rising: false, trend: 3 });
+  const { rising } = summarize(rows);
+  assert.equal(rising.count, 7);
+  assert.deepEqual(rising.top.map((r) => r.productId), ["r6", "r5", "r4", "r3", "r2"]);
+});
