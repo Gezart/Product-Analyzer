@@ -1,5 +1,13 @@
 # History
 
+## 2026-11-04 · design-shell
+- Start of the redesign to the owner's design (Unstuck App Design canvas): the app's own left menu as in the design ("Unstuck" mark, the current page white and bold; a scrolling row at phone width), only pages that are built (Dashboard, Products, Inbox, Collections, Compare, Reports, Plans, Settings; the weekly plan counts as Inbox); Shopify's sub-menu (`ui-nav-menu`) removed, as the owner chose
+- Design tokens in Tailwind (`globals.css`): Inter, the light grey ground, ink and muted text, border and line colors, indigo links and the soft indigo panels; shared pieces in `src/app/ui/kit.jsx` (page header with back link and actions, card, buttons, the design's status pills and table classes)
+- Pages keep working inside the new frame; each is redone to the design in its own task (docs/TASKS.md, Phase 3a), and the Polaris components go at the end
+- The menu rule is pure and tested (`src/lib/nav.js`)
+- The Inbox links to the weekly plan until the two are one page (design-inbox); at phone width the current page scrolls into view in the menu row
+- Checked in a browser at 1280 px and 390 px
+
 ## 2026-11-04 · rising-effect
 - Each suggested action on a rising star has a "Done" button: from that day (the store's calendar) its sales are measured as units a day since, against the 30 days before, for 30 days (a result from day 7); only for products that are rising stars; the same action isn't recorded twice while it's measured, also with clicks at the same moment (the database keeps one per product, action and day)
 - A rising star moved up 3+ places into the first 24 on the Collections page is recorded the same way, automatically, and removed when that order is undone; a rising star never gets a rescue plan from a move, whatever its status (a "no change" there must not lead to a markdown)

@@ -127,6 +127,23 @@ From the features workspace (Rising stars), picked by the owner as the next feat
 | `rising-stars` | The rule (nightly with the scores): at least 5 units in the last 30 days, 20%+ over the 30 days before (which had sales), converting at least as well as the store's median when visits are known; never dead stock, a slow mover or waiting for its season. A "Rising stars" card on the dashboard, a filter and mark in the product list, and on the product page the growth with suggested actions (stock when it runs out within 45 days at this pace, move it up in its collections, feature it on the home page) | A rising product shows on the dashboard, in the list and on its page with its actions | done |
 | `rising-effect` | Measure sales after an action (e.g. moved up in a collection, featured) vs the period before | An action on a rising star shows its measurement | done |
 
+## Phase 3a · Redesign (owner's design)
+
+The owner's design (Unstuck App Design canvas) is followed as closely as possible: its own left menu (no Shopify admin sub-menu), Inter, a light grey ground with white cards, its status colors, buttons and tables, all in Tailwind (no Polaris components; App Bridge stays for sign-in, the resource picker and toasts). Pages appear in the menu only once their feature is built. Every later feature follows the design.
+
+| Branch | Task | Done when | Status |
+| --- | --- | --- | --- |
+| `design-shell` | Design tokens (colors, Inter, radii) in Tailwind, the app shell with the design's left menu (built pages only, active page marked; stacks at phone width), shared UI pieces (page header, card, buttons, status pill, table styles); Shopify's sub-menu removed | Every page sits in the design's shell and menu | done |
+| `design-dashboard` | Dashboard as in the design: catalog health, this week's moves, money stuck by status, next best move, rising stars, running out, top 10 | The dashboard matches the design with live data | doing |
+| `design-products` | Products list as in the design: search, sort, status filter pills with counts, the table (status pills, extra pill for rising stars / markdown, money, stock value, days, sell-through, vs market, last change) | The list matches the design | todo |
+| `design-product` | Product page as in the design (next step, numbers, daily sales, why it isn't selling, market price, variants, actions); sections for features not built yet are left out | The product page matches the design | todo |
+| `design-fix-center` | Fix center as in the design (description with AI, photos with AI, title and SEO, collections and price, from the diagnosis, history) | The fix center matches the design | todo |
+| `design-inbox` | Inbox with the weekly plan on top, as in the design (the separate "This week" page goes into it) | The inbox matches the design | todo |
+| `design-collections` | Collection Optimizer as in the design | Matches the design | todo |
+| `design-markdown-compare` | Markdown and Compare as in the design | Match the design | todo |
+| `design-results` | Results page (rescue plans and how the verdict is made), new in the menu | Matches the design | todo |
+| `design-account` | Monthly report, Plans, Settings and the first import as in the design; Polaris components removed | Match the design; no Polaris left | todo |
+
 ## v2 (not in v1)
 
 AI diagnosis and AI drafts (Claude), weekly email digest.

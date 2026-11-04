@@ -1,4 +1,5 @@
 import "./globals.css";
+import { AppShell } from "./ui/app-shell";
 
 export const metadata = {
   title: "Unstuck: Product Analyzer",
@@ -12,23 +13,15 @@ export default function RootLayout({ children }) {
         {/* App Bridge must be the first script on the page and load synchronously. */}
         <meta name="shopify-api-key" content={process.env.SHOPIFY_API_KEY} />
         <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" />
+        {/* Polaris web components stay until every screen follows the design (see docs/TASKS.md, Phase 3a). */}
         <script src="https://cdn.shopify.com/shopifycloud/polaris.js" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
       </head>
-      <body className="min-h-full flex flex-col">
-        <ui-nav-menu>
-          <a href="/" rel="home">
-            Home
-          </a>
-          <a href="/products">Products</a>
-          <a href="/inbox">Inbox</a>
-          <a href="/plan">This week</a>
-          <a href="/collections">Collections</a>
-          <a href="/compare">Compare</a>
-          <a href="/reports">Reports</a>
-          <a href="/settings">Settings</a>
-          <a href="/plans">Plans</a>
-        </ui-nav-menu>
-        {children}
+      <body className="min-h-full">
+        {/* Only the app's own menu (the owner's design); Shopify shows just the app's name. */}
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
