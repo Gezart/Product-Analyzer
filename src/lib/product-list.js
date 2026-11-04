@@ -20,5 +20,6 @@ export function changeLabel(change) {
   const what = CHANGED[change.type] ?? "Changed";
   if (change.verdict && change.verdict !== "cancelled") return `${what} · ${VERDICT[change.verdict] ?? change.verdict}`;
   const at = change.at ? new Date(change.at) : null;
-  return at && !Number.isNaN(at.getTime()) ? `${what} · ${at.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}` : what;
+  // The viewer's own calendar, like the other dates in the app.
+  return at && !Number.isNaN(at.getTime()) ? `${what} · ${at.toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : what;
 }

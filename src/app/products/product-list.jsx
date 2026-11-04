@@ -68,7 +68,9 @@ export function ProductList() {
     const filter = next.filter !== undefined ? next.filter : risingOnly ? "rising" : status;
     if (filter === "rising") q.set("rising", "1");
     else if (filter) q.set("status", filter);
-    q.set("sort", next.sort ?? sort);
+    // The sort goes in the URL only once it's chosen, so each filter keeps its own default.
+    const chosen = next.sort ?? (SORTS[params.get("sort")] ? params.get("sort") : null);
+    if (chosen) q.set("sort", chosen);
     router.replace(`/products?${q}`);
   };
   const money = moneyFormatter(data?.currency);
@@ -89,7 +91,9 @@ export function ProductList() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="m-0 text-[22px] font-bold tracking-[-0.01em]">Products</h1>
-          <p className="mt-0.5 mb-0 text-[13px] text-muted">Every active product with its status, money at stake{hasMarket ? " and market price" : ""}.</p>
+          <p className="mt-0.5 mb-0 text-[13px] text-muted">
+            Every active product with its status{hasMarket ? ", money at stake and market price" : " and money at stake"}.
+          </p>
         </div>
         <Link href="/compare" className={BTN.secondary}>
           Compare products
@@ -135,7 +139,7 @@ export function ProductList() {
               >
                 All <span className="tabular-nums opacity-75">{products.length}</span>
               </button>
-              {FILTERS.filter((f) => countOf(f.key) > 0 || f.key === current).map((f) => (
+              {FILTERS.map((f) => (
                 <button
                   key={f.key}
                   type="button"
@@ -204,7 +208,9 @@ export function ProductList() {
                         <span className="flex flex-wrap gap-1">
                           <Pill tone={p.status}>{STATUS_INFO[p.status]?.label ?? p.status}</Pill>
                           {p.rising && <Pill tone="rising">Rising star</Pill>}
-                          {p.markdown && <Pill tone="neutral">{p.markdown.paused ? "Markdown · paused" : `Markdown · step ${p.markdown.step}`}</Pill>}
+                          {p.markdown && (
+                            <Pill tone="neutral">{p.markdown.paused ? "Markdown · paused" : p.markdown.step ? `Markdown · step ${p.markdown.step}` : "Markdown · starting"}</Pill>
+                          )}
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{p.moneyAtStake > 0 ? money.format(p.moneyAtStake) : "—"}</td>
@@ -212,7 +218,7 @@ export function ProductList() {
                       <td className="px-3 py-2.5 text-right text-ink-2 tabular-nums">{daysLabel(p)}</td>
                       <td className="px-3 py-2.5 text-right text-ink-2 tabular-nums">{p.sellThrough == null ? "—" : pct.format(p.sellThrough)}</td>
                       {hasMarket && (
-                        <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${p.marketGap > 0 ? "text-[#B45309]" : "text-ink-2"}`}>
+                        <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${p.marketGap >= 0.005 ? "text-[#B45309]" : "text-ink-2"}`}>
                           {p.marketGap == null ? "—" : formatGap(p.marketGap)}
                         </td>
                       )}

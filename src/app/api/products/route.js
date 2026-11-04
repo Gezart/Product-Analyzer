@@ -13,7 +13,7 @@ export const GET = appRoute(async ({ shop }) => {
     marketGaps(shop),
     db().fix.findMany({
       where: { product: { shopId: shop.id }, status: "applied" },
-      orderBy: { appliedAt: "desc" },
+      orderBy: { appliedAt: { sort: "desc", nulls: "last" } },
       distinct: ["productId"],
       select: { id: true, productId: true, type: true, appliedAt: true },
     }),
@@ -29,7 +29,8 @@ export const GET = appRoute(async ({ shop }) => {
       return [f.productId, { type: f.type, at: f.appliedAt, verdict }];
     }),
   );
-  const markdownOf = new Map(markdowns.map((m) => [m.productId, { step: m.currentStep + 1, paused: m.status === "paused" }]));
+  // `step` null while the first price change isn't confirmed yet (currentStep -1).
+  const markdownOf = new Map(markdowns.map((m) => [m.productId, { step: m.currentStep >= 0 ? m.currentStep + 1 : null, paused: m.status === "paused" }]));
   return Response.json({
     currency: shop.currency,
     marketAbove: gaps.size ? sanitizeThresholds(settings?.thresholds).marketAbove : null,
