@@ -15,6 +15,9 @@ test("the signature covers every other parameter, sorted, with repeated keys joi
   const params = new URLSearchParams("extra=1&extra=2&shop=some-shop.myshopify.com&logged_in_customer_id=1&path_prefix=%2Fapps%2Fawesome_reviews&timestamp=1317327555");
   const message = "extra=1,2logged_in_customer_id=1path_prefix=/apps/awesome_reviewsshop=some-shop.myshopify.comtimestamp=1317327555";
   assert.equal(proxySignature(params, secret), createHmac("sha256", secret).update(message).digest("hex"));
+  // The "key=value" strings are sorted (as Shopify does), not the keys: "a1=…" comes before "a=…".
+  const prefix = new URLSearchParams("a=2&a1=1&shop=s.myshopify.com&timestamp=1");
+  assert.equal(proxySignature(prefix, secret), createHmac("sha256", secret).update("a1=1a=2shop=s.myshopify.comtimestamp=1").digest("hex"));
 });
 
 test("a proxied request is trusted only with a valid, recent signature", () => {
@@ -31,6 +34,12 @@ test("a proxied request is trusted only with a valid, recent signature", () => {
   assert.equal(verifyProxyRequest(new URLSearchParams("shop=a.myshopify.com"), secret, now).reason, "missing signature");
   // A shop that isn't a myshopify domain, even signed.
   assert.equal(verifyProxyRequest(signed([["shop", "evil.example.com"], ["timestamp", String(now)]]), secret, now).reason, "bad shop");
+  // A second shop (or timestamp, signature, customer) is refused, even when it's covered by the signature.
+  const twoShops = signed([["shop", "victim.myshopify.com"], ["shop", "attacker.myshopify.com"], ["timestamp", String(now)]]);
+  assert.deepEqual(verifyProxyRequest(twoShops, secret, now), { ok: false, reason: "repeated parameter" });
+  const twoSignatures = new URLSearchParams(good);
+  twoSignatures.append("signature", good.get("signature"));
+  assert.equal(verifyProxyRequest(twoSignatures, secret, now).reason, "repeated parameter");
   // A logged-in customer is passed on.
   assert.equal(verifyProxyRequest(signed([["shop", "a.myshopify.com"], ["logged_in_customer_id", "42"], ["timestamp", String(now)]]), secret, now).customerId, "42");
 });

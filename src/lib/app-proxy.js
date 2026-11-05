@@ -6,13 +6,19 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 /** How old a proxied request may be (seconds): stops a captured URL from being replayed later. */
 export const MAX_AGE_SECONDS = 15 * 60;
 
+/** Parameters Shopify sends once: a second copy (e.g. one a visitor added) is refused, never guessed. */
+const SINGLE = ["shop", "timestamp", "signature", "logged_in_customer_id", "path_prefix"];
+
 /**
  * Shopify's signature over the other query parameters: each `key=value` (several values of one key
- * joined by ","), sorted, concatenated without separators, HMAC-SHA256 hex with the app's secret.
+ * joined by ","), the pairs sorted, concatenated without separators, HMAC-SHA256 hex with the app's secret.
  */
 export function proxySignature(searchParams, secret) {
-  const keys = [...new Set([...searchParams.keys()])].filter((k) => k !== "signature").sort();
-  const message = keys.map((k) => `${k}=${searchParams.getAll(k).join(",")}`).join("");
+  const keys = [...new Set([...searchParams.keys()])].filter((k) => k !== "signature");
+  const message = keys
+    .map((k) => `${k}=${searchParams.getAll(k).join(",")}`)
+    .sort()
+    .join("");
   return createHmac("sha256", secret).update(message).digest("hex");
 }
 
@@ -21,6 +27,7 @@ export function proxySignature(searchParams, secret) {
  * or `{ ok: false, reason }`. `now` in seconds.
  */
 export function verifyProxyRequest(searchParams, secret, now = Math.floor(Date.now() / 1000)) {
+  if (SINGLE.some((k) => searchParams.getAll(k).length > 1)) return { ok: false, reason: "repeated parameter" };
   const signature = searchParams.get("signature") ?? "";
   if (!/^[0-9a-f]{64}$/.test(signature)) return { ok: false, reason: "missing signature" };
   const expected = Buffer.from(proxySignature(searchParams, secret), "hex");
