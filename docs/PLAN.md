@@ -73,7 +73,7 @@ The MVP ships all twelve modules in a basic form; the loop must work end to end 
 | 11 | Notifications | In-app inbox; weekly email digest with the top 5 actions | Slack/WhatsApp alerts, real-time alerts for stock-outs | Digest goes out weekly and links straight to each action |
 | 12 | Billing and plans | Free and paid plans through Shopify Billing; usage limits enforced | Usage-based "pay on recovered revenue" plan, annual plans | Upgrade, downgrade and uninstall all work with no manual steps |
 
-**Out of scope for v1:** A/B testing with split traffic, theme edits, storefront widgets, ad platform integrations.
+**Out of scope for v1:** theme code edits, ad platform integrations. *(2026-11-05: the owner moved A/B tests with split traffic and storefront blocks — through a theme app extension, without editing theme code — into v1; see docs/TASKS.md, Phase 3b.)*
 
 ## Analysis logic
 

@@ -1,0 +1,25 @@
+{%- comment -%}
+  Turned on once in the theme editor (App embeds). Tells the storefront scripts where the app's proxy
+  is (/apps/unstuck, after a market's language prefix) and which product the page shows.
+{%- endcomment -%}
+{%- if routes.root_url == '/' -%}
+  {%- assign unstuck_proxy = '/apps/unstuck' -%}
+{%- else -%}
+  {%- assign unstuck_proxy = routes.root_url | append: '/apps/unstuck' -%}
+{%- endif -%}
+<script>
+  window.Unstuck = window.Unstuck || {};
+  window.Unstuck.proxy = {{ unstuck_proxy | json }};
+  {%- if template.name == 'product' and product %}
+  window.Unstuck.productId = {{ product.id | json }};
+  {%- endif %}
+</script>
+
+{% schema %}
+{
+  "name": "A/B tests",
+  "target": "body",
+  "javascript": "unstuck-embed.js",
+  "settings": []
+}
+{% endschema %}

@@ -1,5 +1,12 @@
 # History
 
+## 2026-11-05 · storefront-extension
+- Start of Phase 3b (owner's choice: A/B tests with split traffic and the page builder, through the storefront without editing theme code)
+- Theme app extension `extensions/unstuck-storefront`: an app block for the product page ("Product page boost", shows nothing until blocks are set in the app) and an app embed ("A/B tests") that tells the storefront scripts where the app is and which product the page shows; a small script with the proxy call helper and the visitor's tracking consent (Shopify's customer privacy API)
+- App proxy: the storefront calls `/apps/unstuck/…` on the shop's domain; Shopify forwards them to `/api/proxy` with a signature, which is checked before anything else (signature over all parameters with the app's secret, at most 15 minutes old, a myshopify shop that has the app installed; tested); answers are never cached
+- `shopify.app.toml`: the `write_app_proxy` scope, the proxy, and app-owned metafields only the app can write (page builder settings on the shop, "often bought together" and the A/B test on products)
+- Open: the owner runs `shopify app deploy` and turns the embed on / adds the block in the dev store's theme editor
+
 ## 2026-11-04 · design-account
 - Monthly report redone to the owner's design: the month as the title with a month picker; "Revenue recovered", "Stock value cleared", "Products rescued" and "Fixes applied" as big numbers with their formula under each; "Where the revenue came from" with the formula per row and a total; returns; the fixes applied with their effect
 - Plans redone to the design: the four plans as cards (current plan and the recommended next one marked, products analyzed, what each adds, the trial) and "Limits each month" (products, diagnoses, AI descriptions, AI photos); plan feature texts describe what each plan includes
