@@ -1,4 +1,5 @@
 // Inbox — docs/PLAN.md module 11. Pure (relative imports only) so node:test can load it.
+import { NEXT_STEP, STATUS as LAUNCH_STATUS } from "./launches.js";
 import { STATUS_INFO } from "./status-info.js";
 
 /** Statuses that call for an action (everything but healthy and not analyzed). */
@@ -116,6 +117,10 @@ export function describe(n) {
         body: `${todo}${last ? ` Last week: ${last}.` : ""}`,
         href: `/inbox?week=${d.week}`,
       };
+    }
+    case "launch_check": {
+      const label = LAUNCH_STATUS[d.status]?.label ?? "Launch check";
+      return { title: `Day ${d.day ?? "?"} · ${label}: ${title}`, body: [d.reason, NEXT_STEP[d.status]].filter(Boolean).join(" "), href: "/launches" };
     }
     case "ab_test_ended": {
       const part = { title: "title", description: "description", images: "photos" }[d.kind] ?? "page";

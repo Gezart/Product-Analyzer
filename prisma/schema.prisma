@@ -118,6 +118,7 @@ model Product {
   aiPhotoDrafts    AiPhotoDraft[]
   risingActions    RisingAction[]
   abTests          AbTest[]
+  launchChecks     LaunchCheck[]
 
   @@unique([shopId, shopifyGid])
   @@index([shopId])
@@ -646,4 +647,22 @@ model AbTestPurchase {
   @@id([testId, lineGid])
   @@index([testId, variant])
   @@map("ab_test_purchases")
+}
+
+/// A new product's launch checkpoint (day 7, 14 or 30 since it was created): how it was doing then
+/// against the store (src/lib/launches.js). Recorded once per checkpoint.
+model LaunchCheck {
+  id        String   @id @default(cuid())
+  productId String   @map("product_id")
+  day       Int
+  /// strong | on_track | page_problem | no_traffic | not_enough_data
+  status    String
+  /// The numbers then: `{ views, carts, buyers, units, revenue, cartRate, storeCartRate, reason }`.
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, day])
+  @@map("launch_checks")
 }

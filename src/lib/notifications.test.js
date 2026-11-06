@@ -54,6 +54,11 @@ test("describe: text and link per type; unknown types still render", () => {
   });
   assert.equal(describe({ type: "ab_test_ended", productTitle: "Tee", data: { kind: "images", reason: "a_better", winner: "a", chance: 0.03 } }).body, "97% chance the page as it was does better. Your store shows it to everyone again.");
   assert.equal(describe({ type: "ab_test_ended", productTitle: "Tee", data: { kind: "description", reason: "changed" } }).title, "A/B test stopped: Tee");
+  assert.deepEqual(describe({ type: "launch_check", productId: "p1", productTitle: "Linen trousers", data: { day: 7, status: "page_problem", reason: "410 visits, 0.5% added to cart (store: 8.0%)." } }), {
+    title: "Day 7 · Early page problem: Linen trousers",
+    body: "410 visits, 0.5% added to cart (store: 8.0%). Visitors come but few add it to the cart: check the photos, the price and the description.",
+    href: "/launches",
+  });
   assert.deepEqual(describe({ type: "something_new", productId: null }), { title: "something new", body: "", href: "/" });
 });
 
