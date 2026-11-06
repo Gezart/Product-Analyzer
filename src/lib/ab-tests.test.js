@@ -7,6 +7,7 @@ import {
   countsFrom,
   decide,
   logGamma,
+  plausibleVisitors,
   parseLineProperty,
   purchasesFor,
   RULES,
@@ -106,6 +107,12 @@ test("a test stops at 95% either way with enough visitors and days, or after 30 
   // 30 days with too few visitors: no winner even if the chance looks clear.
   assert.deepEqual(decide(start, stats([40, 0], [40, 10]), at(30)), { ended: true, reason: "time", winner: null });
   assert.equal(RULES.threshold, 0.95);
+  // More visitors counted than Shopify saw (made-up visits): not decided early, no winner at 30 days.
+  assert.deepEqual(decide(start, clearB, at(10), RULES, false), { ended: false });
+  assert.deepEqual(decide(start, clearB, at(30), RULES, false), { ended: true, reason: "time", winner: null });
+  assert.equal(plausibleVisitors(800, 500), true);
+  assert.equal(plausibleVisitors(1200, 500), false);
+  assert.equal(plausibleVisitors(1200, 0), null);
 });
 
 test("numbers per version: visitors, add-to-carts and buyers, with their rates", () => {

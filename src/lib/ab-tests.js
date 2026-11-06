@@ -166,15 +166,26 @@ export function testStats(counts = {}) {
 export const daysRunning = (startedAt, now) => Math.max(0, Math.floor((now.getTime() - new Date(startedAt).getTime()) / DAY_MS));
 
 /**
+ * Counted visitors look real: at most twice Shopify's own visit sessions of the product since the test
+ * started (plus some slack for a day not synced yet). Unknown when Shopify gives no visit data (null).
+ * The storefront's count endpoint is public, so made-up visits must not decide a test.
+ */
+export function plausibleVisitors(counted, sessions) {
+  if (sessions == null || sessions <= 0) return null;
+  return counted <= sessions * 2 + 50;
+}
+
+/**
  * Whether a running test is over: `{ ended: false }`, or `{ ended: true, reason, winner }` with reason
  * "b_better" or "a_better" (the chance passed the threshold with enough visitors and days) or "time"
- * (30 days; the winner then only if the chance is clear, else null).
+ * (30 days; the winner then only if the chance is clear, else null). `plausible` false (more visitors
+ * counted than Shopify saw): never decided early, and no winner at 30 days.
  */
-export function decide(startedAt, stats, now = new Date(), rules = RULES) {
+export function decide(startedAt, stats, now = new Date(), rules = RULES, plausible = true) {
   const days = (now.getTime() - new Date(startedAt).getTime()) / DAY_MS;
   const { chance } = stats;
   const clear = chance == null ? null : chance >= rules.threshold ? "b" : chance <= 1 - rules.threshold ? "a" : null;
-  const enough = stats.a.visitors >= rules.minVisitors && stats.b.visitors >= rules.minVisitors && days >= rules.minDays;
+  const enough = plausible !== false && stats.a.visitors >= rules.minVisitors && stats.b.visitors >= rules.minVisitors && days >= rules.minDays;
   if (enough && clear) return { ended: true, reason: clear === "b" ? "b_better" : "a_better", winner: clear };
   if (days >= rules.maxDays) return { ended: true, reason: "time", winner: enough ? clear : null };
   return { ended: false };

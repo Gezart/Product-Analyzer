@@ -328,6 +328,9 @@ export async function approveMarkdown(shopId, productId, expected) {
   const { product, settings, session } = await context(shopId, productId);
   const eligible = await eligibility(product);
   if (!eligible) throw new MarkdownError("This product doesn't qualify for a markdown right now.", 400);
+  // Two discounts on one product would add up under the floor: a bundle and a markdown don't run together.
+  const bundle = await db().bundle.findFirst({ where: { productId, status: { in: ["starting", "active"] } }, select: { id: true } });
+  if (bundle) throw new MarkdownError("This product is in a running bundle. End the bundle first: the two discounts would add up.", 409);
   const live = await readLiveVariants(session, product.shopifyGid);
   if (!live) throw new MarkdownError("Product no longer exists in Shopify", 404);
   const startStock = liveStock(live);

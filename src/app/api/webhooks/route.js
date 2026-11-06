@@ -1,3 +1,4 @@
+import { redactTestOrders } from "@/lib/ab-tests-shopify";
 import { AuthError, getOfflineSession, TokenRefusedError } from "@/lib/auth";
 import { syncPlan } from "@/lib/billing";
 import { db } from "@/lib/db";
@@ -59,8 +60,13 @@ export async function POST(request) {
       await handleInventoryWebhook(domain, JSON.parse(rawBody));
       break;
     case "CUSTOMERS_DATA_REQUEST":
+      // No customer data is kept: orders keep only date, product, variant, qty and price; A/B tests keep
+      // a random browser id per visitor and, for an order, that id with the order's id (no name, email,
+      // address or Shopify customer id).
+      break;
     case "CUSTOMERS_REDACT":
-      // We never store customer data (orders keep only date, product, variant, qty, price).
+      // The A/B test purchases of those orders, and the browser ids that made them, are removed.
+      await redactTestOrders(domain, JSON.parse(rawBody).orders_to_redact);
       break;
     case "SHOP_REDACT":
       // Deletes the shop and, via cascades, every row it owns (Google's access is revoked first).

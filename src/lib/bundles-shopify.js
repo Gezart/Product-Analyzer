@@ -9,6 +9,7 @@ import { asDate, dateKey, shiftDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { errorMessage, HttpError } from "@/lib/http-error";
 import { localDateKey } from "@/lib/jobs/schedule";
+import { readLiveVariants } from "@/lib/markdown-shopify";
 import { notify } from "@/lib/notify";
 import { hasFeature } from "@/lib/plans";
 
@@ -16,6 +17,14 @@ const APP_NAMESPACE = "$app";
 /** A bundle still "starting" after this crashed while it was being set up. */
 const STALE_START_MS = 10 * 60_000;
 const DEFAULT_SETTINGS = { marginFloorPct: 10, maxDiscountPct: 40 };
+/**
+ * A bundle's discount ends by itself this long after its last check (pushed forward hourly while the
+ * bundle stays valid): if the app can't manage it any more (uninstalled, token refused, a failure), it
+ * still stops in Shopify on its own.
+ */
+const LEASE_MS = 48 * 3_600_000;
+/** The lease is pushed forward once less than this is left. */
+const RENEW_MS = 24 * 3_600_000;
 
 const DISCOUNT_CREATE = `#graphql
   mutation BundleDiscount($discount: DiscountAutomaticBxgyInput!) {
@@ -27,9 +36,14 @@ const DISCOUNT_CREATE = `#graphql
 
 const DISCOUNTS_BY_TITLE = `#graphql
   query BundleDiscountsByTitle($query: String!) {
-    automaticDiscountNodes(first: 10, query: $query) {
+    automaticDiscountNodes(first: 25, reverse: true, query: $query) {
       nodes { id automaticDiscount { ... on DiscountAutomaticBxgy { title status createdAt } } }
     }
+  }`;
+
+const DISCOUNT_RENEW = `#graphql
+  mutation BundleDiscountRenew($id: ID!, $discount: DiscountAutomaticBxgyInput!) {
+    discountAutomaticBxgyUpdate(id: $id, automaticBxgyDiscount: $discount) { automaticDiscountNode { id } userErrors { field message } }
   }`;
 
 const DISCOUNT_END = `#graphql
@@ -174,7 +188,14 @@ export async function startBundle(shop, body) {
   );
   if (!product || !partner) throw new HttpError("Product not found", 404);
   if (product.status !== "ACTIVE" || partner.status !== "ACTIVE") throw new HttpError("Both products must be active in Shopify.", 400);
-  const max = maxBundlePct(product.variants, await discountSettings(shop.id));
+  // Two discounts on one product would add up under the floor: a markdown and a bundle don't run together.
+  const markdown = await db().markdownPlan.findFirst({ where: { productId: product.id, status: { in: ["active", "paused"] } }, select: { id: true } });
+  if (markdown) throw new HttpError(`A markdown is running on ${product.title}. End it first: the two discounts would add up.`, 409);
+  const session = await getOfflineSession(shop.domain);
+  // Prices and costs as they are in Shopify now (a change may not be synced yet).
+  const live = await readLiveVariants(session, product.shopifyGid);
+  if (!live) throw new HttpError("Product no longer exists in Shopify", 404);
+  const max = maxBundlePct(live, await discountSettings(shop.id));
   const valid = validateBundle({ productId: product.id, partnerId: partner.id, pct: body?.pct }, max.pct);
   if (!valid.ok) throw new HttpError(max.reason && !max.pct ? max.reason : valid.error, 400);
   if (stockOf(product.variants) <= 0) throw new HttpError(`${product.title} is out of stock.`, 400);
@@ -188,13 +209,15 @@ export async function startBundle(shop, body) {
     if (error?.code === "P2002") throw new HttpError("One of these products is already in a running bundle.", 409);
     throw error;
   }
-  const session = await getOfflineSession(shop.domain);
+  const endsAt = new Date(Date.now() + LEASE_MS);
   try {
     const data = await adminGraphql(session, DISCOUNT_CREATE, {
       discount: {
         title: bundle.title,
         startsAt: new Date().toISOString(),
-        combinesWith: { productDiscounts: false, orderDiscounts: true, shippingDiscounts: true },
+        endsAt: endsAt.toISOString(),
+        // Not with discount codes on the order either: they would take the bundled unit under its floor.
+        combinesWith: { productDiscounts: false, orderDiscounts: false, shippingDiscounts: true },
         customerBuys: { items: { products: { productsToAdd: [partner.shopifyGid] } }, value: { quantity: "1" } },
         customerGets: { items: { products: { productsToAdd: [product.shopifyGid] } }, value: { discountOnQuantity: { quantity: "1", effect: { percentage: bundle.pct / 100 } } } },
         usesPerOrderLimit: "1",
@@ -209,28 +232,36 @@ export async function startBundle(shop, body) {
     if (await clearShopify(session, bundle, partner.shopifyGid)) await db().bundle.delete({ where: { id: bundle.id } }).catch(() => {});
     throw error;
   }
-  return db().bundle.update({ where: { id: bundle.id }, data: { status: "active", startedAt: new Date() } });
-}
-
-/** Ends a running bundle (claimed first, so it ends once) and takes it off Shopify. False when it wasn't running. */
-async function finish(session, bundle, partnerGid, reason) {
-  const claimed = await db().bundle.updateMany({ where: { id: bundle.id, status: "active" }, data: { status: "ended", endReason: reason, endedAt: new Date(), cleanup: true } });
-  if (!claimed.count) return false;
-  if (await clearShopify(session, bundle, partnerGid)) await db().bundle.update({ where: { id: bundle.id }, data: { cleanup: false } });
-  return true;
-}
-
-/** The merchant ends a bundle: the discount stops and the offer leaves the page. */
-export async function endBundle(shop, bundleId) {
-  const bundle = await db().bundle.findFirst({ where: { id: bundleId, shopId: shop.id }, include: { partner: { select: { shopifyGid: true } } } });
-  if (!bundle) throw new HttpError("Bundle not found", 404);
-  if (!(await finish(await getOfflineSession(shop.domain), bundle, bundle.partner.shopifyGid, "stopped"))) throw new HttpError("This bundle isn't running.", 409);
+  return db().bundle.update({ where: { id: bundle.id }, data: { status: "active", startedAt: new Date(), endsAt } });
 }
 
 /**
- * Nightly: ends running bundles that can't go on (the stuck product sold out, a product was removed,
- * its floor no longer allows the discount, or the plan no longer includes bundles) with an inbox note,
- * retries clearing Shopify for ended ones, and cleans up starts that crashed.
+ * Ends a running bundle (claimed first, so it ends once) and takes it off Shopify: `{ ended, cleared }`
+ * (`cleared` false: Shopify didn't confirm; retried hourly, and the discount's lease ends it anyway).
+ */
+async function finish(session, bundle, partnerGid, reason) {
+  const claimed = await db().bundle.updateMany({ where: { id: bundle.id, status: "active" }, data: { status: "ended", endReason: reason, endedAt: new Date(), cleanup: true } });
+  if (!claimed.count) return { ended: false, cleared: false };
+  const cleared = await clearShopify(session, bundle, partnerGid);
+  if (cleared) await db().bundle.update({ where: { id: bundle.id }, data: { cleanup: false } });
+  return { ended: true, cleared };
+}
+
+/** The merchant ends a bundle: the discount stops and the offer leaves the page. Resolves whether Shopify confirmed it. */
+export async function endBundle(shop, bundleId) {
+  const bundle = await db().bundle.findFirst({ where: { id: bundleId, shopId: shop.id }, include: { partner: { select: { shopifyGid: true } } } });
+  if (!bundle) throw new HttpError("Bundle not found", 404);
+  const { ended, cleared } = await finish(await getOfflineSession(shop.domain), bundle, bundle.partner.shopifyGid, "stopped");
+  if (!ended) throw new HttpError("This bundle isn't running.", 409);
+  return { cleared, endsAt: bundle.endsAt };
+}
+
+/**
+ * Hourly (with the plan runner), nightly, after a plan change and right after a bundled product changes:
+ * ends running bundles that can't go on (the stuck product sold out, a product was removed, its floor no
+ * longer allows the discount at Shopify's prices and costs now, or the plan no longer includes bundles)
+ * with an inbox note, pushes the discount's lease forward for the others, retries clearing Shopify for
+ * ended ones, and cleans up starts that crashed.
  */
 export async function runBundles(shopId, now = new Date()) {
   const shop = await db().shop.findUnique({ where: { id: shopId } });
@@ -257,16 +288,27 @@ export async function runBundles(shopId, now = new Date()) {
         if (await clearShopify(session, bundle, bundle.partner.shopifyGid)) await db().bundle.update({ where: { id: bundle.id }, data: { cleanup: false } });
         continue;
       }
+      const live = included ? await readLiveVariants(session, bundle.product.shopifyGid) : null;
       const reason = endReason({
         included,
-        productActive: bundle.product.status === "ACTIVE",
+        productActive: bundle.product.status === "ACTIVE" && (!included || live != null),
         partnerActive: bundle.partner.status === "ACTIVE",
         stock: stockOf(bundle.product.variants),
-        maxPct: maxBundlePct(bundle.product.variants, settings).pct,
+        maxPct: live ? maxBundlePct(live, settings).pct : 0,
         pct: bundle.pct,
       });
-      if (reason && (await finish(session, bundle, bundle.partner.shopifyGid, reason))) {
-        await notify({ shopId, type: "bundle_ended", productId: bundle.productId, data: { reason } });
+      if (reason) {
+        if ((await finish(session, bundle, bundle.partner.shopifyGid, reason)).ended) {
+          await notify({ shopId, type: "bundle_ended", productId: bundle.productId, data: { reason } });
+        }
+        continue;
+      }
+      if (bundle.discountGid && (!bundle.endsAt || bundle.endsAt.getTime() - now.getTime() < RENEW_MS)) {
+        const endsAt = new Date(now.getTime() + LEASE_MS);
+        const data = await adminGraphql(session, DISCOUNT_RENEW, { id: bundle.discountGid, discount: { endsAt: endsAt.toISOString() } });
+        const errors = data.discountAutomaticBxgyUpdate.userErrors;
+        if (errors.length) throw new Error(`Lease not renewed: ${errorsText(errors)}`);
+        await db().bundle.update({ where: { id: bundle.id }, data: { endsAt } });
       }
     } catch (error) {
       console.error("[bundles] check failed", bundle.id, errorMessage(error));

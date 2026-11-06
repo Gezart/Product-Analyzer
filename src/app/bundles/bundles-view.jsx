@@ -60,7 +60,16 @@ export function BundlesView() {
 
   const start = (product, partner, pct) =>
     act(`start:${product.gid}`, () => send("/api/bundles", { productGid: product.gid, partnerGid: partner.gid, pct }), `Started: shoppers who buy ${partner.title} get ${product.title} ${pct}% off.`);
-  const end = (bundle) => act(`end:${bundle.id}`, () => send(`/api/bundles/${bundle.id}/end`), `Ended: the discount on ${bundle.product.title} stopped.`);
+  const end = (bundle) =>
+    act(
+      `end:${bundle.id}`,
+      async () => {
+        const result = await send(`/api/bundles/${bundle.id}/end`);
+        // Shopify didn't confirm: say so (it's retried, and the discount stops by itself at the latest).
+        if (!result.cleared) throw new Error(`Ended here, but Shopify didn't confirm yet. It's retried every hour, and the discount stops by itself${result.endsAt ? ` by ${new Date(result.endsAt).toLocaleString()}` : " within 2 days"}.`);
+      },
+      `Ended: the discount on ${bundle.product.title} stopped.`,
+    );
 
   const locked = Boolean(data?.upgrade);
   const running = data?.bundles.filter((b) => b.status === "active") ?? [];
@@ -80,7 +89,7 @@ export function BundlesView() {
       )}
 
       {data && (
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(260px,1fr)]">
+        <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(260px,1fr)]">
           <div className="flex min-w-0 flex-col gap-3">
             <Card heading="Running">
               {running.length === 0 ? (
@@ -173,10 +182,11 @@ function Suggestions({ suggestions, busy, onStart }) {
               <li key={s.product.gid} className={`${TROW} flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-[13px]`}>
                 <div className="min-w-0">
                   <p className="m-0">
+                    Sell{" "}
                     <Link href={`/products/${s.product.id}`} className="font-semibold">
                       {s.product.title}
                     </Link>{" "}
-                    {STATUS_INFO[s.product.status] && <Pill tone={s.product.status}>{STATUS_INFO[s.product.status].label}</Pill>} with <strong>{s.partner.title}</strong>
+                    {STATUS_INFO[s.product.status] && <Pill tone={s.product.status}>{STATUS_INFO[s.product.status].label}</Pill>} at a discount to shoppers who buy <strong>{s.partner.title}</strong>
                   </p>
                   <p className="mt-1 mb-0 text-muted">
                     {s.why} Up to {s.product.maxPct}% off keeps it above your margin floor.
@@ -184,11 +194,11 @@ function Suggestions({ suggestions, busy, onStart }) {
                 </div>
                 <span className="flex items-center gap-2">
                   <label className="flex items-center gap-1">
-                    <span className="sr-only">Discount on {s.product.title}</span>
+                    Discount
                     <input type="number" min={BUNDLE.minPct} max={s.product.maxPct} value={pct} onChange={(e) => setPcts({ ...pcts, [s.product.gid]: Number(e.target.value) })} className={INPUT} />%
                   </label>
                   <button type="button" disabled={Boolean(busy)} onClick={() => onStart(s.product, s.partner, pct)} className={`${BTN.smallPrimary} cursor-pointer`}>
-                    {busy === `start:${s.product.gid}` ? "Starting…" : "Start"}
+                    {busy === `start:${s.product.gid}` ? "Starting…" : "Start bundle"}
                   </button>
                 </span>
               </li>
@@ -213,6 +223,8 @@ function OwnBundle({ busy, onStart }) {
     const chosen = picked?.[0];
     if (!chosen) return;
     setError(null);
+    const other = which === "partner" ? product : partner;
+    if (other?.gid === chosen.id) return setError("Choose two different products.");
     if (which === "partner") return setPartner({ gid: chosen.id, title: chosen.title });
     try {
       const res = await fetch(`/api/bundles/limit?gid=${encodeURIComponent(chosen.id)}`);
@@ -240,7 +252,11 @@ function OwnBundle({ busy, onStart }) {
         </button>
       </div>
       {error && <p className="m-0 font-semibold text-[#B91C1C]">{error}</p>}
-      {product && !product.maxPct && <p className="m-0 text-[#92400E]">{product.reason}</p>}
+      {product && !product.maxPct && (
+        <p className="m-0 text-[#92400E]">
+          {product.reason} Set each variant&apos;s &quot;Cost per item&quot; in Shopify (Products → the product → its variants), then choose it again.
+        </p>
+      )}
       {product?.maxPct > 0 && partner && (
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1">
@@ -270,7 +286,7 @@ function HowItWorks() {
   return (
     <section className={`${CARD} flex flex-col gap-2 px-5 py-4 text-[13px] text-ink-2`}>
       <h2 className={H2}>How a bundle works</h2>
-      <ul className="m-0 flex flex-col gap-1.5 pl-5">
+      <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5">
         <li>A Shopify automatic discount: when the cart has the product that sells, one unit of the stuck product gets the discount. Everyone else pays the full price.</li>
         <li>The discount never takes any variant under your margin floor (Settings), nor over your max discount.</li>
         <li>

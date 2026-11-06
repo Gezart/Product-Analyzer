@@ -43,14 +43,14 @@ export function LayoutSettings({ layout, locked, error, onChange }) {
           {error}
         </p>
       )}
-      <fieldset disabled={locked} className="m-0 flex flex-col gap-3 border-0 p-0">
+      <fieldset disabled={locked} className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0">
         <ol className="m-0 flex list-none flex-col gap-1.5 p-0">
           {layout.elements.map((element, index) => {
             const required = REQUIRED_ELEMENTS.includes(element.type);
             const label = LAYOUT_LABELS[element.type];
             return (
-              <li key={element.type} className="flex items-center justify-between gap-2 rounded-lg border border-hair px-3 py-2">
-                <label className="flex min-w-0 items-center gap-2.5 text-[13px]">
+              <li key={element.type} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-hair px-3 py-2">
+                <label className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[13px]">
                   <input
                     type="checkbox"
                     checked={element.enabled}
@@ -59,7 +59,7 @@ export function LayoutSettings({ layout, locked, error, onChange }) {
                     className="size-4"
                   />
                   <span className="font-semibold">{label}</span>
-                  <span className="truncate text-muted">{required ? "Always on" : HINTS[element.type]}</span>
+                  <span className="min-w-0 text-muted">{required ? "Always on" : HINTS[element.type]}</span>
                 </label>
                 <span className="flex shrink-0 gap-1.5">
                   <button type="button" disabled={index === 0} onClick={() => set({ elements: moved(layout.elements, index, -1) })} aria-label={`Move ${label} up`} className={`${BTN.tiny} cursor-pointer`}>

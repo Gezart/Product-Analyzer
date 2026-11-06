@@ -187,7 +187,7 @@ export function Preview({ blocks, layout = DEFAULT_LAYOUT }) {
   // Two columns: the photos come first (left on wide screens), the rest in order.
   const ordered = layout.columns === 2 && parts.includes("gallery") ? ["gallery", ...parts.filter((t) => t !== "gallery")] : parts;
   return (
-    <section aria-labelledby="preview" className={`${CARD} flex flex-col gap-3 px-5 py-4 lg:sticky lg:top-4`}>
+    <section aria-labelledby="preview" className={`${CARD} order-first flex flex-col gap-3 px-5 py-4 lg:sticky lg:top-4 lg:order-none`}>
       <h2 id="preview" className={H2}>
         Preview
       </h2>

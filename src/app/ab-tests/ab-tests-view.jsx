@@ -116,7 +116,7 @@ export function AbTestsView() {
       )}
 
       {data && (
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(260px,1fr)]">
+        <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(260px,1fr)]">
           <div className="flex min-w-0 flex-col gap-3">
             {running.length === 0 && (
               <Notice compact>No test is running. Start one with New test: pick a product and write its version B.</Notice>
@@ -153,7 +153,7 @@ function Version({ label, version, kind }) {
 }
 
 function ChanceBar({ chance }) {
-  const value = chance == null ? 50 : Math.round(chance * 100);
+  const value = chance == null ? 0 : Math.round(chance * 100);
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
@@ -267,6 +267,7 @@ function RunningTest({ test, rules, money, busy, locked, onAct }) {
 }
 
 function FinishedTests({ tests, busy, onAct }) {
+  const [confirm, setConfirm] = useState(null);
   return (
     <Card heading="Finished tests">
       <div className="overflow-x-auto">
@@ -276,13 +277,13 @@ function FinishedTests({ tests, busy, onAct }) {
               <th className={TH} scope="col">
                 Product
               </th>
-              <th className={TH} scope="col">
+              <th className={`${TH} hidden sm:table-cell`} scope="col">
                 Test
               </th>
               <th className={TH} scope="col">
                 Result
               </th>
-              <th className={TH} scope="col">
+              <th className={`${TH} hidden sm:table-cell`} scope="col">
                 Chance B better
               </th>
               <th className={TH} scope="col">
@@ -296,21 +297,35 @@ function FinishedTests({ tests, busy, onAct }) {
                 <td className="px-3 py-[9px]">
                   <Link href={`/products/${test.product.id}`}>{test.product.title}</Link>
                   <span className="block text-xs text-muted">
+                    <span className="sm:hidden">{KIND_LABELS[test.kind]} · </span>
                     {new Date(test.startedAt).toLocaleDateString()} – {test.endedAt ? new Date(test.endedAt).toLocaleDateString() : "…"}
                   </span>
                 </td>
-                <td className="px-3 py-[9px]">{KIND_LABELS[test.kind]}</td>
+                <td className="hidden px-3 py-[9px] sm:table-cell">{KIND_LABELS[test.kind]}</td>
                 <td className="px-3 py-[9px]">
                   <Pill tone={test.status === "applied" ? "good" : (RESULT_TONE[test.endReason] ?? "neutral")}>
                     {test.status === "applied" ? "B is in use" : test.status === "applying" ? "Applying B…" : resultLabel(test)}
                   </Pill>
                 </td>
-                <td className="px-3 py-[9px]">{test.stats?.chance == null ? "—" : pct(test.stats.chance, 0)}</td>
+                <td className="hidden px-3 py-[9px] sm:table-cell">{test.stats?.chance == null ? "—" : pct(test.stats.chance, 0)}</td>
                 <td className="px-3 py-[9px] text-right">
-                  {test.status === "ended" && test.endReason !== "product_gone" && (
-                    <button type="button" disabled={Boolean(busy)} onClick={() => onAct(test, "use-b")} className={`${BTN.tiny} cursor-pointer`}>
-                      {busy === `${test.id}:use-b` ? "Applying…" : "Use B now"}
+                  {test.status === "ended" && test.endReason !== "product_gone" && confirm !== test.id && (
+                    <button type="button" disabled={Boolean(busy)} onClick={() => setConfirm(test.id)} className={`${BTN.tiny} cursor-pointer`}>
+                      Use B now
                     </button>
+                  )}
+                  {confirm === test.id && (
+                    <span className="flex flex-col items-end gap-1">
+                      <span className="text-xs text-muted">{test.winner === "b" ? "Put B on the product?" : "B didn't win. Put it on the product anyway?"}</span>
+                      <span className="flex gap-1.5">
+                        <button type="button" disabled={Boolean(busy)} onClick={() => onAct(test, "use-b")} className={`${BTN.tiny} cursor-pointer`}>
+                          {busy === `${test.id}:use-b` ? "Applying…" : "Yes"}
+                        </button>
+                        <button type="button" onClick={() => setConfirm(null)} className={`${BTN.tiny} cursor-pointer`}>
+                          No
+                        </button>
+                      </span>
+                    </span>
                   )}
                 </td>
               </tr>
@@ -326,7 +341,7 @@ function HowItWorks({ rules }) {
   return (
     <section className={`${CARD} flex flex-col gap-2 px-5 py-4 text-[13px] text-ink-2`}>
       <h2 className={H2}>How a test works</h2>
-      <ul className="m-0 flex flex-col gap-1.5 pl-5">
+      <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5">
         <li>Each visitor who allows tracking sees A or B, half each, and keeps seeing the same one. Others see your page as it is and aren&apos;t counted.</li>
         <li>Views and add-to-carts are counted on the product page; purchases come from your orders.</li>
         <li>

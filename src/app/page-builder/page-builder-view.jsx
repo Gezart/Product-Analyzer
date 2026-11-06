@@ -94,7 +94,8 @@ export function PageBuilderView() {
       const body = await res.json().catch(() => ({}));
       if (res.status === 400 && body.errors) {
         setBlockErrors(Object.fromEntries(body.errors.map((e) => [e.field, e.message])));
-        setMessage({ tone: "bad", text: "Some blocks need a fix before saving." });
+        const names = body.errors.map((e) => (e.field === "layout" ? "Full product page" : (BLOCK_LABELS[e.field] ?? e.field)));
+        setMessage({ tone: "bad", text: `Fix these before saving: ${[...new Set(names)].join(", ")}. The message is on each one below.` });
         return;
       }
       if (!res.ok) throw new Error(body.error ?? `Failed (${res.status})`);
@@ -136,10 +137,10 @@ export function PageBuilderView() {
 
   const actions = data && (
     <>
-      <button type="button" onClick={() => openThemeEditor(data.layoutEditorUrl)} className={`${BTN.secondary} cursor-pointer`}>
+      <button type="button" disabled={locked} onClick={() => openThemeEditor(data.layoutEditorUrl)} className={`${BTN.secondary} cursor-pointer`}>
         Add full page
       </button>
-      <button type="button" onClick={() => openThemeEditor(data.themeEditorUrl)} className={`${BTN.secondary} cursor-pointer`}>
+      <button type="button" disabled={locked} onClick={() => openThemeEditor(data.themeEditorUrl)} className={`${BTN.secondary} cursor-pointer`}>
         Add blocks only
       </button>
       <button type="button" disabled={saving || locked} onClick={save} className={`${BTN.primary} cursor-pointer`}>
@@ -161,7 +162,7 @@ export function PageBuilderView() {
       )}
 
       {blocks && (
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
+        <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
           <div className="flex min-w-0 flex-col gap-3">
             <ThemeSteps />
             <Suggestions suggestions={data.suggestions} locked={locked} busy={using} onUse={useSuggestion} />
@@ -202,7 +203,7 @@ function ThemeSteps() {
   return (
     <section className={`${CARD} px-5 py-4 text-[13px] text-ink-2`}>
       <h2 className={H2}>How it gets on your store</h2>
-      <ol className="mt-2 mb-0 flex flex-col gap-1 pl-5">
+      <ol className="mt-2 mb-0 flex list-decimal flex-col gap-1 pl-5">
         <li>Set up the page below and save.</li>
         <li>
           <strong>Whole page:</strong> click <strong>Add full page</strong>. In the theme editor, make a product template (or use your product page), add the <strong>Unstuck product page</strong> block and remove the

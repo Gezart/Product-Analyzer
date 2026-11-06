@@ -683,6 +683,8 @@ model Bundle {
   /// The Shopify discount's title (shoppers see it in the cart); also finds a discount whose id was lost.
   title       String
   discountGid String?   @map("discount_gid")
+  /// When the Shopify discount ends by itself unless the hourly check pushes it forward (a lease).
+  endsAt      DateTime? @map("ends_at")
   status      String    @default("starting") // starting | active | ended
   /// Whether the discount or the offer may still be live in Shopify after it ended (retried nightly).
   cleanup     Boolean   @default(false)

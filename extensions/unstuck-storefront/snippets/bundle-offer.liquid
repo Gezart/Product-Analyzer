@@ -14,7 +14,8 @@
     assign keep = 100 | minus: unstuck_bundle.pct
     assign bundle_price = offered_variant.price | times: keep | divided_by: 100
     assign image_alt = offered.featured_image.alt | default: offered.title
-    assign this_title = product.title | escape
+    # `t` escapes what it fills in.
+    assign this_title = product.title
   -%}
   <div class="unstuck-block unstuck-bundle">
     <p class="unstuck-bundle__title">{{ 'unstuck.bundle_title' | t: pct: unstuck_bundle.pct }}</p>
