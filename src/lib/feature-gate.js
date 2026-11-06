@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { HttpError } from "@/lib/http-error";
 import { FEATURE_PLAN, getPlan, hasFeature, PLANS, productLimit } from "@/lib/plans";
 
-const LABEL = { fixCenter: "The fix center", markdown: "Markdown", marketPrice: "Market price", aiDescriptions: "Writing with AI", aiPhotos: "Making photos with AI", collectionOrder: "Ordering collections", compare: "Compare", reports: "The monthly report" };
+const LABEL = { fixCenter: "The fix center", markdown: "Markdown", marketPrice: "Market price", aiDescriptions: "Writing with AI", aiPhotos: "Making photos with AI", collectionOrder: "Ordering collections", compare: "Compare", reports: "The monthly report", pageBuilder: "The page builder" };
 
 /** `{ error, upgrade }` when the shop's plan doesn't include `feature` (the message and the plan to upgrade to), else null. */
 export function missingFeature(shop, feature) {
