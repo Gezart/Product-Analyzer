@@ -1,3 +1,4 @@
+import { recordBulkPurchases } from "@/lib/ab-tests-shopify";
 import { adminGraphql } from "@/lib/admin";
 import { getOfflineSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -30,7 +31,8 @@ const PRODUCTS_QUERY = `{
   }
 }`;
 
-// Only dates, cancellation and line items (product, variant, quantity, price) — no customer fields.
+// Only dates, cancellation and line items (product, variant, quantity, price, and the line properties
+// where an A/B test leaves its visitor's random id) — no customer fields.
 const ordersQuery = (filter) => `{
   orders(query: "${filter}") {
     edges { node {
@@ -38,6 +40,7 @@ const ordersQuery = (filter) => `{
       lineItems { edges { node {
         id currentQuantity product { id } variant { id }
         discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount } }
+        customAttributes { key value }
       } } }
     } }
   }
@@ -248,7 +251,10 @@ export async function runSyncPoll(job, signal) {
       // Yesterday's views next; that job re-scores once they're in (or without them if unavailable).
       await enqueue({ type: "views-sync", shopId });
     } else {
-      await applyCatchup(shopId, await orderWindowStart(shopId, shop.timezone), orderLinesFromBulk(rows, shop.timezone));
+      const lines = orderLinesFromBulk(rows, shop.timezone);
+      await applyCatchup(shopId, await orderWindowStart(shopId, shop.timezone), lines);
+      // A/B tests: purchases whose webhook was missed or failed.
+      await recordBulkPurchases(shopId, rows, lines).catch((e) => console.error("[ab-tests] purchases", e));
       await setSyncState(shopId, "catchup", { status: "done", error: null, lastSyncedAt: new Date() });
       await enqueue({ type: "score-shop", shopId });
     }

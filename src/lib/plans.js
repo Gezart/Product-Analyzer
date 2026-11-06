@@ -7,7 +7,7 @@ export const TRIAL_DAYS = 14;
 export const PLANS = [
   { id: "free", name: "Free", price: 0, products: 25, diagnoses: 3, aiTexts: 0, aiPhotos: 0, features: ["Dashboard and statuses", "Diagnosis with evidence", "Rising stars", "Seasonal products", "Weekly plan in your inbox"] },
   { id: "starter", name: "Starter", price: 19, products: 250, diagnoses: 30, aiTexts: 30, aiPhotos: 0, features: ["Fix center with AI descriptions", "Rescue plans", "Markdown engine", "Collection Optimizer", "Market price (Google + competitors)"] },
-  { id: "growth", name: "Growth", price: 39, products: 2000, diagnoses: 150, aiTexts: 150, aiPhotos: 50, features: ["AI photos", "Page builder for product pages", "Compare", "Monthly report", "More AI each month"] },
+  { id: "growth", name: "Growth", price: 39, products: 2000, diagnoses: 150, aiTexts: 150, aiPhotos: 50, features: ["AI photos", "Page builder for product pages", "A/B tests on product pages", "Compare", "Monthly report", "More AI each month"] },
   { id: "pro", name: "Pro", price: 79, products: Infinity, diagnoses: 500, aiTexts: 500, aiPhotos: 200, features: ["The most AI each month", "Priority support"] },
 ];
 
@@ -34,7 +34,7 @@ export function planFromSubscriptions(names) {
 }
 
 /** The plan each feature starts at; every plan includes the features of the plans below it. */
-export const FEATURE_PLAN = { fixCenter: "starter", rescuePlans: "starter", markdown: "starter", marketPrice: "starter", aiDescriptions: "starter", collectionOrder: "starter", compare: "growth", reports: "growth", aiPhotos: "growth", pageBuilder: "growth" };
+export const FEATURE_PLAN = { fixCenter: "starter", rescuePlans: "starter", markdown: "starter", marketPrice: "starter", aiDescriptions: "starter", collectionOrder: "starter", compare: "growth", reports: "growth", aiPhotos: "growth", pageBuilder: "growth", abTests: "growth" };
 
 const rank = (planId) => Math.max(0, PLANS.findIndex((p) => p.id === planId));
 

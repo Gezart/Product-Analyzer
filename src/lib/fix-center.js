@@ -23,6 +23,18 @@ async function readState(session, productGid, type) {
   return live ? stateOf(live, type) : null;
 }
 
+/** The A/B test kind a fix type changes (a new photo changes the photos' order too). */
+const TEST_KIND = { title: "title", description: "description", images: "images", photo: "images" };
+const TEST_LABEL = { title: "title", description: "description", images: "photos" };
+
+/** A running A/B test shows its own version of that part of the page: a fix there would spoil it. */
+async function assertNoRunningTest(productId, type) {
+  const kind = TEST_KIND[type];
+  if (!kind) return;
+  const test = await db().abTest.findFirst({ where: { productId, kind, status: { in: ["starting", "running"] } }, select: { id: true } });
+  if (test) throw new FixError(`An A/B test on this product's ${TEST_LABEL[kind]} is running. Stop it, or use B, on the A/B tests page first.`, 409);
+}
+
 /** Refresh local product data afterwards; a failure here must not change the fix's outcome. */
 async function refreshProduct(shopId, productGid) {
   await enqueue({ type: "sync-product", shopId, payload: { productGid } }).catch(() => {});
@@ -51,6 +63,7 @@ export async function applyFix(
   { diagnosisId, expected } = {},
 ) {
   const { product, session } = await productContext(shopId, productId);
+  await assertNoRunningTest(productId, type);
   const live = await readLiveProduct(session, product.shopifyGid);
   if (!live) throw new FixError("Product no longer exists in Shopify", 404);
   const before = stateOf(live, type);
@@ -117,6 +130,7 @@ export async function applyFix(
  */
 export async function addPhotoFix(shopId, productId, photo, { ai = false, diagnosisId, draftId = null } = {}) {
   const { product, session } = await productContext(shopId, productId);
+  await assertNoRunningTest(productId, "photo");
   const live = await readLiveProduct(session, product.shopifyGid);
   if (!live) throw new FixError("Product no longer exists in Shopify", 404);
   const before = stateOf(live, "photo");

@@ -1,3 +1,4 @@
+import { runAbTests } from "@/lib/ab-tests-shopify";
 import { pruneDrafts } from "@/lib/ai/photos";
 import { refreshShopLinks } from "@/lib/competitor-prices";
 import { syncBenchmarks } from "@/lib/google-merchant";
@@ -45,13 +46,17 @@ export const handlers = {
     requireShop(job);
     await syncViews(job, signal);
   },
-  /** Plan runner: closes measurement windows, applies markdown steps, restores prices, guards floors. */
+  /**
+   * Plan runner: closes measurement windows, applies markdown steps, restores prices, guards floors,
+   * and ends A/B tests that are decided.
+   */
   "rescue-runner": async (job) => {
     // Each part runs even if another fails; the job fails afterwards so it is retried.
     const shopId = requireShop(job);
     const results = await Promise.allSettled([
       runRescuePlans(shopId),
       runMarkdownPlans(shopId).then(() => guardPrices(shopId)),
+      runAbTests(shopId),
     ]);
     const failed = results.find((r) => r.status === "rejected");
     if (failed) throw failed.reason;
@@ -90,6 +95,10 @@ export const handlers = {
   /** Publishes the page builder for the shop's plan and refreshes "often bought together". */
   "page-builder": async (job, signal) => {
     await runPageBuilder(requireShop(job), signal);
+  },
+  /** A/B tests: ends decided ones and those the plan no longer includes (also hourly, with the plan runner). */
+  "ab-tests": async (job) => {
+    await runAbTests(requireShop(job));
   },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,

@@ -1,3 +1,5 @@
+import { testLinesFromWebhook } from "@/lib/ab-tests";
+import { recordTestPurchases } from "@/lib/ab-tests-shopify";
 import { adminGraphql } from "@/lib/admin";
 import { getOfflineSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -58,7 +60,14 @@ export async function handleOrderWebhook(domain, payload) {
   const windowStart = await orderWindowStart(shop.id, shop.timezone);
   if (localDateKey(new Date(payload.created_at), shop.timezone) < windowStart) return;
   const updatedAt = new Date(payload.updated_at ?? payload.created_at);
-  await applyOrderLines(shop.id, orderGid, updatedAt, orderLinesFromWebhook(payload, shop.timezone));
+  const lines = orderLinesFromWebhook(payload, shop.timezone);
+  const applied = await applyOrderLines(shop.id, orderGid, updatedAt, lines);
+  // A/B tests: lines bought after seeing a test (the nightly catch-up repairs a failure here). An
+  // out-of-date webhook (a newer version is stored) must not bring back a cancelled purchase.
+  const testLines = applied ? testLinesFromWebhook(payload) : [];
+  if (testLines.length) {
+    await recordTestPurchases(shop.id, testLines, lines, new Map([[orderGid, new Date(payload.created_at)]])).catch((e) => console.error("[ab-tests] purchases", e));
+  }
   // Refunds come with the order (subscriptions made before they were added send none: keep what's stored).
   if (Array.isArray(payload.refunds)) await replaceOrderRefunds(shop.id, orderGid, updatedAt, lineRefundsFromWebhook(payload, shop.timezone));
 }

@@ -51,6 +51,7 @@ model Shop {
   returnReasons      ReturnReason[]
   aiPhotoDrafts      AiPhotoDraft[]
   collectionReorders CollectionReorder[]
+  abTests            AbTest[]
 
   @@map("shops")
 }
@@ -116,6 +117,7 @@ model Product {
   googleBenchmarks GoogleBenchmark[]
   aiPhotoDrafts    AiPhotoDraft[]
   risingActions    RisingAction[]
+  abTests          AbTest[]
 
   @@unique([shopId, shopifyGid])
   @@index([shopId])
@@ -571,4 +573,77 @@ model RisingAction {
   @@unique([productId, kind, startedOn])
   @@index([productId, startedOn])
   @@map("rising_actions")
+}
+
+/// An A/B test on a product page (docs/TASKS.md, Phase 3b): half the visitors see version B of the
+/// title, description or photo order. `a` and `b` are fix states (src/lib/fixes.js); "Use B now"
+/// applies `b` as a fix. At most one test per product starts, runs or is applied at a time (partial
+/// unique index in the migration).
+model AbTest {
+  id         String    @id @default(cuid())
+  shopId     String    @map("shop_id")
+  productId  String    @map("product_id")
+  kind       String // title | description | images
+  a          Json
+  b          Json
+  /// Photo previews at the start (`{ [mediaGid]: url }`), for the list of tests.
+  previews   Json      @default("{}")
+  status     String    @default("starting") // starting | running | ended | applying | applied
+  /// Whether the storefront metafield is (still) set; an ended test's is removed, retried until it is.
+  published  Boolean   @default(false)
+  /// b_better | a_better | time | stopped | changed | plan | product_gone | used_b
+  endReason  String?   @map("end_reason")
+  winner     String? // a | b
+  /// The numbers when it ended (`testStats`).
+  result     Json?
+  fixId      String?   @map("fix_id")
+  /// When "Use B now" claimed it ("applying"); one older than a few minutes crashed.
+  claimedAt  DateTime? @map("claimed_at")
+  startedAt  DateTime  @default(now()) @map("started_at")
+  endedAt    DateTime? @map("ended_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  shop      Shop              @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  visitors  AbTestVisitor[]
+  purchases AbTestPurchase[]
+
+  @@index([shopId, status])
+  @@index([productId])
+  @@map("ab_tests")
+}
+
+/// A visitor counted in a test (a random id from the storefront, only with tracking consent; no
+/// customer data). The version comes from the ids (`variantOf`), never from the storefront.
+model AbTestVisitor {
+  testId    String    @map("test_id")
+  visitorId String    @map("visitor_id")
+  variant   String // a | b
+  viewedAt  DateTime  @default(now()) @map("viewed_at")
+  cartedAt  DateTime? @map("carted_at")
+
+  test AbTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@id([testId, visitorId])
+  @@index([testId, variant])
+  @@map("ab_test_visitors")
+}
+
+/// An order line of the tested product bought by a counted visitor (its line item property), with its
+/// quantity now (0 once cancelled or removed) and revenue.
+model AbTestPurchase {
+  testId    String   @map("test_id")
+  lineGid   String   @map("line_gid")
+  orderGid  String   @map("order_gid")
+  visitorId String   @map("visitor_id")
+  variant   String
+  quantity  Int
+  revenue   Decimal  @db.Decimal(14, 2)
+  orderedAt DateTime @map("ordered_at")
+
+  test AbTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@id([testId, lineGid])
+  @@index([testId, variant])
+  @@map("ab_test_purchases")
 }

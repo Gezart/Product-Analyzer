@@ -1,6 +1,7 @@
 {%- comment -%}
   Turned on once in the theme editor (App embeds). Tells the storefront scripts where the app's proxy
-  is (/apps/unstuck, after a market's language prefix) and which product the page shows.
+  is (/apps/unstuck, after a market's language prefix) and which product the page shows, and on a
+  product with a running A/B test adds the test (snippets/ab-test.liquid).
 {%- endcomment -%}
 {%- if routes.root_url == '/' -%}
   {%- assign unstuck_proxy = '/apps/unstuck' -%}
@@ -14,6 +15,18 @@
   window.Unstuck.productId = {{ product.id | json }};
   {%- endif %}
 </script>
+{%- comment -%}
+  Title and description tests run in the store's main language only: B is written in it, and the page
+  in another language shows translated text (photos tests run in every language).
+{%- endcomment -%}
+{%- if template.name == 'product' and product -%}
+  {%- assign unstuck_ab = product.metafields["$app"].ab_test.value -%}
+  {%- if unstuck_ab.id -%}
+    {%- if unstuck_ab.kind == 'images' or request.locale.primary -%}
+      {%- render 'ab-test', product: product, ab: unstuck_ab -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endif %}
 
 {% schema %}
 {
