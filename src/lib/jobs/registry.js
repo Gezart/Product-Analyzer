@@ -12,7 +12,7 @@ import { runRescuePlans } from "@/lib/rescue-plans";
 import { closeMonth } from "@/lib/reports";
 import { scoreShop } from "@/lib/score-shop";
 import { runDailyMetrics, runInitialSync, runOrdersCatchup, runRegisterWebhooks, runSyncPoll } from "@/lib/sync/initial-sync";
-import { runSyncInventory, runSyncProduct } from "@/lib/sync/live";
+import { runProductsCatchup, runSyncInventory, runSyncProduct } from "@/lib/sync/live";
 import { runReturnsSync } from "@/lib/sync/returns";
 import { syncViews } from "@/lib/sync/views";
 import { sendWeeklyPlan } from "@/lib/weekly-plans";
@@ -113,6 +113,8 @@ export const handlers = {
   },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
+  /** Hourly: re-syncs products whose webhooks were missed (new or edited in Shopify, not here). */
+  "products-catchup": runProductsCatchup,
   "sync-inventory": runSyncInventory,
 };
 
@@ -139,4 +141,4 @@ export const nightlyJobs = [
 ];
 
 /** Jobs enqueued once per shop every hour. */
-export const hourlyJobs = ["rescue-runner"];
+export const hourlyJobs = ["rescue-runner", "products-catchup"];

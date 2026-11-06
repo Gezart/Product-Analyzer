@@ -7,7 +7,8 @@ import { PermanentJobError } from "@/lib/jobs/errors";
 import { enqueue } from "@/lib/jobs/queue";
 import { localDateKey } from "@/lib/jobs/schedule";
 import { orderWindowStart } from "@/lib/sync/initial-sync";
-import { applyOrderLines, markProductDeleted, rebuildProductSales, replaceOrderRefunds, upsertProducts } from "@/lib/sync/store";
+import { catchupSince, nextMark, staleProducts, updatedSinceQuery } from "@/lib/sync/products-catchup";
+import { applyOrderLines, markProductDeleted, rebuildProductSales, replaceOrderRefunds, setSyncState, upsertProducts } from "@/lib/sync/store";
 import { assembleProducts, lineRefundsFromWebhook, orderLinesFromWebhook, rowsFromProductNode } from "@/lib/sync/transform";
 
 // Pages of 100 keep each request well under Shopify's 1,000-point query cost limit.
@@ -176,4 +177,49 @@ export async function runSyncInventory(job) {
   );
   const productGid = data.inventoryItem?.variant?.product.id;
   if (productGid) await queueProductSync(shopId, productGid);
+}
+
+const RECENT_PRODUCTS = `#graphql
+  query RecentProducts($query: String!, $after: String) {
+    products(first: 250, after: $after, sortKey: UPDATED_AT, query: $query) {
+      nodes { id updatedAt }
+      pageInfo { hasNextPage endCursor }
+    }
+  }`;
+/** Up to 2,000 changed products per run; a busier hour continues in the next run. */
+const CATCHUP_PAGES = 8;
+
+/**
+ * Job "products-catchup" (hourly, and after webhooks were re-pointed): re-syncs products changed in
+ * Shopify after our last copy, or missing here, in case their webhooks never arrived.
+ */
+export async function runProductsCatchup(job) {
+  const { shopId, session } = await jobContext(job);
+  const [imported, state] = await Promise.all([
+    db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "products" } }, select: { status: true } }),
+    db().syncState.findUnique({ where: { shopId_resource: { shopId, resource: "products-catchup" } }, select: { lastSyncedAt: true } }),
+  ]);
+  // During the first import the bulk query brings every product.
+  if (imported?.status !== "done") return;
+
+  const startedAt = new Date();
+  const query = updatedSinceQuery(catchupSince(state?.lastSyncedAt, startedAt));
+  let after = null;
+  for (let page = 0; page < CATCHUP_PAGES; page++) {
+    const { products } = await adminGraphql(session, RECENT_PRODUCTS, { query, after });
+    const { nodes } = products;
+    if (nodes.length) {
+      const rows = await db().product.findMany({
+        where: { shopId, shopifyGid: { in: nodes.map((n) => n.id) } },
+        select: { shopifyGid: true, updatedAt: true },
+      });
+      const known = new Map(rows.map((p) => [p.shopifyGid, p.updatedAt]));
+      for (const gid of staleProducts(nodes, known)) await queueProductSync(shopId, gid);
+    }
+    const complete = !products.pageInfo.hasNextPage || !products.pageInfo.endCursor;
+    // Saved per page (oldest first), so a failure on a later page doesn't redo the earlier ones.
+    await setSyncState(shopId, "products-catchup", { status: "done", error: null, lastSyncedAt: nextMark(nodes, complete, startedAt) });
+    if (complete) return;
+    after = products.pageInfo.endCursor;
+  }
 }
