@@ -167,6 +167,7 @@ From the features list (Funksionet e Unstuck), in the order the owner chose. Eac
 | `launch-tracker` | New products followed through their first 7, 14 and 30 days: views, add-to-cart rate and sales against the store's; an early warning (no traffic, page problem) in the inbox at each checkpoint; a Launches page | A new product with views but few add-to-carts is flagged at day 7 with what to check | done |
 | `bundles` | "Buy together −X%": a stuck product (dead stock, slow mover) paired with a product that sells well; a Shopify automatic discount (buy the bestseller, get the stuck product at X% off, never below the price floor; `write_discounts` scope); an offer block on the bestseller's page; sales of the stuck product through the bundle measured | A bundle runs as a Shopify discount and shows on the bestseller's page; its sales show in the app | done (needs `shopify app deploy` for the new scope; dev-store check pending) |
 | `review-fixes` | What the customer test and the security review (owner's request) found in the four features above | Both reviews' findings fixed or listed as known limits | done |
+| `product-sync-fix` | New products didn't reach the app (owner's report: a product added on the dev store missing from Products and Launches): webhooks kept going to an old app URL until the nightly re-subscribe. Re-subscribe when the app URL changed, plus an hourly products catch-up | A product added in Shopify shows in Products and Launches within the hour, even when its webhook is missed | done |
 
 ## v2 (not in v1)
 

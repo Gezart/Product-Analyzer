@@ -2,6 +2,7 @@ import { HttpResponseError, RequestedTokenType } from "@shopify/shopify-api";
 import { db } from "@/lib/db";
 import { enqueue } from "@/lib/jobs/queue";
 import { resetSyncSteps } from "@/lib/sync/store";
+import { checkWebhookAddress } from "@/lib/sync/webhook-check";
 import { shopify } from "@/lib/shopify";
 import { loadOfflineSession, storeSession } from "@/lib/session-storage";
 
@@ -44,7 +45,10 @@ export async function authenticate(request) {
  */
 async function markInstalled(domain) {
   const existing = await db().shop.findUnique({ where: { domain } });
-  if (existing && !existing.uninstalledAt) return existing;
+  if (existing && !existing.uninstalledAt) {
+    await checkWebhookAddress(existing.id);
+    return existing;
+  }
 
   const now = new Date();
   const created = await db().shop.createMany({ data: [{ domain, installedAt: now }], skipDuplicates: true });

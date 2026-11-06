@@ -1,5 +1,14 @@
 import { DeliveryMethod } from "@shopify/shopify-api";
+import { env } from "@/lib/env";
 import { shopify } from "@/lib/shopify";
+
+const CALLBACK_PATH = "/api/webhooks";
+
+/** Where this server receives webhooks (subscriptions made elsewhere point at another address). */
+export function webhookAddress() {
+  // Same as the address Shopify is given (src/lib/shopify.js: hostScheme https + hostName).
+  return `https://${new URL(env.appUrl).host}${CALLBACK_PATH}`;
+}
 
 /** Topics subscribed per shop (compliance topics are set in the Partner Dashboard instead). */
 export const WEBHOOK_TOPICS = [
@@ -29,7 +38,7 @@ export async function registerWebhooks(session) {
           [
             {
               deliveryMethod: DeliveryMethod.Http,
-              callbackUrl: "/api/webhooks",
+              callbackUrl: CALLBACK_PATH,
               // Order payloads limited to what we store: no customer, address or contact fields.
               ...(topic.startsWith("ORDERS_") ? { includeFields: ORDER_FIELDS } : {}),
             },

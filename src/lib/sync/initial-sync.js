@@ -9,7 +9,7 @@ import { BulkBusyError, bulkStatus, readJsonl, startBulkQuery } from "@/lib/sync
 import { isLocalDate, ORDER_DAYS } from "@/lib/sync/constants";
 import { applyOrderLines, pruneNotifications, pruneScores, replaceOrderLines, setSyncState, snapshotInventory, upsertProducts } from "@/lib/sync/store";
 import { assembleProducts, orderLinesFromBulk } from "@/lib/sync/transform";
-import { registerWebhooks } from "@/lib/sync/webhooks";
+import { registerWebhooks, webhookAddress } from "@/lib/sync/webhooks";
 
 const POLL_EVERY_MS = 10_000;
 const MAX_POLLS = 360; // 1 hour
@@ -140,13 +140,23 @@ export async function runInitialSync(job) {
   });
 }
 
-/** Job "register-webhooks" (after install and nightly): subscribes the shop to all topics. */
+/**
+ * Job "register-webhooks" (after install, nightly, and when the app URL changed): subscribes the shop to
+ * all topics. The address used is kept in the sync state's `lastCursor`; when it moved, deliveries went to
+ * the old address until now, so the products changed meanwhile are re-read.
+ */
 export async function runRegisterWebhooks(job) {
   const shopId = requireShop(job);
   try {
     const { session } = await shopContext(shopId);
+    const before = await db().syncState.findUnique({
+      where: { shopId_resource: { shopId, resource: "webhooks" } },
+      select: { lastCursor: true },
+    });
+    const address = webhookAddress();
     await registerWebhooks(session);
-    await setSyncState(shopId, "webhooks", { status: "done", error: null, lastSyncedAt: new Date() });
+    await setSyncState(shopId, "webhooks", { status: "done", error: null, lastSyncedAt: new Date(), lastCursor: address });
+    if (before?.lastCursor !== address) await enqueue({ type: "products-catchup", shopId });
   } catch (error) {
     if (error instanceof PermanentJobError || job.attempts >= job.maxAttempts) {
       const message = error instanceof Error ? error.message : String(error);
