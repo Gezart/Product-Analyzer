@@ -50,7 +50,7 @@ export const handlers = {
   },
   /**
    * Plan runner: closes measurement windows, applies markdown steps, restores prices, guards floors,
-   * and ends A/B tests that are decided.
+   * ends A/B tests that are decided, and checks running bundles (floor, stock, the discount's lease).
    */
   "rescue-runner": async (job) => {
     // Each part runs even if another fails; the job fails afterwards so it is retried.
@@ -59,6 +59,7 @@ export const handlers = {
       runRescuePlans(shopId),
       runMarkdownPlans(shopId).then(() => guardPrices(shopId)),
       runAbTests(shopId),
+      runBundles(shopId),
     ]);
     const failed = results.find((r) => r.status === "rejected");
     if (failed) throw failed.reason;
@@ -129,8 +130,6 @@ export const nightlyJobs = [
   // After the orders catch-up: "often bought together" from the latest orders.
   { type: "page-builder", hour: 5 },
   { type: "price-guard", hour: 6 },
-  // After the midnight refresh (stock, costs): bundles that sold out or no longer fit the floor end.
-  { type: "bundles", hour: 6 },
   // Stores last month's report once it is over (no-op on other days).
   { type: "monthly-report", hour: 6 },
   // After the night's scoring, catch-up and rescue verdicts: this week's plan (Mondays only).

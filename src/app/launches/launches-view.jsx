@@ -89,7 +89,32 @@ export function LaunchesView() {
             <Notice compact>No products were added in the last 30 days. New products show here from their first day.</Notice>
           ) : (
             <Card heading="New products">
-              <div className="overflow-x-auto">
+              <ul className="m-0 flex list-none flex-col p-0 sm:hidden">
+                {data.launches.map((launch) => {
+                  const next = nextLink(launch);
+                  return (
+                    <li key={launch.id} className={`${TROW} flex flex-col gap-1.5 px-5 py-3 text-[13px]`}>
+                      <span className="flex flex-wrap items-center justify-between gap-2">
+                        <Link href={`/products/${launch.id}`} className="font-semibold">
+                          {launch.title}
+                        </Link>
+                        <Pill tone={STATUS[launch.status]?.tone}>{STATUS[launch.status]?.label}</Pill>
+                      </span>
+                      <span className="text-xs text-muted">
+                        Day {launch.day} · {launch.views.toLocaleString()} visits · {pct(launch.cartRate)} added to cart · {launch.units.toLocaleString()} sold
+                      </span>
+                      <span className="text-xs text-muted">{launch.reason}</span>
+                      {(launch.status === "page_problem" || launch.status === "no_traffic") && (
+                        <Link href={next.href} className="text-xs font-semibold">
+                          {next.label} →
+                        </Link>
+                      )}
+                      <Checkpoints launch={launch} />
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full border-collapse text-[13px]">
                   <thead className={THEAD}>
                     <tr>
@@ -157,7 +182,7 @@ export function LaunchesView() {
           )}
 
           <Card heading="How a launch is judged">
-            <ul className="m-0 flex flex-col gap-1.5 px-5 pt-0 pb-4 pl-10 text-[13px] text-ink-2">
+            <ul className="m-0 flex list-disc flex-col gap-1.5 px-5 pt-0 pb-4 pl-10 text-[13px] text-ink-2">
               <li>Checks on day 7, 14 and 30 after a product is added; the inbox tells you about launches that need attention or start strong.</li>
               <li>
                 <strong>Few visits</strong>: under {data.rules.minViews} visits and under a quarter of what a typical product of yours gets in as many days.

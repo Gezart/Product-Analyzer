@@ -1,7 +1,7 @@
 // A/B tests in Shopify and the database: the product's `$app.ab_test` metafield (what the storefront
 // shows), visitors and add-to-carts from the storefront, purchases from orders, and when a test ends.
 
-import { countsFrom, decide, isTestId, isVisitorId, KIND_LABELS, KINDS, purchasesFor, storefrontValue, testLinesFromBulk, testStats, validateTest, variantOf, versionView } from "@/lib/ab-tests";
+import { countsFrom, decide, isTestId, isVisitorId, KIND_LABELS, KINDS, plausibleVisitors, purchasesFor, storefrontValue, testLinesFromBulk, testStats, validateTest, variantOf, versionView } from "@/lib/ab-tests";
 import { adminGraphql } from "@/lib/admin";
 import { getOfflineSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -18,6 +18,8 @@ const KEY = "ab_test";
 const STALE_START_MS = 10 * 60_000;
 /** A "Use B now" still "applying" after this crashed (applying a fix takes seconds). */
 const STALE_APPLY_MS = 5 * 60_000;
+/** Visitors and purchases of a test ended this long ago are removed (its numbers stay in `result`). */
+const KEEP_ENDED_MS = 30 * 86_400_000;
 
 const METAFIELD_READ = `#graphql
   query AbTestMetafield($id: ID!) { product(id: $id) { metafield(namespace: "${APP_NAMESPACE}", key: "${KEY}") { value } } }`;
@@ -307,6 +309,7 @@ export async function runAbTests(shopId, now = new Date()) {
     },
     include: { product: { select: { shopifyGid: true } } },
   });
+  await pruneEnded(shopId, now);
   if (!tests.length) return;
   const session = await getOfflineSession(shop.domain);
   for (const test of tests.filter((t) => t.status === "applying")) {
@@ -335,7 +338,9 @@ export async function runAbTests(shopId, now = new Date()) {
         if (!live) end = { reason: "product_gone" };
         else if (!sameState(test.kind, stateOf(live, test.kind), test.a)) end = { reason: "changed" };
         else {
-          const decision = decide(test.startedAt, stats.get(test.id), now);
+          const counted = stats.get(test.id).a.visitors + stats.get(test.id).b.visitors;
+          const seen = await sessionsSince(test);
+          const decision = decide(test.startedAt, stats.get(test.id), now, undefined, plausibleVisitors(counted, seen.sessions, seen.shopHasViews));
           if (decision.ended) end = { reason: decision.reason, winner: decision.winner };
           else if ((await publishedTestId(session, productGid)) !== test.id) await republish(session, test, productGid);
         }
@@ -352,6 +357,42 @@ export async function runAbTests(shopId, now = new Date()) {
   }
   for (const test of tests.filter((t) => t.status === "ended" || t.status === "applied")) await unpublish(session, test, test.product.shopifyGid);
   if (failure) throw failure;
+}
+
+/** Shopify's visit sessions of the tested product since the test started, and whether the shop has visit data at all then. */
+async function sessionsSince(test) {
+  const since = new Date(new Date(test.startedAt).toISOString().slice(0, 10));
+  const [own, shop] = await Promise.all([
+    db().productDailyMetric.aggregate({ where: { productId: test.productId, date: { gte: since } }, _sum: { viewSessions: true } }),
+    db().productDailyMetric.findFirst({ where: { product: { shopId: test.shopId }, date: { gte: since }, viewSessions: { gt: 0 } }, select: { productId: true } }),
+  ]);
+  return { sessions: own._sum.viewSessions ?? 0, shopHasViews: Boolean(shop) };
+}
+
+/** Browser ids of tests that ended over 30 days ago aren't kept: their numbers stay in the test's result. */
+async function pruneEnded(shopId, now) {
+  const old = { shopId, status: { in: ["ended", "applied"] }, endedAt: { lt: new Date(now.getTime() - KEEP_ENDED_MS) } };
+  await db().abTestVisitor.deleteMany({ where: { test: old } });
+  await db().abTestPurchase.deleteMany({ where: { test: old } });
+}
+
+/**
+ * GDPR customers/redact: purchases of the orders to redact, and the browser ids that made them, are
+ * removed from the shop's tests (nothing else there identifies a person).
+ */
+export async function redactTestOrders(domain, orderIds) {
+  const orderGids = (orderIds ?? []).map((id) => `gid://shopify/Order/${id}`);
+  if (!orderGids.length) return;
+  const shops = await db().shop.findMany({ where: { domain }, select: { id: true } });
+  for (const shop of shops) {
+    const purchases = await db().abTestPurchase.findMany({ where: { orderGid: { in: orderGids }, test: { shopId: shop.id } }, select: { visitorId: true } });
+    // One browser id per browser, shared by every test: removed from all of the shop's tests.
+    const visitorIds = [...new Set(purchases.map((p) => p.visitorId))];
+    if (visitorIds.length) {
+      await db().abTestPurchase.deleteMany({ where: { visitorId: { in: visitorIds }, test: { shopId: shop.id } } });
+      await db().abTestVisitor.deleteMany({ where: { visitorId: { in: visitorIds }, test: { shopId: shop.id } } });
+    }
+  }
 }
 
 /**

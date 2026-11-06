@@ -97,6 +97,8 @@ export function NewTest({ productId, onStarted, onClose }) {
   }
 
   const media = product?.media ?? [];
+  /** B unchanged from the page as it is: nothing to test yet. */
+  const same = Boolean(product) && JSON.stringify(b) === JSON.stringify(kind === "title" ? { title: product.title } : kind === "description" ? { descriptionHtml: product.descriptionHtml ?? "" } : { mediaIds: product.media.map((m) => m.id) });
   const byId = Object.fromEntries(media.map((m) => [m.id, m]));
   const canPhotos = photosTestable(media);
 
@@ -127,7 +129,7 @@ export function NewTest({ productId, onStarted, onClose }) {
 
       {product?.running && (
         <Notice tone="warn" compact>
-          A test is already running on this product. Stop it, or use its B, before starting another.
+          A test is already running on this product (in the list below). Stop it, or use its B, before starting another.
         </Notice>
       )}
 
@@ -175,9 +177,12 @@ export function NewTest({ productId, onStarted, onClose }) {
             <p className="m-0 max-w-[560px] text-[13px] text-muted">
               Your product in Shopify doesn&apos;t change while the test runs. B shows on the product page only, to visitors who allow tracking.
             </p>
-            <button type="button" disabled={starting} onClick={start} className={`${BTN.primary} cursor-pointer`}>
-              {starting ? "Starting…" : "Start test"}
-            </button>
+            <span className="flex flex-col items-end gap-1">
+              <button type="button" disabled={starting || same} onClick={start} className={`${BTN.primary} cursor-pointer`}>
+                {starting ? "Starting…" : "Start test"}
+              </button>
+              {same && <span className="text-xs text-muted">Change B first: it&apos;s the same as A.</span>}
+            </span>
           </div>
         </>
       )}
@@ -194,7 +199,7 @@ function Photos({ ids, byId, onMove }) {
     onMove(next);
   };
   return (
-    <ol className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2 p-0">
+    <ol className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-3 p-0">
       {ids.map((id, i) => (
         <li key={id} className="flex flex-col gap-1">
           <div className="relative aspect-square overflow-hidden rounded-lg border border-line bg-head">
@@ -202,14 +207,14 @@ function Photos({ ids, byId, onMove }) {
             <span className="absolute top-1 left-1 rounded bg-white/90 px-1.5 text-[11px] font-semibold">{i + 1}</span>
           </div>
           {onMove && (
-            <span className="flex justify-between gap-1">
-              <button type="button" disabled={i === 0} onClick={() => move(i, i - 1)} aria-label={`Move photo ${i + 1} left`} className={`${BTN.tiny} cursor-pointer px-2`}>
+            <span className="flex flex-wrap justify-center gap-1">
+              <button type="button" disabled={i === 0} onClick={() => move(i, i - 1)} aria-label={`Move photo ${i + 1} left`} className={`${BTN.tiny} cursor-pointer px-1.5`}>
                 ←
               </button>
-              <button type="button" disabled={i === 0} onClick={() => move(i, 0)} className={`${BTN.tiny} cursor-pointer px-2`}>
+              <button type="button" disabled={i === 0} onClick={() => move(i, 0)} className={`${BTN.tiny} cursor-pointer px-1.5`}>
                 First
               </button>
-              <button type="button" disabled={i === ids.length - 1} onClick={() => move(i, i + 1)} aria-label={`Move photo ${i + 1} right`} className={`${BTN.tiny} cursor-pointer px-2`}>
+              <button type="button" disabled={i === ids.length - 1} onClick={() => move(i, i + 1)} aria-label={`Move photo ${i + 1} right`} className={`${BTN.tiny} cursor-pointer px-1.5`}>
                 →
               </button>
             </span>
