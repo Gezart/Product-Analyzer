@@ -14,6 +14,8 @@
     assign visible = true
   endif
   assign separator = ''
+  # Done here, not in an output tag: those end at the first closing brace, even inside a string.
+  assign text = settings.text | escape | replace: '{count}', count
 -%}
 <div class="unstuck-block unstuck-low-stock">
   <p
@@ -25,7 +27,7 @@
       hidden
     {% endunless %}
   >
-    {{- settings.text | escape | replace: '{count}', count -}}
+    {{- text -}}
   </p>
   <script type="application/json" data-unstuck-stock>
     {
