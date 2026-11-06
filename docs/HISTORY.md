@@ -1,5 +1,12 @@
 # History
 
+## 2026-11-06 · launch-tracker
+- New Launches page in the menu (after Products), on every plan (like Rising stars; the owner can move it): every product added in the last 30 days with its day, visits, add-to-cart rate, units and revenue so far, how it's doing now against the store, what to do next (fix the page, or give it visibility) and its day 7, 14 and 30 checks; on top, how many launched, how many need attention and the store's add-to-cart rate
+- The rules (tested): the store's yardstick is the median add-to-cart rate of its products with 20+ visits in the last 30 days, and the median visits per product per day. A launch with under 30 visits and under a quarter of what a typical product gets in as many days has **few visits**; with 30+ visits and under half the store's rate, an **early page problem**; 1.5× the store's rate with a sale, a **strong start**; otherwise on track, or too early to tell. Without visit data in the store, sales only. Today's unfinished day never counts
+- Every night at 8:00 store time (after yesterday's visits are in) each new product's checkpoint is recorded once (`launch_checks`; a product found late gets only its latest checkpoint), and the inbox says when a launch needs attention or starts strong, with the numbers and what to do. Checked against a local database (a repeated run records nothing new)
+- Not done: the owner's design for this page wasn't available here (it follows the app's design system)
+- Open: run the migration
+
 ## 2026-11-06 · page-builder-full
 - The full product page: a new app block, **Unstuck product page**, shows the whole page (photos, title, price, variant picker, quantity, "Add to cart" and Shopify's "Buy it now", description, and the page builder's blocks) in the order set in the app. Merchants put it in a product template in place of the theme's product section; the theme's code isn't changed
 - Page builder: "Full product page" card with its parts on/off and ↑/↓ (title, price, variant picker and buy buttons always on), photos (big photo with thumbnails, all photos, or the first only), one or two columns, Buy it now, vendor and sale badge; the preview draws the page in that order; "Add full page" and "Add blocks only" open the theme editor with each block. Saved with the blocks (checked and tested; a page builder saved before reads back with the default layout)

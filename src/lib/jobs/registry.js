@@ -4,6 +4,7 @@ import { refreshShopLinks } from "@/lib/competitor-prices";
 import { syncBenchmarks } from "@/lib/google-merchant";
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { enqueue } from "@/lib/jobs/queue";
+import { runLaunchTracker } from "@/lib/launches-shop";
 import { guardPrices, runMarkdownPlans } from "@/lib/markdown-engine";
 import { runPageBuilder } from "@/lib/page-builder-shopify";
 import { runRescuePlans } from "@/lib/rescue-plans";
@@ -100,6 +101,10 @@ export const handlers = {
   "ab-tests": async (job) => {
     await runAbTests(requireShop(job));
   },
+  /** New products' launch checkpoints (day 7, 14, 30) against the store, with inbox notes. */
+  "launch-tracker": async (job) => {
+    await runLaunchTracker(requireShop(job));
+  },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
   "sync-inventory": runSyncInventory,
@@ -123,6 +128,8 @@ export const nightlyJobs = [
   { type: "monthly-report", hour: 6 },
   // After the night's scoring, catch-up and rescue verdicts: this week's plan (Mondays only).
   { type: "weekly-plan", hour: 7 },
+  // After yesterday's views are in (views-sync follows the midnight refresh): launch checkpoints.
+  { type: "launch-tracker", hour: 8 },
 ];
 
 /** Jobs enqueued once per shop every hour. */
