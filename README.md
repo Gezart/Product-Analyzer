@@ -27,6 +27,7 @@ No other dependencies are added without the owner's approval.
 ## Code layout
 
 - `src/app/` — pages (client components in Tailwind, following the owner's design; shared pieces in `src/app/ui/kit.jsx`) and `api/*/route.js`. Every API route is wrapped in `appRoute()` (`src/lib/route.js`): it authenticates the session token (401), and answers expected failures (`HttpError`, `src/lib/http-error.js`) as `{ error }` with their status.
+- `extensions/unstuck-storefront/` — the theme app extension (product page block, app embed); it calls the app through the app proxy (`/apps/unstuck/…` → `src/app/api/proxy`, signature checked in `src/lib/app-proxy.js`). Deployed with `shopify app deploy`.
 - `src/lib/*.js` without `@/` imports are pure (scoring, diagnosis, rescue verdicts, markdown ladder, reports, dates…): all money and analysis decisions live there and are unit-tested next to them (`*.test.js`).
 - Other `src/lib` modules talk to the database (Prisma) or Shopify (`admin.js`, `*-shopify.js`); `src/lib/sync/` imports data, `src/lib/jobs/` runs background work.
 - Shared helpers: dates as `YYYY-MM-DD` store dates (`dates.js`), plan features and limits (`plans.js`, `feature-gate.js`).

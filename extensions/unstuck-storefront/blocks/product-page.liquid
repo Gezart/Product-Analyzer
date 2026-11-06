@@ -1,0 +1,21 @@
+{%- comment -%}
+  Unstuck's product page blocks (Page builder in the app): which show, in which order and with which
+  settings comes from the app-owned shop metafield. Nothing shows until blocks are set in the app.
+{%- endcomment -%}
+{%- assign unstuck_config = shop.metafields["$app"].page_builder.value -%}
+<div class="unstuck-product" data-unstuck-product="{{ product.id }}">
+  {%- if unstuck_config and product -%}
+    {%- render 'page-blocks', product: product, config: unstuck_config -%}
+  {%- endif -%}
+</div>
+
+{% schema %}
+{
+  "name": "Product page boost",
+  "target": "section",
+  "enabled_on": { "templates": ["product"] },
+  "javascript": "unstuck-product.js",
+  "stylesheet": "unstuck-product.css",
+  "settings": []
+}
+{% endschema %}

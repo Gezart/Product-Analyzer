@@ -1,0 +1,5 @@
+# The app's storefront pieces (docs/TASKS.md, Phase 3b): an app block merchants add to the product
+# page in the theme editor, and an app embed for A/B tests. The theme's own code is never changed.
+name = "Unstuck storefront"
+type = "theme"
+handle = "unstuck-storefront"

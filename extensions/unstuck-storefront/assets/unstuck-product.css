@@ -1,0 +1,4 @@
+/* Unstuck's product page blocks: plain, so they take the theme's fonts and colors. */
+.unstuck-product:empty {
+  display: none;
+}

@@ -144,6 +144,19 @@ The owner's design (Unstuck App Design canvas) is followed as closely as possibl
 | `design-results` | Results page (rescue plans and how the verdict is made), new in the menu | Matches the design | done |
 | `design-account` | Monthly report, Plans, Settings and the first import as in the design; Polaris components removed | Match the design; no Polaris left | done |
 
+## Phase 3b · Storefront: Page builder and A/B tests (owner's choice, 2026-11-05)
+
+The owner chose: real A/B tests (half the visitors see B, at the same time) through a theme app extension; the page builder's first blocks: "Only X left", trust badges and size chart, "Often bought together", "Notify me when back"; both on the Growth plan. Nothing changes the theme's code; the merchant adds the app's block in the theme editor.
+
+| Branch | What | Done when | Status |
+|---|---|---|---|
+| `storefront-extension` | Theme app extension (app block for the product page + app embed), app proxy with signature check, app-owned metafields, `write_app_proxy` scope | The block and the embed load on a product page; proxy requests with a bad signature are refused | done (code; the storefront check waits on the dev store) |
+| `page-builder` | Page builder page as in the design: blocks on/off and order, settings per block, "Use for" (all, collections, products), preview, "Add to theme"; blocks "Only X left", trust badges, size chart, "Often bought together" (from orders) | The chosen blocks show on the store's product page as set | todo |
+| `notify-back-in-stock` | "Notify me when back": shoppers leave their email for a sold-out variant; an email goes out when it's back in stock (email service, owner's key); deleted on GDPR requests | A request on a sold-out size gets an email when stock returns | todo |
+| `ab-tests` | A/B tests as in the design: title, description or photos; 50/50 per visitor, views and carts through the proxy (only with tracking consent), purchases from orders; chance B is better, stop at 95% or 30 days; "Use B now" applies it as a fix | A running test splits visitors and shows the chance; the winner applies in one click | todo |
+| — | Owner: `shopify app deploy` (extension, proxy, scopes), turn on the app embed and add the block in the theme editor of the dev store | Block visible on a product page of the dev store | todo (owner) |
+| — | Owner: an email service account for "Notify me when back" (Resend, from a verified domain) and `RESEND_API_KEY`, `NOTIFY_FROM_EMAIL` in `.env` | Test email arrives | todo (owner) |
+
 ## v2 (not in v1)
 
 AI diagnosis and AI drafts (Claude), weekly email digest.

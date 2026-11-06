@@ -73,7 +73,7 @@ The MVP ships all twelve modules in a basic form; the loop must work end to end 
 | 11 | Notifications | In-app inbox; weekly email digest with the top 5 actions | Slack/WhatsApp alerts, real-time alerts for stock-outs | Digest goes out weekly and links straight to each action |
 | 12 | Billing and plans | Free and paid plans through Shopify Billing; usage limits enforced | Usage-based "pay on recovered revenue" plan, annual plans | Upgrade, downgrade and uninstall all work with no manual steps |
 
-**Out of scope for v1:** A/B testing with split traffic, theme edits, storefront widgets, ad platform integrations.
+**Out of scope for v1:** theme code edits, ad platform integrations. *(2026-11-05: the owner moved A/B tests with split traffic and storefront blocks — through a theme app extension, without editing theme code — into v1; see docs/TASKS.md, Phase 3b.)*
 
 ## Analysis logic
 
@@ -243,6 +243,7 @@ The five hard gates for App Store approval are: GraphQL Admin API, Shopify Billi
 | `read_all_orders` | Full sales history for better baselines | Must be requested and approved in the Partner Dashboard; v2 ([Shopify scopes](https://shopify.dev/docs/api/usage/access-scopes)) |
 | `read_reports` | `shopifyqlQuery`: per-product `view_sessions`, `view_cart_sessions`, `view_cart_checkout_purchase_sessions` per day, with history | Spike: `shopifyqlQuery` (GraphQL Admin API 2025-10+) needs `read_reports`; Shopify also lists Level 2 protected customer data access for it (request in the Partner Dashboard if the check page reports "access denied"). Changing scopes asks the merchant to approve again. The query that works on the store is confirmed with the ShopifyQL check page (`/dev/shopifyql`) ([products dataset](https://shopify.dev/api/shopifyql/datasets/products-dataset), [ShopifyQL in the Admin API](https://shopify.dev/docs/apps/build/shopifyql/graphql-admin-api)) |
 | `read_returns` | Return reasons per returned item (Shopify returns), for the Returns diagnosis and report | Added with the Returns feature; merchants approve it once after the app update. Refunded units come from orders (`read_orders`) ([ReturnLineItem](https://shopify.dev/docs/api/admin-graphql/latest/objects/ReturnLineItem)) |
+| `write_app_proxy` | The storefront blocks and A/B tests call the app at `/apps/unstuck/…` on the shop's domain (app proxy) | Added with Phase 3b; merchants approve it once after the app update. Every proxied request's signature is checked (`src/lib/app-proxy.js`) |
 | `write_discounts` | Automatic discounts and bundles | v2 only |
 
 ### Platform rules we design for
