@@ -52,6 +52,7 @@ model Shop {
   aiPhotoDrafts      AiPhotoDraft[]
   collectionReorders CollectionReorder[]
   abTests            AbTest[]
+  bundles            Bundle[]
 
   @@map("shops")
 }
@@ -119,6 +120,8 @@ model Product {
   risingActions    RisingAction[]
   abTests          AbTest[]
   launchChecks     LaunchCheck[]
+  bundles          Bundle[]             @relation("BundleProduct")
+  bundlePartners   Bundle[]             @relation("BundlePartner")
 
   @@unique([shopId, shopifyGid])
   @@index([shopId])
@@ -665,4 +668,34 @@ model LaunchCheck {
 
   @@unique([productId, day])
   @@map("launch_checks")
+}
+
+/// "Buy together −X%" (docs/TASKS.md, Phase 3c): a stuck product (`productId`) at `pct`% off for shoppers
+/// who buy a product that sells well (`partnerId`), as a Shopify automatic discount (`discountGid`) and
+/// an offer on the partner's page (its `$app.bundle` metafields). At most one running bundle per product
+/// on either side (partial unique indexes in the migration).
+model Bundle {
+  id          String    @id @default(cuid())
+  shopId      String    @map("shop_id")
+  productId   String    @map("product_id")
+  partnerId   String    @map("partner_id")
+  pct         Int
+  /// The Shopify discount's title (shoppers see it in the cart); also finds a discount whose id was lost.
+  title       String
+  discountGid String?   @map("discount_gid")
+  status      String    @default("starting") // starting | active | ended
+  /// Whether the discount or the offer may still be live in Shopify after it ended (retried nightly).
+  cleanup     Boolean   @default(false)
+  /// stopped | sold_out | product_gone | floor | plan
+  endReason   String?   @map("end_reason")
+  startedAt   DateTime  @default(now()) @map("started_at")
+  endedAt     DateTime? @map("ended_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  shop    Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  product Product @relation("BundleProduct", fields: [productId], references: [id], onDelete: Cascade)
+  partner Product @relation("BundlePartner", fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, status])
+  @@map("bundles")
 }

@@ -129,6 +129,7 @@ export async function runSyncProduct(job) {
   const data = await adminGraphql(session, PRODUCT_QUERY, { id: productGid });
   if (!data.product) {
     await markProductDeleted(shopId, productGid);
+    await checkBundles(shopId, productGid);
     return;
   }
   const variants = await remainingPages(data.product.variants, async (after) =>
@@ -146,6 +147,21 @@ export async function runSyncProduct(job) {
   });
   // Order lines may have arrived before the product existed here.
   await rebuildProductSales(shopId, [productGid]);
+  await checkBundles(shopId, productGid);
+}
+
+/**
+ * A product in a running bundle changed (price, cost, stock, status): the bundles check runs now, not
+ * only at night, so a lower price never sits under the floor with the bundle's discount for long.
+ */
+async function checkBundles(shopId, productGid) {
+  const bundled = await db().bundle.findFirst({
+    where: { shopId, status: "active", OR: [{ product: { shopifyGid: productGid } }, { partner: { shopifyGid: productGid } }] },
+    select: { id: true },
+  });
+  if (!bundled) return;
+  const pending = await db().job.findFirst({ where: { shopId, type: "bundles", status: "queued" }, select: { id: true } });
+  if (!pending) await enqueue({ type: "bundles", shopId });
 }
 
 /** Job "sync-inventory": finds the inventory item's product and queues its re-sync. */

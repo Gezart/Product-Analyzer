@@ -11,7 +11,7 @@ include_config_on_deploy = true
 
 [access_scopes]
 # Keep in sync with SHOPIFY_SCOPES in .env.example.
-scopes = "read_products,write_products,read_inventory,read_orders,read_reports,read_returns,write_app_proxy"
+scopes = "read_products,write_products,read_inventory,read_orders,read_reports,read_returns,write_app_proxy,write_discounts"
 # Shopify-managed install: the app gets its token by token exchange, no OAuth redirect.
 use_legacy_install_flow = false
 
@@ -37,6 +37,18 @@ access.admin = "merchant_read"
 name = "Unstuck: often bought together"
 description = "Products often bought with this one, from the store's orders."
 type = "list.product_reference"
+access.admin = "merchant_read"
+
+[product.metafields.app.bundle]
+name = "Unstuck bundle"
+description = "The running bundle offered on this product's page: its id and discount."
+type = "json"
+access.admin = "merchant_read"
+
+[product.metafields.app.bundle_product]
+name = "Unstuck bundle: product offered"
+description = "The product offered at a discount with this one."
+type = "product_reference"
 access.admin = "merchant_read"
 
 [product.metafields.app.ab_test]

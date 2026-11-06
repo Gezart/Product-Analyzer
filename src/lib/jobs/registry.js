@@ -1,5 +1,6 @@
 import { runAbTests } from "@/lib/ab-tests-shopify";
 import { pruneDrafts } from "@/lib/ai/photos";
+import { runBundles } from "@/lib/bundles-shopify";
 import { refreshShopLinks } from "@/lib/competitor-prices";
 import { syncBenchmarks } from "@/lib/google-merchant";
 import { PermanentJobError } from "@/lib/jobs/errors";
@@ -101,6 +102,10 @@ export const handlers = {
   "ab-tests": async (job) => {
     await runAbTests(requireShop(job));
   },
+  /** Bundles: ends the ones that can't go on (sold out, removed, floor, plan) and clears Shopify for ended ones. */
+  bundles: async (job) => {
+    await runBundles(requireShop(job));
+  },
   /** New products' launch checkpoints (day 7, 14, 30) against the store, with inbox notes. */
   "launch-tracker": async (job) => {
     await runLaunchTracker(requireShop(job));
@@ -124,6 +129,8 @@ export const nightlyJobs = [
   // After the orders catch-up: "often bought together" from the latest orders.
   { type: "page-builder", hour: 5 },
   { type: "price-guard", hour: 6 },
+  // After the midnight refresh (stock, costs): bundles that sold out or no longer fit the floor end.
+  { type: "bundles", hour: 6 },
   // Stores last month's report once it is over (no-op on other days).
   { type: "monthly-report", hour: 6 },
   // After the night's scoring, catch-up and rescue verdicts: this week's plan (Mondays only).

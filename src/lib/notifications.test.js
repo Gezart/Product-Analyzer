@@ -59,6 +59,11 @@ test("describe: text and link per type; unknown types still render", () => {
     body: "410 visits, 0.5% added to cart (store: 8.0%). Visitors come but few add it to the cart: check the photos, the price and the description.",
     href: "/launches",
   });
+  assert.deepEqual(describe({ type: "bundle_ended", productId: "p1", productTitle: "Scarf", data: { reason: "sold_out" } }), {
+    title: "Bundle ended: Scarf",
+    body: "It sold out, so the discount and the offer stopped.",
+    href: "/bundles",
+  });
   assert.deepEqual(describe({ type: "something_new", productId: null }), { title: "something new", body: "", href: "/" });
 });
 

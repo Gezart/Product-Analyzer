@@ -5,6 +5,8 @@
     "sold_out": "Sold out",
     "unavailable": "Unavailable",
     "quantity": "Quantity",
-    "sale": "Sale"
+    "sale": "Sale",
+    "bundle_title": "Buy together, save {{ pct }}%",
+    "bundle_note": "The discount applies in the cart with {{ product }}."
   }
 }
