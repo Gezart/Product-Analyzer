@@ -5,6 +5,7 @@ import { adminGraphql } from "@/lib/admin";
 import { getOfflineSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { HttpError } from "@/lib/http-error";
+import { enqueue } from "@/lib/jobs/queue";
 import { blockEnabled, boughtTogether, boughtTogetherChanges, pageBuilderOf, storefrontConfig } from "@/lib/page-builder";
 import { hasFeature } from "@/lib/plans";
 
@@ -43,6 +44,22 @@ export async function publishPageBuilder(session, pageBuilder, plan) {
     { ownerId: shop.id, namespace: APP_NAMESPACE, key: "page_builder", type: "json", value: JSON.stringify(config) },
   ]);
   if (errors.length) throw new HttpError(`Shopify didn't save the page builder: ${errorsText(errors)}`, 502);
+}
+
+/** Queues the page builder job ("often bought together"), unless one is already waiting. */
+async function queueRefresh(shopId) {
+  const pending = await db().job.findFirst({ where: { shopId, type: "page-builder", status: "queued" }, select: { id: true } });
+  if (!pending) await enqueue({ type: "page-builder", shopId });
+}
+
+/**
+ * Saves a checked page builder: publishes it to the storefront first, then stores it, so a save Shopify
+ * refuses changes nothing; "often bought together" is worked out when that block is on.
+ */
+export async function savePageBuilder(shop, session, pageBuilder) {
+  await publishPageBuilder(session, pageBuilder, shop.plan);
+  await db().settings.upsert({ where: { shopId: shop.id }, create: { shopId: shop.id, pageBuilder }, update: { pageBuilder } });
+  if (blockEnabled(pageBuilder, "bought_together")) await queueRefresh(shop.id);
 }
 
 const boughtTogetherInput = ({ product, list }) => ({
@@ -122,13 +139,14 @@ export async function refreshBoughtTogether(shopId, session, signal) {
 /**
  * The page builder job (after a save, a plan change and every night): publishes what the storefront
  * shows for the current plan, then refreshes "often bought together" when that block is on. Shops that
- * never turned a block on are skipped.
+ * never saved the page builder are skipped.
  */
 export async function runPageBuilder(shopId, signal) {
   const shop = await db().shop.findUnique({ where: { id: shopId }, include: { settings: { select: { pageBuilder: true } } } });
   if (!shop || shop.uninstalledAt) return;
-  const pageBuilder = pageBuilderOf(shop.settings?.pageBuilder);
-  if (!pageBuilder.blocks.some((b) => b.enabled)) return;
+  // Never saved: the storefront shows the defaults already (no blocks, the default full page).
+  if (!Array.isArray(shop.settings?.pageBuilder?.blocks)) return;
+  const pageBuilder = pageBuilderOf(shop.settings.pageBuilder);
 
   const session = await getOfflineSession(shop.domain);
   await publishPageBuilder(session, pageBuilder, shop.plan);

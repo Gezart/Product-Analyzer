@@ -52,10 +52,69 @@ export const DEFAULT_BLOCKS = {
   bought_together: { title: "Often bought together", max: 3 },
 };
 
+// ── The full product page ("Unstuck product page" app block) ──────────────────────────────────
+
+/** The parts of the full product page, in the default order. */
+export const LAYOUT_ELEMENTS = ["gallery", "title", "price", "variants", "quantity", "buy_buttons", "blocks", "description"];
+
+export const LAYOUT_LABELS = {
+  gallery: "Photos",
+  title: "Title",
+  price: "Price",
+  variants: "Variant picker",
+  quantity: "Quantity",
+  buy_buttons: "Buy buttons",
+  blocks: "Your blocks",
+  description: "Description",
+};
+
+/** Without these the page can't sell, so they stay on (the variant picker hides itself on products without variants). */
+export const REQUIRED_ELEMENTS = ["title", "price", "variants", "buy_buttons"];
+
+/** Photos: a big photo with thumbnails, all photos under each other, or the first photo only. */
+export const GALLERY_STYLES = ["thumbnails", "stacked", "single"];
+
+export const DEFAULT_LAYOUT = {
+  elements: LAYOUT_ELEMENTS.map((type) => ({ type, enabled: true })),
+  gallery: "thumbnails",
+  /** 2: photos on the left, the rest on the right (one column on phones); 1: everything in one column. */
+  columns: 2,
+  /** Shopify's "Buy it now" (dynamic checkout) under "Add to cart". */
+  buyNow: true,
+  vendor: false,
+  saleBadge: true,
+};
+
 /** Every block off, in the default order: nothing shows on the storefront until the merchant turns one on. */
 export const DEFAULT_PAGE_BUILDER = {
   blocks: BLOCK_TYPES.map((type) => ({ type, enabled: false, useFor: ALL, settings: DEFAULT_BLOCKS[type] })),
+  layout: DEFAULT_LAYOUT,
 };
+
+/** `{ value }` or `{ error }` for the full page's layout (missing: the default, as saved before it existed). */
+function checkLayout(raw) {
+  if (raw === undefined) return { value: DEFAULT_LAYOUT };
+  if (!raw || typeof raw !== "object") return { error: "The product page layout isn't valid." };
+  const elements = raw.elements;
+  const types = Array.isArray(elements) ? elements.map((e) => e?.type) : [];
+  if (types.length !== LAYOUT_ELEMENTS.length || !LAYOUT_ELEMENTS.every((t) => types.includes(t))) return { error: "The product page's parts aren't valid." };
+  if (!elements.every((e) => typeof e.enabled === "boolean")) return { error: "On or off is missing for a part of the product page." };
+  const off = elements.find((e) => REQUIRED_ELEMENTS.includes(e.type) && !e.enabled);
+  if (off) return { error: `${LAYOUT_LABELS[off.type]} can't be turned off: the page can't sell without it.` };
+  if (!GALLERY_STYLES.includes(raw.gallery)) return { error: "Choose how the photos show." };
+  if (raw.columns !== 1 && raw.columns !== 2) return { error: "Choose one or two columns." };
+  for (const key of ["buyNow", "vendor", "saleBadge"]) if (typeof raw[key] !== "boolean") return { error: "A product page setting is missing." };
+  return {
+    value: {
+      elements: elements.map((e) => ({ type: e.type, enabled: e.enabled })),
+      gallery: raw.gallery,
+      columns: raw.columns,
+      buyNow: raw.buyNow,
+      vendor: raw.vendor,
+      saleBadge: raw.saleBadge,
+    },
+  };
+}
 
 const GID = { collection: /^gid:\/\/shopify\/Collection\/\d+$/, product: /^gid:\/\/shopify\/Product\/\d+$/ };
 
@@ -157,6 +216,9 @@ export function validatePageBuilder(body) {
     if (useFor.error) errors.push({ field: block.type, message: useFor.error });
     value.blocks.push({ type: block.type, enabled: block.enabled === true, useFor: useFor.value, settings: settings.value });
   }
+  const layout = checkLayout(body.layout);
+  if (layout.error) errors.push({ field: "layout", message: layout.error });
+  value.layout = layout.value;
   return errors.length ? { ok: false, errors } : { ok: true, value };
 }
 
@@ -171,16 +233,90 @@ const numericId = (gid) => Number(gid.split("/").pop());
 /**
  * What the theme app extension reads (the shop's `$app.page_builder` metafield): the blocks that are
  * on, in order, with their settings and numeric ids for "Use for" (Liquid compares them with
- * `product.id` and `collection.id`). `included` false (the plan doesn't have the page builder) shows
- * nothing.
+ * `product.id` and `collection.id`), and the full product page's layout. `included` false (the plan
+ * doesn't have the page builder) shows none of the blocks, and the full page in its default layout:
+ * a store that uses it as its product page keeps selling.
  */
 export function storefrontConfig(pageBuilder, { included }) {
   const blocks = included ? pageBuilder.blocks.filter((b) => b.enabled) : [];
+  const layout = included ? (pageBuilder.layout ?? DEFAULT_LAYOUT) : DEFAULT_LAYOUT;
   return {
     v: 1,
     blocks: blocks.map((b) => {
       const ids = b.useFor.mode === "products" ? b.useFor.productIds : b.useFor.collectionIds;
       return { type: b.type, for: { mode: b.useFor.mode, ids: ids.map(numericId) }, ...b.settings };
+    }),
+    layout: {
+      elements: layout.elements.filter((e) => e.enabled).map((e) => e.type),
+      gallery: layout.gallery,
+      columns: layout.columns,
+      buy_now: layout.buyNow,
+      vendor: layout.vendor,
+      sale_badge: layout.saleBadge,
+    },
+  };
+}
+
+// ── Suggestions per product ──────────────────────────────────────────────────────────────────
+
+/** An option that holds sizes (English and the store languages we see most). */
+const SIZE_OPTION = /size|gr(ö|oe)(ß|ss)e|taille|talla|taglia|tamanho|maat|rozmiar|madh/i;
+
+/** Whether the block shows on this product now (`{ gid, collections }`, both Shopify GIDs). */
+export function blockCovers(block, product) {
+  if (!block.enabled) return false;
+  if (block.useFor.mode === "all") return true;
+  if (block.useFor.mode === "products") return block.useFor.productIds.includes(product.gid);
+  return block.useFor.collectionIds.some((id) => product.collections.includes(id));
+}
+
+/** Whether one product can be added to the block without changing it for others (off, or used for chosen products). */
+const canAdd = (block) => !block.enabled || (block.useFor.mode === "products" && block.useFor.productIds.length < LIMITS.useForIds);
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/**
+ * Blocks that would help this product, each with why: a size chart for products with sizes that are
+ * returned often or lack size details, "Only X left" when variants run low, trust badges for a page
+ * many visit but few buy from, "often bought together" when it has partners. Blocks that already show
+ * on it, or can't take it without changing other products, aren't suggested.
+ *
+ * `product`: `{ gid, collections, status, reasons: [code], options: [name], variants: [{ inventoryQty, sellsWhenOut }], boughtTogether: [gid] }`.
+ */
+export function suggestBlocks(product, pageBuilder) {
+  const byType = Object.fromEntries(pageBuilder.blocks.map((b) => [b.type, b]));
+  const out = [];
+  const add = (type, reason) => {
+    const block = byType[type];
+    if (block && !blockCovers(block, product) && canAdd(block)) out.push({ type, reason });
+  };
+  const reasons = product.reasons ?? [];
+  if ((product.options ?? []).some((name) => SIZE_OPTION.test(name))) {
+    if (reasons.includes("returned_often")) add("size_chart", "Returned often, and it comes in sizes.");
+    else if (reasons.includes("missing_details")) add("size_chart", "Its page doesn't give size details.");
+  }
+  const threshold = byType.low_stock?.settings.threshold ?? DEFAULT_BLOCKS.low_stock.threshold;
+  const low = (product.variants ?? []).filter((v) => !v.sellsWhenOut && v.inventoryQty > 0 && v.inventoryQty <= threshold).length;
+  if (low && product.status !== "dead_stock") add("low_stock", `${plural(low, "variant")} with ${threshold} or fewer left.`);
+  if (product.status === "page_problem") add("trust_badges", "Many visit its page, few buy.");
+  const partners = (product.boughtTogether ?? []).length;
+  if (partners) add("bought_together", `Often bought with ${plural(partners, "other product")}.`);
+  return out;
+}
+
+/**
+ * The page builder with `type` on for this product too (the block turned on and the product added to its
+ * chosen products). A block on for all products or for collections is left as it is: it would change
+ * for other products.
+ */
+export function withProduct(pageBuilder, type, productGid) {
+  return {
+    ...pageBuilder,
+    blocks: pageBuilder.blocks.map((b) => {
+      if (b.type !== type) return b;
+      if (b.enabled && b.useFor.mode !== "products") return b;
+      const productIds = b.enabled && b.useFor.mode === "products" ? [...new Set([...b.useFor.productIds, productGid])] : [productGid];
+      return { ...b, enabled: true, useFor: { mode: "products", collectionIds: [], productIds } };
     }),
   };
 }

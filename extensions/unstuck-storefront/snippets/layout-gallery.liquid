@@ -1,0 +1,64 @@
+{%- comment -%}
+  The full product page's photos: a big photo with thumbnails, all photos under each other ("stacked"),
+  or the first photo only ("single"). The picked variant's photo shows first.
+{%- endcomment -%}
+{%- assign featured = current.featured_media | default: product.featured_media -%}
+<div class="unstuck-gallery unstuck-gallery--{{ style }}" data-unstuck-gallery>
+  {%- if product.media.size == 0 -%}
+    {{ 'product-1' | placeholder_svg_tag: 'unstuck-gallery__placeholder' }}
+  {%- else -%}
+    <div class="unstuck-gallery__slides">
+      {%- for media in product.media -%}
+        {%- if style == 'single' and media.id != featured.id -%}
+          {%- continue -%}
+        {%- endif -%}
+        {%- liquid
+          assign media_alt = media.alt | default: product.title
+          assign loading = 'lazy'
+          if media.id == featured.id
+            assign loading = 'eager'
+          endif
+        -%}
+        <div
+          class="unstuck-gallery__slide"
+          data-media-id="{{ media.id }}"
+          {% if style == 'thumbnails' and media.id != featured.id %}
+            hidden
+          {% endif %}
+        >
+          {%- if media.media_type == 'image' -%}
+            {{
+              media
+              | image_url: width: 1500
+              | image_tag:
+                loading: loading,
+                widths: '400, 600, 900, 1200, 1500',
+                sizes: '(min-width: 990px) 50vw, 100vw',
+                alt: media_alt
+            }}
+          {%- else -%}
+            {{ media | media_tag }}
+          {%- endif -%}
+        </div>
+      {%- endfor -%}
+    </div>
+    {%- if style == 'thumbnails' and product.media.size > 1 -%}
+      <div class="unstuck-gallery__thumbs">
+        {%- for media in product.media -%}
+          {%- assign media_alt = media.alt | default: product.title -%}
+          <button
+            type="button"
+            class="unstuck-gallery__thumb"
+            data-media-id="{{ media.id }}"
+            aria-label="{{ media_alt | escape }}"
+            {% if media.id == featured.id %}
+              aria-current="true"
+            {% endif %}
+          >
+            {{ media.preview_image | image_url: width: 160 | image_tag: loading: 'lazy', widths: '80, 160', sizes: '80px', alt: '' }}
+          </button>
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+  {%- endif -%}
+</div>

@@ -4,11 +4,14 @@ import {
   blockEnabled,
   boughtTogether,
   boughtTogetherChanges,
+  DEFAULT_LAYOUT,
   DEFAULT_PAGE_BUILDER,
   lowStockText,
   pageBuilderOf,
   storefrontConfig,
+  suggestBlocks,
   validatePageBuilder,
+  withProduct,
 } from "./page-builder.js";
 
 const P = (n) => `gid://shopify/Product/${n}`;
@@ -20,7 +23,68 @@ const errorsOf = (body) => validatePageBuilder(body).errors?.map((e) => `${e.fie
 
 test("the defaults are valid and show nothing", () => {
   assert.deepEqual(validatePageBuilder(DEFAULT_PAGE_BUILDER), { ok: true, value: DEFAULT_PAGE_BUILDER });
-  assert.deepEqual(storefrontConfig(DEFAULT_PAGE_BUILDER, { included: true }), { v: 1, blocks: [] });
+  const defaultLayout = { elements: ["gallery", "title", "price", "variants", "quantity", "buy_buttons", "blocks", "description"], gallery: "thumbnails", columns: 2, buy_now: true, vendor: false, sale_badge: true };
+  assert.deepEqual(storefrontConfig(DEFAULT_PAGE_BUILDER, { included: true }), { v: 1, blocks: [], layout: defaultLayout });
+  // Saved before the full page existed: the default layout.
+  assert.deepEqual(validatePageBuilder({ blocks: DEFAULT_PAGE_BUILDER.blocks }).value.layout, DEFAULT_LAYOUT);
+});
+
+test("the full product page: every part once, in the merchant's order; the parts that sell stay on", () => {
+  const layout = (change) => ({ blocks: DEFAULT_PAGE_BUILDER.blocks, layout: { ...DEFAULT_LAYOUT, ...change } });
+  const moved = [...DEFAULT_LAYOUT.elements].reverse().map((e) => (e.type === "quantity" ? { ...e, enabled: false } : e));
+  const custom = validatePageBuilder(layout({ elements: moved, gallery: "stacked", columns: 1, buyNow: false, vendor: true })).value.layout;
+  assert.deepEqual(custom.elements.map((e) => e.type), ["description", "blocks", "buy_buttons", "quantity", "variants", "price", "title", "gallery"]);
+  const config = storefrontConfig({ ...DEFAULT_PAGE_BUILDER, layout: custom }, { included: true }).layout;
+  assert.deepEqual(config, { elements: ["description", "blocks", "buy_buttons", "variants", "price", "title", "gallery"], gallery: "stacked", columns: 1, buy_now: false, vendor: true, sale_badge: true });
+  // Without the plan: the default page (it may be the store's product page), no blocks.
+  assert.deepEqual(storefrontConfig({ ...DEFAULT_PAGE_BUILDER, layout: custom }, { included: false }).layout.columns, 2);
+
+  const off = DEFAULT_LAYOUT.elements.map((e) => (e.type === "buy_buttons" ? { ...e, enabled: false } : e));
+  assert.deepEqual(errorsOf(layout({ elements: off })), ["layout: Buy buttons can't be turned off: the page can't sell without it."]);
+  assert.deepEqual(errorsOf(layout({ elements: DEFAULT_LAYOUT.elements.slice(1) })), ["layout: The product page's parts aren't valid."]);
+  assert.deepEqual(errorsOf(layout({ gallery: "carousel" })), ["layout: Choose how the photos show."]);
+  assert.deepEqual(errorsOf(layout({ columns: 3 })), ["layout: Choose one or two columns."]);
+  assert.deepEqual(errorsOf(layout({ vendor: "yes" })), ["layout: A product page setting is missing."]);
+});
+
+test("suggested blocks per product, with why; not where a block already shows", () => {
+  const product = {
+    gid: P(1),
+    collections: [C(9)],
+    status: "page_problem",
+    reasons: ["returned_often"],
+    options: ["Color", "Size"],
+    variants: [{ inventoryQty: 2, sellsWhenOut: false }, { inventoryQty: 30, sellsWhenOut: false }, { inventoryQty: 0, sellsWhenOut: true }],
+    boughtTogether: [P(2), P(3)],
+  };
+  assert.deepEqual(suggestBlocks(product, DEFAULT_PAGE_BUILDER), [
+    { type: "size_chart", reason: "Returned often, and it comes in sizes." },
+    { type: "low_stock", reason: "1 variant with 5 or fewer left." },
+    { type: "trust_badges", reason: "Many visit its page, few buy." },
+    { type: "bought_together", reason: "Often bought with 2 other products." },
+  ]);
+  // Already on for all products, or for this product's collection: not suggested. On for some
+  // collections without it: can't take it without changing others, not suggested either.
+  const covered = { blocks: [...withBlock("trust_badges", { enabled: true }).blocks.slice(0, 2), ...withBlock("size_chart", { enabled: true, useFor: { mode: "collections", collectionIds: [C(9)], productIds: [] } }).blocks.slice(2)], layout: DEFAULT_LAYOUT };
+  assert.deepEqual(suggestBlocks(product, covered).map((s) => s.type), ["low_stock", "bought_together"]);
+  const other = withBlock("bought_together", { enabled: true, useFor: { mode: "collections", collectionIds: [C(4)], productIds: [] } });
+  assert.ok(!suggestBlocks(product, { ...other, layout: DEFAULT_LAYOUT }).some((s) => s.type === "bought_together"));
+  // No sizes, nothing low, healthy, no partners: nothing to suggest. Dead stock gets no "Only X left".
+  assert.deepEqual(suggestBlocks({ gid: P(5), collections: [], status: "healthy", reasons: [], options: ["Color"], variants: [{ inventoryQty: 50 }], boughtTogether: [] }, DEFAULT_PAGE_BUILDER), []);
+  assert.deepEqual(suggestBlocks({ ...product, status: "dead_stock", reasons: [], boughtTogether: [] }, DEFAULT_PAGE_BUILDER), []);
+});
+
+test("using a suggestion turns the block on for that product, without changing it for others", () => {
+  const on = withProduct(DEFAULT_PAGE_BUILDER, "size_chart", P(1)).blocks.find((b) => b.type === "size_chart");
+  assert.deepEqual([on.enabled, on.useFor], [true, { mode: "products", collectionIds: [], productIds: [P(1)] }]);
+  const chosen = withBlock("size_chart", { enabled: true, useFor: { mode: "products", collectionIds: [], productIds: [P(2)] } });
+  assert.deepEqual(withProduct(chosen, "size_chart", P(1)).blocks.find((b) => b.type === "size_chart").useFor.productIds, [P(2), P(1)]);
+  const all = withBlock("size_chart", { enabled: true });
+  assert.deepEqual(withProduct(all, "size_chart", P(1)), all);
+  // On for some collections: the merchant's collections are kept (the product isn't added).
+  const collections = withBlock("size_chart", { enabled: true, useFor: { mode: "collections", collectionIds: [C(1)], productIds: [] } });
+  assert.deepEqual(withProduct(collections, "size_chart", P(5)), collections);
+  assert.equal(validatePageBuilder(withProduct(DEFAULT_PAGE_BUILDER, "size_chart", P(1))).ok, true);
 });
 
 test("every block type exactly once, in the merchant's order", () => {

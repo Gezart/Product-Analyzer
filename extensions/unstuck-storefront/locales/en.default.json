@@ -1,6 +1,10 @@
 {
   "unstuck": {
     "notify_title": "Notify me when it's back",
-    "add_to_cart": "Add to cart"
+    "add_to_cart": "Add to cart",
+    "sold_out": "Sold out",
+    "unavailable": "Unavailable",
+    "quantity": "Quantity",
+    "sale": "Sale"
   }
 }

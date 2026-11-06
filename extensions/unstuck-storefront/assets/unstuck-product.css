@@ -110,3 +110,147 @@
   font: inherit;
   cursor: pointer;
 }
+
+/* The full product page (blocks/product-layout.liquid). Fonts and colors come from the theme. */
+.unstuck-layout {
+  display: grid;
+  gap: 2rem;
+  margin: 1rem 0;
+}
+
+@media (min-width: 750px) {
+  .unstuck-layout--two {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.unstuck-layout__info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.unstuck-layout__vendor {
+  margin: 0;
+  font-size: 0.85em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.unstuck-layout__title {
+  margin: 0;
+}
+
+.unstuck-layout__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.15em;
+}
+
+.unstuck-layout__price-was {
+  opacity: 0.6;
+}
+
+.unstuck-layout__badge {
+  padding: 0.1rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.8em;
+}
+
+.unstuck-layout__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+
+.unstuck-layout__option,
+.unstuck-layout__quantity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 8rem;
+}
+
+.unstuck-layout__option select,
+.unstuck-layout__quantity input {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.unstuck-layout__quantity input {
+  width: 6rem;
+}
+
+.unstuck-layout__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.unstuck-layout__add {
+  padding: 0.85rem 1rem;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.unstuck-layout__add:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.unstuck-gallery__slides {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.unstuck-gallery__slide img,
+.unstuck-gallery__slide video,
+.unstuck-gallery__slide iframe,
+.unstuck-gallery__placeholder {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.unstuck-gallery__thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.unstuck-gallery__thumb {
+  width: 4.5rem;
+  padding: 0;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+}
+
+.unstuck-gallery__thumb[aria-current="true"] {
+  border-color: currentColor;
+}
+
+.unstuck-gallery__thumb img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+}

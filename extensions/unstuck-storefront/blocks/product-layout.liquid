@@ -1,0 +1,120 @@
+{%- comment -%}
+  Unstuck's full product page (Page builder in the app): photos, title, price, variant picker, quantity,
+  buy buttons, description and the page builder's blocks, in the order and with the settings set in the
+  app (the shop's $app.page_builder metafield; the default layout until it's saved). Merchants put it in
+  a product template in place of the theme's product section; the theme's code isn't changed.
+{%- endcomment -%}
+{%- liquid
+  assign unstuck_config = shop.metafields["$app"].page_builder.value
+  assign unstuck_layout = unstuck_config.layout
+  if unstuck_layout.elements
+    assign elements = unstuck_layout.elements
+    assign gallery_style = unstuck_layout.gallery
+    assign columns = unstuck_layout.columns
+    assign buy_now = unstuck_layout.buy_now
+    assign show_vendor = unstuck_layout.vendor
+    assign sale_badge = unstuck_layout.sale_badge
+  else
+    assign elements = 'gallery,title,price,variants,quantity,buy_buttons,blocks,description' | split: ','
+    assign gallery_style = 'thumbnails'
+    assign columns = 2
+    assign buy_now = true
+    assign show_vendor = false
+    assign sale_badge = true
+  endif
+  assign current = product.selected_or_first_available_variant
+  assign form_id = 'unstuck-product-form-' | append: block.id
+  assign on_sale = false
+  if current.compare_at_price > current.price
+    assign on_sale = true
+  endif
+-%}
+{%- if product -%}
+  <div class="unstuck-layout{% if columns == 2 %} unstuck-layout--two{% endif %}" data-unstuck-layout>
+    {%- if columns == 2 and elements contains 'gallery' -%}
+      <div class="unstuck-layout__media">
+        {%- render 'layout-gallery', product: product, style: gallery_style, current: current -%}
+      </div>
+    {%- endif -%}
+    <div class="unstuck-layout__info">
+      {%- for element in elements -%}
+        {%- case element -%}
+          {%- when 'gallery' -%}
+            {%- unless columns == 2 -%}
+              {%- render 'layout-gallery', product: product, style: gallery_style, current: current -%}
+            {%- endunless -%}
+          {%- when 'title' -%}
+            {%- if show_vendor and product.vendor != blank -%}
+              <p class="unstuck-layout__vendor">{{ product.vendor | escape }}</p>
+            {%- endif -%}
+            <h1 class="unstuck-layout__title">{{ product.title | escape }}</h1>
+          {%- when 'price' -%}
+            <div class="unstuck-layout__price">
+              <span class="unstuck-layout__price-now" data-unstuck-price>{{ current.price | money }}</span>
+              <s class="unstuck-layout__price-was" data-unstuck-was {% unless on_sale %}hidden{% endunless %}>
+                {%- if on_sale -%}{{ current.compare_at_price | money }}{%- endif -%}
+              </s>
+              {%- if sale_badge -%}
+                <span class="unstuck-layout__badge" data-unstuck-sale {% unless on_sale %}hidden{% endunless %}>
+                  {{- 'unstuck.sale' | t -}}
+                </span>
+              {%- endif -%}
+            </div>
+          {%- when 'variants' -%}
+            {%- render 'layout-variants', product: product -%}
+          {%- when 'quantity' -%}
+            <label class="unstuck-layout__quantity">
+              <span>{{ 'unstuck.quantity' | t }}</span>
+              <input type="number" name="quantity" min="1" value="1" form="{{ form_id }}">
+            </label>
+          {%- when 'buy_buttons' -%}
+            {%- form 'product', product, id: form_id, class: 'unstuck-layout__form', novalidate: 'novalidate' -%}
+              <input type="hidden" name="id" value="{{ current.id }}">
+              <button
+                type="submit"
+                name="add"
+                class="unstuck-layout__add"
+                data-unstuck-add
+                data-add="{{ 'unstuck.add_to_cart' | t | escape }}"
+                data-sold-out="{{ 'unstuck.sold_out' | t | escape }}"
+                data-unavailable="{{ 'unstuck.unavailable' | t | escape }}"
+                {% unless current.available %}
+                  disabled
+                {% endunless %}
+              >
+                {%- if current.available -%}
+                  {{- 'unstuck.add_to_cart' | t -}}
+                {%- else -%}
+                  {{- 'unstuck.sold_out' | t -}}
+                {%- endif -%}
+              </button>
+              {%- if buy_now -%}
+                {{ form | payment_button }}
+              {%- endif -%}
+            {%- endform -%}
+          {%- when 'blocks' -%}
+            <div class="unstuck-product" data-unstuck-product="{{ product.id }}">
+              {%- if unstuck_config -%}
+                {%- render 'page-blocks', product: product, config: unstuck_config -%}
+              {%- endif -%}
+            </div>
+          {%- when 'description' -%}
+            {%- if product.description != blank -%}
+              <div class="unstuck-layout__description rte">{{ product.description }}</div>
+            {%- endif -%}
+        {%- endcase -%}
+      {%- endfor -%}
+    </div>
+  </div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Unstuck product page",
+  "target": "section",
+  "enabled_on": { "templates": ["product"] },
+  "javascript": "unstuck-product.js",
+  "stylesheet": "unstuck-product.css",
+  "settings": []
+}
+{% endschema %}
