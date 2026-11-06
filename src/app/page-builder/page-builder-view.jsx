@@ -5,10 +5,12 @@ import { apiError } from "@/app/api-error";
 import { BTN, CARD, H2, Notice, PageHeader, UpgradeNotice } from "@/app/ui/kit";
 import { BLOCK_LABELS } from "@/lib/page-builder";
 import { BlockSettings } from "./block-settings";
+import { LayoutSettings } from "./layout-settings";
 import { Preview } from "./preview";
+import { Suggestions } from "./suggestions";
 import { UseFor } from "./use-for";
 
-const SUBTITLE = "Blocks for your product pages. Turn them on, put them in order, and choose which products show them.";
+const SUBTITLE = "Your product page: the whole page, or blocks added to your theme's. Turn blocks on, put them in order, and choose which products show them.";
 
 const BLOCK_HINTS = {
   low_stock: "Shows how many are left when stock runs low, for the variant the shopper picked.",
@@ -47,6 +49,8 @@ function openThemeEditor(url) {
 export function PageBuilderView() {
   const [data, setData] = useState(null);
   const [blocks, setBlocks] = useState(null);
+  const [layout, setLayout] = useState(null);
+  const [using, setUsing] = useState(null);
   const [titles, setTitles] = useState({});
   const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -57,6 +61,7 @@ export function PageBuilderView() {
   function load(body) {
     setData(body);
     setBlocks(body.pageBuilder.blocks);
+    setLayout(body.pageBuilder.layout);
     setTitles(body.productTitles);
   }
 
@@ -84,7 +89,7 @@ export function PageBuilderView() {
       const res = await fetch("/api/page-builder", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blocks }),
+        body: JSON.stringify({ blocks, layout }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 400 && body.errors) {
@@ -94,7 +99,7 @@ export function PageBuilderView() {
       }
       if (!res.ok) throw new Error(body.error ?? `Failed (${res.status})`);
       load(body);
-      setMessage({ tone: "good", text: "Saved. Your product pages show the blocks that are on." });
+      setMessage({ tone: "good", text: "Saved. Your product pages show the new layout and the blocks that are on." });
     } catch (e) {
       setMessage({ tone: "bad", text: e.message });
     } finally {
@@ -102,10 +107,40 @@ export function PageBuilderView() {
     }
   }
 
+  /** Changes on the page not saved yet (a suggestion saves what's stored, so it waits for them). */
+  const dirty = Boolean(data && blocks && (JSON.stringify(blocks) !== JSON.stringify(data.pageBuilder.blocks) || JSON.stringify(layout) !== JSON.stringify(data.pageBuilder.layout)));
+
+  /** A suggestion: the block goes on for that product and is saved right away. */
+  async function useSuggestion(product, type) {
+    if (dirty) {
+      setMessage({ tone: "bad", text: "Save your changes first, then use the suggestion." });
+      return;
+    }
+    setUsing(`${product.gid}:${type}`);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/page-builder/suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productGid: product.gid, type }),
+      });
+      if (!res.ok) throw await apiError(res);
+      load(await res.json());
+      setMessage({ tone: "good", text: `Saved. ${product.title} now shows ${BLOCK_LABELS[type]}.` });
+    } catch (e) {
+      setMessage({ tone: "bad", text: e.message });
+    } finally {
+      setUsing(null);
+    }
+  }
+
   const actions = data && (
     <>
+      <button type="button" onClick={() => openThemeEditor(data.layoutEditorUrl)} className={`${BTN.secondary} cursor-pointer`}>
+        Add full page
+      </button>
       <button type="button" onClick={() => openThemeEditor(data.themeEditorUrl)} className={`${BTN.secondary} cursor-pointer`}>
-        Add to theme
+        Add blocks only
       </button>
       <button type="button" disabled={saving || locked} onClick={save} className={`${BTN.primary} cursor-pointer`}>
         {saving ? "Saving…" : "Save"}
@@ -129,6 +164,16 @@ export function PageBuilderView() {
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
           <div className="flex min-w-0 flex-col gap-3">
             <ThemeSteps />
+            <Suggestions suggestions={data.suggestions} locked={locked} busy={using} onUse={useSuggestion} />
+            <LayoutSettings
+              layout={layout}
+              locked={locked}
+              error={blockErrors.layout}
+              onChange={(next) => {
+                setLayout(next);
+                setMessage(null);
+              }}
+            />
             {blocks.map((block, index) => (
               <BlockCard
                 key={block.type}
@@ -146,7 +191,7 @@ export function PageBuilderView() {
               />
             ))}
           </div>
-          <Preview blocks={blocks} />
+          <Preview blocks={blocks} layout={layout} />
         </div>
       )}
     </>
@@ -158,9 +203,13 @@ function ThemeSteps() {
     <section className={`${CARD} px-5 py-4 text-[13px] text-ink-2`}>
       <h2 className={H2}>How it gets on your store</h2>
       <ol className="mt-2 mb-0 flex flex-col gap-1 pl-5">
-        <li>Turn blocks on below and save.</li>
+        <li>Set up the page below and save.</li>
         <li>
-          Click <strong>Add to theme</strong>: the theme editor opens with the <strong>Product page boost</strong> block. Place it (e.g. under the buy buttons) and save the theme.
+          <strong>Whole page:</strong> click <strong>Add full page</strong>. In the theme editor, make a product template (or use your product page), add the <strong>Unstuck product page</strong> block and remove the
+          theme&apos;s product information, then save the theme.
+        </li>
+        <li>
+          <strong>Blocks only:</strong> click <strong>Add blocks only</strong> and place the <strong>Product page boost</strong> block in your theme&apos;s product page (e.g. under the buy buttons).
         </li>
         <li>Your theme&apos;s code isn&apos;t changed; remove the block in the theme editor any time.</li>
       </ol>

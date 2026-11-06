@@ -1,0 +1,41 @@
+{%- comment -%}
+  The full product page's variant picker: a list per option; unstuck-product.js finds the variant for
+  the picked values (from the hidden list below) and updates the price, the buy button, the photo and
+  the form's variant id. Products without variants show nothing.
+{%- endcomment -%}
+{%- unless product.has_only_default_variant -%}
+  <div class="unstuck-layout__options">
+    {%- for option in product.options_with_values -%}
+      <label class="unstuck-layout__option">
+        <span>{{ option.name | escape }}</span>
+        <select data-unstuck-option="{{ forloop.index }}">
+          {%- for value in option.values -%}
+            {%- assign value_name = value.name | default: value -%}
+            <option
+              value="{{ value_name | escape }}"
+              {% if option.selected_value == value_name %}
+                selected
+              {% endif %}
+            >
+              {{- value_name | escape -}}
+            </option>
+          {%- endfor -%}
+        </select>
+      </label>
+    {%- endfor -%}
+  </div>
+  <ul hidden data-unstuck-variants>
+    {%- for variant in product.variants -%}
+      <li
+        data-id="{{ variant.id }}"
+        data-option1="{{ variant.option1 | escape }}"
+        data-option2="{{ variant.option2 | escape }}"
+        data-option3="{{ variant.option3 | escape }}"
+        data-available="{{ variant.available }}"
+        data-price="{{ variant.price | money | escape }}"
+        data-was="{% if variant.compare_at_price > variant.price %}{{ variant.compare_at_price | money | escape }}{% endif %}"
+        data-media="{{ variant.featured_media.id }}"
+      ></li>
+    {%- endfor -%}
+  </ul>
+{%- endunless -%}

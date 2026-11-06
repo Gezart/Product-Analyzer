@@ -157,6 +157,16 @@ The owner chose: real A/B tests (half the visitors see B, at the same time) thro
 | — | Owner: `shopify app deploy` (extension, proxy, scopes), turn on the app embed and add the block in the theme editor of the dev store; run the migrations | Block visible on a product page of the dev store; an A/B test shows B to half the visitors | todo (owner) |
 | — | Owner: an email service account for "Notify me when back" (Resend, from a verified domain) and `RESEND_API_KEY`, `NOTIFY_FROM_EMAIL` in `.env` | Test email arrives | todo (owner) |
 
+## Phase 3c · The owner's next features (2026-11-06)
+
+From the features list (Funksionet e Unstuck), in the order the owner chose. Each branch starts from the previous one (they can't be pushed from the working session; the owner pushes and merges them in order).
+
+| Branch | What | Done when | Status |
+|---|---|---|---|
+| `page-builder-full` | The full product page as an app block ("Unstuck product page": photos, title, price, variant picker, quantity, buy buttons, description and the page builder's blocks), its parts on/off and in order with photo style, columns, Buy it now, vendor and sale badge set in the Page builder with a preview; suggested blocks per product (from status, diagnosis, stock, "often bought together") used in one click | A product template with the block shows the page as set in the app; a suggestion turns its block on for that product | done (storefront check waits on the dev store) |
+| `launch-tracker` | New products followed through their first 7, 14 and 30 days: views, add-to-cart rate and sales against the store's; an early warning (no traffic, page problem) in the inbox at each checkpoint; a Launches page | A new product with views but few add-to-carts is flagged at day 7 with what to check | todo |
+| `bundles` | "Buy together −X%": a stuck product (dead stock, slow mover) paired with a product that sells well; a Shopify automatic discount (buy the bestseller, get the stuck product at X% off, never below the price floor; `write_discounts` scope); an offer block on the bestseller's page; sales of the stuck product through the bundle measured | A bundle runs as a Shopify discount and shows on the bestseller's page; its sales show in the app | todo |
+
 ## v2 (not in v1)
 
 AI diagnosis and AI drafts (Claude), weekly email digest.

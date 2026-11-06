@@ -2,6 +2,9 @@
   "blocks": {
     "product_page": {
       "name": "Product page boost"
+    },
+    "product_layout": {
+      "name": "Unstuck product page"
     }
   }
 }
