@@ -12,6 +12,7 @@ test("the menu item each page belongs to", () => {
   assert.equal(activeHref("/page-builder"), "/page-builder");
   assert.equal(activeHref("/ab-tests"), "/ab-tests");
   assert.equal(activeHref("/launches"), "/launches");
+  assert.equal(activeHref("/bundles"), "/bundles");
   assert.equal(activeHref("/dev/shopifyql"), null);
-  assert.deepEqual(NAV.map((n) => n.label), ["Dashboard", "Products", "Launches", "Inbox", "Results", "Collections", "Page builder", "A/B tests", "Compare", "Reports", "Plans", "Settings"]);
+  assert.deepEqual(NAV.map((n) => n.label), ["Dashboard", "Products", "Launches", "Inbox", "Results", "Collections", "Bundles", "Page builder", "A/B tests", "Compare", "Reports", "Plans", "Settings"]);
 });

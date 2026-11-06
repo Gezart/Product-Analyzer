@@ -7,6 +7,9 @@
   {%- if unstuck_config and product -%}
     {%- render 'page-blocks', product: product, config: unstuck_config -%}
   {%- endif -%}
+  {%- if product -%}
+    {%- render 'bundle-offer', product: product -%}
+  {%- endif -%}
 </div>
 
 {% schema %}

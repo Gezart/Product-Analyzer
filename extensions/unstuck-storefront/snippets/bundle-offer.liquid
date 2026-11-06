@@ -1,0 +1,40 @@
+{%- comment -%}
+  "Buy together": on a product that carries a running bundle (the app's Bundles), the product offered
+  with it at the bundle's discount, with its own "Add to cart". The discount itself is a Shopify
+  automatic discount: it applies in the cart once both are in it. Nothing shows without a bundle, or
+  when the offered product isn't available.
+{%- endcomment -%}
+{%- liquid
+  assign unstuck_bundle = product.metafields["$app"].bundle.value
+  assign offered = product.metafields["$app"].bundle_product.value
+-%}
+{%- if unstuck_bundle.pct and offered and offered.available -%}
+  {%- liquid
+    assign offered_variant = offered.selected_or_first_available_variant
+    assign keep = 100 | minus: unstuck_bundle.pct
+    assign bundle_price = offered_variant.price | times: keep | divided_by: 100
+    assign image_alt = offered.featured_image.alt | default: offered.title
+    assign this_title = product.title | escape
+  -%}
+  <div class="unstuck-block unstuck-bundle">
+    <p class="unstuck-bundle__title">{{ 'unstuck.bundle_title' | t: pct: unstuck_bundle.pct }}</p>
+    <div class="unstuck-bundle__item">
+      <a class="unstuck-bundle__link" href="{{ offered.url }}">
+        {%- if offered.featured_image -%}
+          {{ offered.featured_image | image_url: width: 160 | image_tag: loading: 'lazy', widths: '80, 160', sizes: '80px', alt: image_alt, class: 'unstuck-bundle__image' }}
+        {%- endif -%}
+        <span class="unstuck-bundle__name">{{ offered.title | escape }}</span>
+      </a>
+      <span class="unstuck-bundle__price">
+        <s>{{ offered_variant.price | money }}</s>
+        {{ bundle_price | money -}}
+      </span>
+      <form method="post" action="{{ routes.cart_add_url }}" class="unstuck-bundle__form">
+        <input type="hidden" name="id" value="{{ offered_variant.id }}">
+        <input type="hidden" name="quantity" value="1">
+        <button type="submit" class="unstuck-bundle__add">{{ 'unstuck.add_to_cart' | t }}</button>
+      </form>
+    </div>
+    <p class="unstuck-bundle__note">{{ 'unstuck.bundle_note' | t: product: this_title }}</p>
+  </div>
+{%- endif -%}

@@ -97,6 +97,7 @@
               {%- if unstuck_config -%}
                 {%- render 'page-blocks', product: product, config: unstuck_config -%}
               {%- endif -%}
+              {%- render 'bundle-offer', product: product -%}
             </div>
           {%- when 'description' -%}
             {%- if product.description != blank -%}

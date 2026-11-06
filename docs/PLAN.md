@@ -244,7 +244,7 @@ The five hard gates for App Store approval are: GraphQL Admin API, Shopify Billi
 | `read_reports` | `shopifyqlQuery`: per-product `view_sessions`, `view_cart_sessions`, `view_cart_checkout_purchase_sessions` per day, with history | Spike: `shopifyqlQuery` (GraphQL Admin API 2025-10+) needs `read_reports`; Shopify also lists Level 2 protected customer data access for it (request in the Partner Dashboard if the check page reports "access denied"). Changing scopes asks the merchant to approve again. The query that works on the store is confirmed with the ShopifyQL check page (`/dev/shopifyql`) ([products dataset](https://shopify.dev/api/shopifyql/datasets/products-dataset), [ShopifyQL in the Admin API](https://shopify.dev/docs/apps/build/shopifyql/graphql-admin-api)) |
 | `read_returns` | Return reasons per returned item (Shopify returns), for the Returns diagnosis and report | Added with the Returns feature; merchants approve it once after the app update. Refunded units come from orders (`read_orders`) ([ReturnLineItem](https://shopify.dev/docs/api/admin-graphql/latest/objects/ReturnLineItem)) |
 | `write_app_proxy` | The storefront blocks and A/B tests call the app at `/apps/unstuck/…` on the shop's domain (app proxy) | Added with Phase 3b; merchants approve it once after the app update. Every proxied request's signature is checked (`src/lib/app-proxy.js`) |
-| `write_discounts` | Automatic discounts and bundles | v2 only |
+| `write_discounts` | Bundles ("Buy together −X%": a Shopify automatic discount per bundle, ended when the bundle ends) | Added with Phase 3c (`bundles`); merchants approve it once after the app update |
 
 ### Platform rules we design for
 

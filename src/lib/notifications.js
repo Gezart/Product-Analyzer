@@ -118,6 +118,15 @@ export function describe(n) {
         href: `/inbox?week=${d.week}`,
       };
     }
+    case "bundle_ended": {
+      const body = {
+        sold_out: "It sold out, so the discount and the offer stopped.",
+        product_gone: "One of its products is no longer active in Shopify, so the discount stopped.",
+        floor: "Its price or cost changed and the discount would now go under your margin floor, so it stopped.",
+        plan: "Your plan no longer includes bundles, so the discount stopped.",
+      }[d.reason] ?? "The discount and the offer stopped.";
+      return { title: `Bundle ended: ${title}`, body, href: "/bundles" };
+    }
     case "launch_check": {
       const label = LAUNCH_STATUS[d.status]?.label ?? "Launch check";
       return { title: `Day ${d.day ?? "?"} · ${label}: ${title}`, body: [d.reason, NEXT_STEP[d.status]].filter(Boolean).join(" "), href: "/launches" };

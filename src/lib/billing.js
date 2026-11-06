@@ -27,7 +27,7 @@ async function activeSubscriptions(session) {
 /**
  * Stores the plan. A new plan analyzes a different number of products, so the shop is re-scored right
  * away — once its first order import has finished (before that, the first analysis follows the import) —
- * and the page builder and A/B tests follow the new plan.
+ * and the page builder, A/B tests and bundles follow the new plan.
  */
 async function setPlan(domain, plan) {
   const planChanged = await db().shop.findMany({ where: { domain, NOT: { plan } }, select: { id: true } });
@@ -38,10 +38,11 @@ async function setPlan(domain, plan) {
   });
   await db().shop.updateMany({ where: { domain }, data: { plan } });
   for (const shop of changed) await enqueue({ type: "score-shop", shopId: shop.id });
-  // The page builder and A/B tests are on Growth and up: what the storefront shows follows the plan.
+  // The page builder, A/B tests and bundles are on Growth and up: what the storefront shows follows the plan.
   for (const shop of planChanged) {
     await enqueue({ type: "page-builder", shopId: shop.id });
     await enqueue({ type: "ab-tests", shopId: shop.id });
+    await enqueue({ type: "bundles", shopId: shop.id });
   }
 }
 
