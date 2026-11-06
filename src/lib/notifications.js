@@ -117,6 +117,19 @@ export function describe(n) {
         href: `/inbox?week=${d.week}`,
       };
     }
+    case "ab_test_ended": {
+      const part = { title: "title", description: "description", images: "photos" }[d.kind] ?? "page";
+      const pct = d.chance == null ? null : Math.round((d.winner === "a" ? 1 - d.chance : d.chance) * 100);
+      const [head, body] = {
+        b_better: ["A/B test finished, B is better", `${pct}% chance B gets more add-to-carts. Use B now to keep it.`],
+        a_better: ["A/B test finished, keep A", `${pct}% chance the page as it was does better. Your store shows it to everyone again.`],
+        time: ["A/B test finished after 30 days", d.winner === "b" ? "B did better. Use B now to keep it." : d.winner === "a" ? "The page as it was did better; it shows to everyone again." : "No clear winner. Your store shows the page as it was to everyone again."],
+        changed: ["A/B test stopped", `The product's ${part} changed in Shopify during the test, so the result wouldn't be fair. Start a new test.`],
+        plan: ["A/B test stopped", "Your plan no longer includes A/B tests."],
+        product_gone: ["A/B test stopped", "The product was deleted in Shopify."],
+      }[d.reason] ?? ["A/B test finished", "See the result on the A/B tests page."];
+      return { title: `${head}: ${title}`, body, href: "/ab-tests" };
+    }
     default:
       return { title: n.type.replaceAll("_", " "), body: "", href: product };
   }

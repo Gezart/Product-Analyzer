@@ -93,6 +93,9 @@ export function ProductView() {
           <Link href={`/compare?ids=${data.product.id}`} className={BTN.secondary}>
             Compare
           </Link>
+          <Link href={`/ab-tests?product=${data.product.id}`} className={BTN.secondary}>
+            A/B test
+          </Link>
           <Link href={`/products/${data.product.id}/fix`} className={BTN.primary}>
             Fix the page
           </Link>

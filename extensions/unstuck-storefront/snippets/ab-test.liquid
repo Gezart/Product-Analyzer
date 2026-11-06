@@ -1,0 +1,30 @@
+{%- comment -%}
+  A/B test on this product page (the app's A/B tests): the page as it is (A) and version B, for
+  unstuck-ab.js, which shows B to half the visitors who allow tracking. The app embed renders it only
+  where the product's $app.ab_test metafield holds a running test. `ab` is that metafield's value.
+{%- endcomment -%}
+<div
+  hidden
+  data-unstuck-ab
+  data-test="{{ ab.id | escape }}"
+  data-kind="{{ ab.kind | escape }}"
+  data-variants="{{ product.variants | map: 'id' | join: ',' }}"
+  {% if ab.kind == 'title' %}
+    data-title-a="{{ product.title | escape }}"
+    data-title-b="{{ ab.title | escape }}"
+  {% endif %}
+>
+  {%- case ab.kind -%}
+    {%- when 'description' -%}
+      <template data-unstuck-ab-a>{{ product.description }}</template>
+      <template data-unstuck-ab-b>{{ ab.description_html }}</template>
+    {%- when 'images' -%}
+      {%- for media in product.media -%}
+        <span data-unstuck-ab-a data-id="{{ media.id }}" data-src="{{ media.preview_image | image_url }}"></span>
+      {%- endfor -%}
+      {%- for media_id in ab.media_ids -%}
+        <span data-unstuck-ab-b data-id="{{ media_id }}"></span>
+      {%- endfor -%}
+  {%- endcase -%}
+</div>
+<script src="{{ 'unstuck-ab.js' | asset_url }}" defer></script>
