@@ -1,5 +1,13 @@
 # History
 
+## 2026-11-06 · webhook-errors
+- After `product-sync-fix` the new product still didn't come in. The dev server log showed why: Shopify refuses the order topics (ORDERS_CREATE/UPDATED/CANCELLED) with "This app is not approved to subscribe to webhook topics containing protected customer data". The product topics were subscribed, but the job failed as a whole, so the catch-up after the URL change wasn't queued (and the job retried 5 times for nothing)
+- Now a refusal for protected customer data only isn't retried: the other topics stay subscribed, the address is kept, and the webhooks state says which topics and what to do (status "error", so order history isn't counted as live); the nightly run tries them again. Any other failure retries as before
+- After a URL change the products catch-up is queued whatever happened to the subscriptions, once (the hourly one waiting for its hour doesn't count)
+- Order topics are now subscribed last (Shopify-api stops at an answer that throws, e.g. an HTTP 403 while access is in draft), and the refusal is logged on the server
+- Checked against a local database with Shopify mocked (refused order topics, mixed failure, later success clears the error)
+- Owner: Partner Dashboard → Apps → Unstuck → API access requests → Protected customer data access → Request access → select "Protected customer data" (no name, email, phone or address fields), give the reason, save, and fill the Data protection details (Shopify's docs; an app made in the newer Dev Dashboard may show this elsewhere). No review needed for a development store. Until then Shopify refuses the order webhooks (and the Order object is protected customer data, so order reads can be refused too)
+
 ## 2026-11-06 · product-sync-fix
 - Owner's report: "Test Product", added on the dev store, never showed in Products or Launches. Cause: each shop's webhooks point at the app URL they were registered with; a new `shopify app dev` tunnel (or a new host) changes that URL, and the subscriptions were only renewed after install and at 3:00 at night, so product and order webhooks went to the old address meanwhile (Launches only lists products the app has)
 - The first request from each shop after the server starts compares the webhook address with the one last registered (kept in `sync_state` "webhooks", `last_cursor`) and, when it moved, re-subscribes right away (the nightly re-subscribe queued for 3:00 doesn't hold it back); after a move, the products changed meanwhile are re-read

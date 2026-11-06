@@ -9,7 +9,7 @@ import { BulkBusyError, bulkStatus, readJsonl, startBulkQuery } from "@/lib/sync
 import { isLocalDate, ORDER_DAYS } from "@/lib/sync/constants";
 import { applyOrderLines, pruneNotifications, pruneScores, replaceOrderLines, setSyncState, snapshotInventory, upsertProducts } from "@/lib/sync/store";
 import { assembleProducts, orderLinesFromBulk } from "@/lib/sync/transform";
-import { registerWebhooks, webhookAddress } from "@/lib/sync/webhooks";
+import { registerWebhooks, webhookAddress, WebhookRegistrationError } from "@/lib/sync/webhooks";
 
 const POLL_EVERY_MS = 10_000;
 const MAX_POLLS = 360; // 1 hour
@@ -143,10 +143,13 @@ export async function runInitialSync(job) {
 /**
  * Job "register-webhooks" (after install, nightly, and when the app URL changed): subscribes the shop to
  * all topics. The address used is kept in the sync state's `lastCursor`; when it moved, deliveries went to
- * the old address until now, so the products changed meanwhile are re-read.
+ * the old address until now, so the products changed meanwhile are re-read (also when some topics failed).
+ * Order topics refused for protected customer data don't retry: the other topics are subscribed, the
+ * address is kept, and the state says what the owner has to do; the nightly run tries them again.
  */
 export async function runRegisterWebhooks(job) {
   const shopId = requireShop(job);
+  let moved = false;
   try {
     const { session } = await shopContext(shopId);
     const before = await db().syncState.findUnique({
@@ -154,16 +157,39 @@ export async function runRegisterWebhooks(job) {
       select: { lastCursor: true },
     });
     const address = webhookAddress();
-    await registerWebhooks(session);
+    moved = before?.lastCursor !== address;
+    try {
+      await registerWebhooks(session);
+    } catch (error) {
+      if (!(error instanceof WebhookRegistrationError && error.protectedDataOnly)) throw error;
+      console.warn(`[webhooks] ${error.topics.join(", ")} refused for shop ${shopId}: the app needs protected customer data access`);
+      await setSyncState(shopId, "webhooks", {
+        status: "error",
+        error: `${error.topics.join(", ")}: Shopify refused them until the app has protected customer data access (Partner Dashboard → API access requests → Protected customer data). Other topics are subscribed.`,
+        lastSyncedAt: new Date(),
+        lastCursor: address,
+      });
+      return;
+    }
     await setSyncState(shopId, "webhooks", { status: "done", error: null, lastSyncedAt: new Date(), lastCursor: address });
-    if (before?.lastCursor !== address) await enqueue({ type: "products-catchup", shopId });
   } catch (error) {
     if (error instanceof PermanentJobError || job.attempts >= job.maxAttempts) {
       const message = error instanceof Error ? error.message : String(error);
       await setSyncState(shopId, "webhooks", { status: "error", error: message.slice(0, 500) });
     }
     throw error;
+  } finally {
+    if (moved) await queueProductsCatchup(shopId);
   }
+}
+
+/** One due products catch-up at a time (the hourly one waiting for its hour doesn't count). */
+async function queueProductsCatchup(shopId) {
+  const pending = await db().job.findFirst({
+    where: { shopId, type: "products-catchup", OR: [{ status: "running" }, { status: "queued", runAt: { lte: new Date() } }] },
+    select: { id: true },
+  });
+  if (!pending) await enqueue({ type: "products-catchup", shopId });
 }
 
 /** Job "orders-catchup" (nightly): re-reads recently changed orders in case webhooks were missed. */
