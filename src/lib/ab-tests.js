@@ -167,12 +167,13 @@ export const daysRunning = (startedAt, now) => Math.max(0, Math.floor((now.getTi
 
 /**
  * Counted visitors look real: at most twice Shopify's own visit sessions of the product since the test
- * started (plus some slack for a day not synced yet). Unknown when Shopify gives no visit data (null).
- * The storefront's count endpoint is public, so made-up visits must not decide a test.
+ * started (plus some slack for a day not synced yet). Unknown (null) only when the shop has no visit
+ * data at all; a product with none recorded in a shop that has some counts as 0. The storefront's count
+ * endpoint is public, so made-up visits must not decide a test.
  */
-export function plausibleVisitors(counted, sessions) {
-  if (sessions == null || sessions <= 0) return null;
-  return counted <= sessions * 2 + 50;
+export function plausibleVisitors(counted, sessions, shopHasViews = sessions > 0) {
+  if (!shopHasViews) return null;
+  return counted <= (sessions ?? 0) * 2 + 50;
 }
 
 /**

@@ -309,6 +309,7 @@ export async function runAbTests(shopId, now = new Date()) {
     },
     include: { product: { select: { shopifyGid: true } } },
   });
+  await pruneEnded(shopId, now);
   if (!tests.length) return;
   const session = await getOfflineSession(shop.domain);
   for (const test of tests.filter((t) => t.status === "applying")) {
@@ -338,7 +339,8 @@ export async function runAbTests(shopId, now = new Date()) {
         else if (!sameState(test.kind, stateOf(live, test.kind), test.a)) end = { reason: "changed" };
         else {
           const counted = stats.get(test.id).a.visitors + stats.get(test.id).b.visitors;
-          const decision = decide(test.startedAt, stats.get(test.id), now, undefined, plausibleVisitors(counted, await sessionsSince(test)));
+          const seen = await sessionsSince(test);
+          const decision = decide(test.startedAt, stats.get(test.id), now, undefined, plausibleVisitors(counted, seen.sessions, seen.shopHasViews));
           if (decision.ended) end = { reason: decision.reason, winner: decision.winner };
           else if ((await publishedTestId(session, productGid)) !== test.id) await republish(session, test, productGid);
         }
@@ -354,17 +356,17 @@ export async function runAbTests(shopId, now = new Date()) {
     }
   }
   for (const test of tests.filter((t) => t.status === "ended" || t.status === "applied")) await unpublish(session, test, test.product.shopifyGid);
-  await pruneEnded(shopId, now);
   if (failure) throw failure;
 }
 
-/** Shopify's visit sessions of the tested product since the test started (null without visit data). */
+/** Shopify's visit sessions of the tested product since the test started, and whether the shop has visit data at all then. */
 async function sessionsSince(test) {
-  const sum = await db().productDailyMetric.aggregate({
-    where: { productId: test.productId, date: { gte: new Date(new Date(test.startedAt).toISOString().slice(0, 10)) } },
-    _sum: { viewSessions: true },
-  });
-  return sum._sum.viewSessions ?? null;
+  const since = new Date(new Date(test.startedAt).toISOString().slice(0, 10));
+  const [own, shop] = await Promise.all([
+    db().productDailyMetric.aggregate({ where: { productId: test.productId, date: { gte: since } }, _sum: { viewSessions: true } }),
+    db().productDailyMetric.findFirst({ where: { product: { shopId: test.shopId }, date: { gte: since }, viewSessions: { gt: 0 } }, select: { productId: true } }),
+  ]);
+  return { sessions: own._sum.viewSessions ?? 0, shopHasViews: Boolean(shop) };
 }
 
 /** Browser ids of tests that ended over 30 days ago aren't kept: their numbers stay in the test's result. */
@@ -383,9 +385,13 @@ export async function redactTestOrders(domain, orderIds) {
   if (!orderGids.length) return;
   const shops = await db().shop.findMany({ where: { domain }, select: { id: true } });
   for (const shop of shops) {
-    const purchases = await db().abTestPurchase.findMany({ where: { orderGid: { in: orderGids }, test: { shopId: shop.id } }, select: { testId: true, visitorId: true } });
-    for (const p of purchases) await db().abTestVisitor.deleteMany({ where: { testId: p.testId, visitorId: p.visitorId } });
-    await db().abTestPurchase.deleteMany({ where: { orderGid: { in: orderGids }, test: { shopId: shop.id } } });
+    const purchases = await db().abTestPurchase.findMany({ where: { orderGid: { in: orderGids }, test: { shopId: shop.id } }, select: { visitorId: true } });
+    // One browser id per browser, shared by every test: removed from all of the shop's tests.
+    const visitorIds = [...new Set(purchases.map((p) => p.visitorId))];
+    if (visitorIds.length) {
+      await db().abTestPurchase.deleteMany({ where: { visitorId: { in: visitorIds }, test: { shopId: shop.id } } });
+      await db().abTestVisitor.deleteMany({ where: { visitorId: { in: visitorIds }, test: { shopId: shop.id } } });
+    }
   }
 }
 

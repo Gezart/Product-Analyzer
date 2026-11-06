@@ -112,7 +112,9 @@ test("a test stops at 95% either way with enough visitors and days, or after 30 
   assert.deepEqual(decide(start, clearB, at(30), RULES, false), { ended: true, reason: "time", winner: null });
   assert.equal(plausibleVisitors(800, 500), true);
   assert.equal(plausibleVisitors(1200, 500), false);
-  assert.equal(plausibleVisitors(1200, 0), null);
+  assert.equal(plausibleVisitors(1200, 0, false), null); // no visit data in the shop at all
+  assert.equal(plausibleVisitors(200, 0, true), false); // the shop has visits, this product none
+  assert.equal(plausibleVisitors(40, 0, true), true);
 });
 
 test("numbers per version: visitors, add-to-carts and buyers, with their rates", () => {
