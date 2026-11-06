@@ -4,6 +4,7 @@ import { syncBenchmarks } from "@/lib/google-merchant";
 import { PermanentJobError } from "@/lib/jobs/errors";
 import { enqueue } from "@/lib/jobs/queue";
 import { guardPrices, runMarkdownPlans } from "@/lib/markdown-engine";
+import { runPageBuilder } from "@/lib/page-builder-shopify";
 import { runRescuePlans } from "@/lib/rescue-plans";
 import { closeMonth } from "@/lib/reports";
 import { scoreShop } from "@/lib/score-shop";
@@ -86,6 +87,10 @@ export const handlers = {
   "ai-photo-drafts": async (job) => {
     await pruneDrafts(requireShop(job));
   },
+  /** Publishes the page builder for the shop's plan and refreshes "often bought together". */
+  "page-builder": async (job, signal) => {
+    await runPageBuilder(requireShop(job), signal);
+  },
   /** Live sync after product/inventory webhooks. */
   "sync-product": runSyncProduct,
   "sync-inventory": runSyncInventory,
@@ -102,6 +107,8 @@ export const nightlyJobs = [
   { type: "returns-sync", hour: 4 },
   { type: "competitor-prices", hour: 5 },
   { type: "google-benchmarks", hour: 5 },
+  // After the orders catch-up: "often bought together" from the latest orders.
+  { type: "page-builder", hour: 5 },
   { type: "price-guard", hour: 6 },
   // Stores last month's report once it is over (no-op on other days).
   { type: "monthly-report", hour: 6 },

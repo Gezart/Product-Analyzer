@@ -44,6 +44,8 @@ test("features by plan: each plan includes the ones below it", () => {
   assert.equal(hasFeature("starter", "compare"), false);
   assert.equal(hasFeature("growth", "reports"), true);
   assert.equal(hasFeature("pro", "compare"), true);
+  assert.equal(hasFeature("starter", "pageBuilder"), false);
+  assert.equal(hasFeature("growth", "pageBuilder"), true);
   assert.equal(hasFeature("unknown", "fixCenter"), false);
 });
 

@@ -1,0 +1,40 @@
+{%- comment -%}
+  "Only X left": shown while the picked variant's tracked stock is 1 to `settings.threshold`. The stock
+  of every tracked variant goes along as JSON, so unstuck-product.js can update it when the shopper
+  picks another variant.
+{%- endcomment -%}
+{%- liquid
+  assign current = product.selected_or_first_available_variant
+  assign count = 0
+  if current.inventory_management == 'shopify'
+    assign count = current.inventory_quantity
+  endif
+  assign visible = false
+  if count > 0 and count <= settings.threshold
+    assign visible = true
+  endif
+  assign separator = ''
+-%}
+<div class="unstuck-block unstuck-low-stock">
+  <p
+    class="unstuck-low-stock__text"
+    data-unstuck-low-stock
+    data-threshold="{{ settings.threshold }}"
+    data-text="{{ settings.text | escape }}"
+    {% unless visible %}
+      hidden
+    {% endunless %}
+  >
+    {{- settings.text | escape | replace: '{count}', count -}}
+  </p>
+  <script type="application/json" data-unstuck-stock>
+    {
+      {%- for variant in product.variants -%}
+        {%- if variant.inventory_management == 'shopify' -%}
+          {{- separator }}"{{ variant.id }}":{{ variant.inventory_quantity -}}
+          {%- assign separator = ',' -%}
+        {%- endif -%}
+      {%- endfor -%}
+    }
+  </script>
+</div>

@@ -1,0 +1,29 @@
+{%- comment -%}
+  Size chart: a table that opens on the page. The first row is the heading.
+{%- endcomment -%}
+<details class="unstuck-block unstuck-size-chart">
+  <summary class="unstuck-size-chart__label">{{ settings.label | escape }}</summary>
+  <div class="unstuck-size-chart__scroll">
+    <table class="unstuck-size-chart__table">
+      <thead>
+        <tr>
+          {%- for cell in settings.rows.first -%}
+            <th scope="col">{{ cell | escape }}</th>
+          {%- endfor -%}
+        </tr>
+      </thead>
+      <tbody>
+        {%- for row in settings.rows offset: 1 -%}
+          <tr>
+            {%- for cell in row -%}
+              <td>{{ cell | escape }}</td>
+            {%- endfor -%}
+          </tr>
+        {%- endfor -%}
+      </tbody>
+    </table>
+  </div>
+  {%- if settings.note != blank -%}
+    <p class="unstuck-size-chart__note">{{ settings.note | escape }}</p>
+  {%- endif -%}
+</details>

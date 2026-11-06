@@ -67,6 +67,8 @@ model Settings {
   digestDay             Int      @default(1) @map("digest_day") // 0 = Sunday … 6 = Saturday
   /// Collections whose products sell in a season: `[{ collectionId, from, to }]` (months 1–12).
   seasonalCollections   Json     @default("[]") @map("seasonal_collections")
+  /// Page builder: the product page blocks, their order, settings and "Use for" (src/lib/page-builder.js).
+  pageBuilder           Json     @default("{}") @map("page_builder")
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
@@ -96,6 +98,8 @@ model Product {
   status           String
   /// Product creation date in Shopify; caps "days without a sale" for new products.
   shopifyCreatedAt DateTime? @map("shopify_created_at")
+  /// "Often bought together" last written to the product's `$app.bought_together` metafield (product GIDs).
+  boughtTogether   String[]  @default([]) @map("bought_together")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
   shop             Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)

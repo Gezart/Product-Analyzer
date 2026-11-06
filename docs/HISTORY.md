@@ -1,5 +1,14 @@
 # History
 
+## 2026-11-06 · page-builder
+- New Page builder page in the menu (after Collections), on Growth and up: the four product page blocks ("Only X left", trust badges, size chart, "Often bought together"), each on/off, in an order the merchant sets (↑/↓), with its own settings and "Use for" (all products, products in collections, or chosen products through Shopify's product picker); a preview of a sample product page with the blocks that are on; "Add to theme" opens the theme editor on a product page with the app's block ready to place
+- Saving checks every block (tested), writes the blocks that are on to the shop's `$app.page_builder` metafield, then stores them (`settings.page_builder`); a save Shopify refuses changes nothing
+- Storefront: the "Product page boost" block renders the blocks in order, each only where its "Use for" matches (Liquid snippets, everything escaped); "Only X left" follows the variant the shopper picks (tracked stock only); size chart opens on the page; "Often bought together" shows available products with an "Add to cart" button; theme check passes
+- "Often bought together" is worked out from the stored orders (pairs in at least 2 orders, most shared first, active products only, up to 4; tested) and written to each product's `$app.bought_together` metafield, only where it changed (`products.bought_together`); refreshed after a save and every night (`page-builder` job)
+- A plan change publishes again for the new plan: below Growth the storefront shows nothing
+- Not done: the owner's design for this page wasn't available here, so the page follows the app's design system (cards, buttons, pills); the look waits on the owner
+- Open: run the migration, `shopify app deploy`, add the block in the dev store's theme editor and check the blocks on a product page
+
 ## 2026-11-05 · storefront-extension
 - Start of Phase 3b (owner's choice: A/B tests with split traffic and the page builder, through the storefront without editing theme code)
 - Theme app extension `extensions/unstuck-storefront`: an app block for the product page ("Product page boost", shows nothing until blocks are set in the app) and an app embed ("A/B tests") that tells the storefront scripts where the app is and which product the page shows; a small script with the proxy call helper and the visitor's tracking consent (Shopify's customer privacy API)

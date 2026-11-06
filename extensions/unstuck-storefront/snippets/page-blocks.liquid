@@ -1,4 +1,40 @@
 {%- comment -%}
-  The product page blocks, in the order set in the app (Page builder task). `config` is the parsed
-  page builder JSON; `product` the product shown.
+  The product page blocks, in the order set in the app's Page builder. `config` is the shop's
+  page builder JSON ($app.page_builder); `product` the product shown. Each block has a "Use for":
+  all products, products in some collections, or chosen products (numeric ids).
 {%- endcomment -%}
+{%- for unstuck_block in config.blocks -%}
+  {%- liquid
+    assign shown = false
+    case unstuck_block.for.mode
+      when 'all'
+        assign shown = true
+      when 'products'
+        for id in unstuck_block.for.ids
+          if id == product.id
+            assign shown = true
+          endif
+        endfor
+      when 'collections'
+        for collection in product.collections
+          for id in unstuck_block.for.ids
+            if id == collection.id
+              assign shown = true
+            endif
+          endfor
+        endfor
+    endcase
+  -%}
+  {%- if shown -%}
+    {%- case unstuck_block.type -%}
+      {%- when 'low_stock' -%}
+        {%- render 'low-stock', product: product, settings: unstuck_block -%}
+      {%- when 'trust_badges' -%}
+        {%- render 'trust-badges', settings: unstuck_block -%}
+      {%- when 'size_chart' -%}
+        {%- render 'size-chart', settings: unstuck_block -%}
+      {%- when 'bought_together' -%}
+        {%- render 'bought-together', product: product, settings: unstuck_block -%}
+    {%- endcase -%}
+  {%- endif -%}
+{%- endfor -%}

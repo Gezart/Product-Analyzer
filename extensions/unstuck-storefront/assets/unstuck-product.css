@@ -2,3 +2,111 @@
 .unstuck-product:empty {
   display: none;
 }
+
+.unstuck-product {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.unstuck-low-stock__text {
+  margin: 0;
+  font-weight: 600;
+}
+
+.unstuck-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unstuck-badges__item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.unstuck-badges__icon {
+  flex: none;
+}
+
+.unstuck-size-chart__label {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.unstuck-size-chart__scroll {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+}
+
+.unstuck-size-chart__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.unstuck-size-chart__table th,
+.unstuck-size-chart__table td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.unstuck-size-chart__note {
+  margin: 0.5rem 0 0;
+  opacity: 0.8;
+}
+
+.unstuck-together__title {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.unstuck-together__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unstuck-together__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.unstuck-together__link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.unstuck-together__image {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.unstuck-together__form {
+  margin: 0;
+}
+
+.unstuck-together__add {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

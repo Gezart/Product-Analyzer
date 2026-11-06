@@ -1,0 +1,40 @@
+{%- comment -%}
+  "Often bought together": the products in the product's $app.bought_together list (worked out by the
+  app from the store's orders), skipping sold-out ones, up to `settings.max`. Nothing shows without any.
+{%- endcomment -%}
+{%- liquid
+  assign partners = product.metafields['$app'].bought_together.value
+  assign shown = 0
+-%}
+{%- capture items -%}
+  {%- for item in partners -%}
+    {%- if shown >= settings.max -%}
+      {%- break -%}
+    {%- endif -%}
+    {%- unless item.available -%}
+      {%- continue -%}
+    {%- endunless -%}
+    {%- assign shown = shown | plus: 1 -%}
+    {%- assign image_alt = item.featured_image.alt | default: item.title -%}
+    <li class="unstuck-together__item">
+      <a class="unstuck-together__link" href="{{ item.url }}">
+        {%- if item.featured_image -%}
+          {{ item.featured_image | image_url: width: 240 | image_tag: loading: 'lazy', widths: '120, 240', sizes: '120px', alt: image_alt, class: 'unstuck-together__image' }}
+        {%- endif -%}
+        <span class="unstuck-together__name">{{ item.title | escape }}</span>
+      </a>
+      <span class="unstuck-together__price">{{ item.price | money }}</span>
+      <form method="post" action="{{ routes.cart_add_url }}" class="unstuck-together__form">
+        <input type="hidden" name="id" value="{{ item.selected_or_first_available_variant.id }}">
+        <input type="hidden" name="quantity" value="1">
+        <button type="submit" class="unstuck-together__add">{{ 'unstuck.add_to_cart' | t }}</button>
+      </form>
+    </li>
+  {%- endfor -%}
+{%- endcapture -%}
+{%- if shown > 0 -%}
+  <div class="unstuck-block unstuck-together">
+    <p class="unstuck-together__title">{{ settings.title | escape }}</p>
+    <ul class="unstuck-together__list">{{ items }}</ul>
+  </div>
+{%- endif -%}
